@@ -412,7 +412,7 @@ async fn test_contract_signin_response_shape() {
     assert_eq!(body["user"]["email"], "signin-contract@example.com");
 }
 
-/// POST /sign-out should return { success: true }
+/// POST /sign-out should return { status: true }
 #[tokio::test]
 async fn test_contract_signout_response_shape() {
     let auth = create_full_auth().await;
@@ -443,7 +443,7 @@ async fn test_contract_signout_response_shape() {
 
     assert_eq!(resp.status, 200);
     let body: Value = serde_json::from_slice(&resp.body).unwrap();
-    assert_eq!(body["success"], true);
+    assert_eq!(body["status"], true);
 }
 
 /// Error responses must have { "message": "..." } shape

@@ -1636,7 +1636,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  success:
+                  status:
                     type: boolean
                     description: Indicates if the operation was successful
                   message:
@@ -1646,7 +1646,7 @@ paths:
                       - Verification email sent
                     description: Status message of the deletion process
                 required:
-                  - success
+                  - status
                   - message
         "400":
           content:
@@ -2370,7 +2370,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  success:
+                  status:
                     type: boolean
                     description: Indicates if the deletion was successful
                   message:
@@ -2379,7 +2379,7 @@ paths:
                       - User deleted
                     description: Confirmation message
                 required:
-                  - success
+                  - status
                   - message
         "400":
           content:
