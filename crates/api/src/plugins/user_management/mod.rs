@@ -52,7 +52,7 @@ impl UserInfo {
 /// Custom callback for sending change-email confirmation emails.
 ///
 /// If set on [`ChangeEmailConfig`], this callback is invoked instead of the
-/// default [`EmailProvider`]. This allows callers to customise the email
+/// default [`EmailProvider`](better_auth_core::EmailProvider). This allows callers to customise the email
 /// subject, template, and delivery mechanism.
 #[async_trait]
 pub trait SendChangeEmailConfirmation: Send + Sync {

@@ -130,7 +130,7 @@ impl AuthError {
         (status, code, message)
     }
 
-    /// Convert this error into a standardized [`AuthResponse`] matching the
+    /// Convert this error into a standardized [`AuthResponse`](crate::types::AuthResponse) matching the
     /// better-auth spec: `{ "code": "...", "message": "..." }`.
     ///
     /// Named `to_auth_response` to avoid collision with Axum's

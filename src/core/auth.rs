@@ -236,7 +236,7 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Handle an authentication request.
     ///
     /// Errors from plugins and core handlers are automatically converted
-    /// into standardized JSON responses via [`AuthError::into_response`],
+    /// into standardized JSON responses via [`AuthError::to_auth_response`],
     /// producing `{ "message": "..." }` with the appropriate HTTP status code.
     pub async fn handle_request(&self, req: AuthRequest) -> AuthResult<AuthResponse> {
         // Ignore any caller-supplied virtual session value; only internal
