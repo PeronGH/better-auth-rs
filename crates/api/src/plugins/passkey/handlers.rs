@@ -304,7 +304,7 @@ pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
     // Store challenge with the challenge itself as part of the identifier
     let identifier = format!("passkey_auth:{}", challenge);
     let expires_at = chrono::Utc::now() + chrono::Duration::seconds(config.challenge_ttl_secs);
-    ctx.database
+    let _ = ctx.database
         .create_verification(CreateVerification {
             identifier,
             value: challenge.clone(),
@@ -370,7 +370,7 @@ pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
         .counter()
         .checked_add(1)
         .ok_or_else(|| AuthError::internal("Passkey counter overflow"))?;
-    ctx.database
+    let _ = ctx.database
         .update_passkey_counter(passkey.id(), new_counter)
         .await?;
 
