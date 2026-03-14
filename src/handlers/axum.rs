@@ -17,7 +17,7 @@ use better_auth_core::SessionManager;
 #[cfg(feature = "axum")]
 use better_auth_core::entity::AuthSession as AuthSessionTrait;
 use better_auth_core::{
-    AuthError, AuthRequest, AuthResponse, DatabaseAdapter, ErrorMessageResponse,
+    AuthError, AuthRequest, AuthResponse, DatabaseAdapter, ErrorCodeMessageResponse,
     HealthCheckResponse, HttpMethod, OkResponse, core_paths,
 };
 
@@ -251,7 +251,8 @@ fn convert_auth_error(err: AuthError) -> Response {
         _ => err.to_string(),
     };
 
-    let body = ErrorMessageResponse { message };
+    let code = AuthError::code_from_message(&message);
+    let body = ErrorCodeMessageResponse { code, message };
 
     (status_code, axum::Json(body)).into_response()
 }

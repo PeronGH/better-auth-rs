@@ -67,10 +67,11 @@ pub use session::SessionManager;
 pub use types::{
     Account, ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
     CreateInvitation, CreateMember, CreateOrganization, CreatePasskey, CreateSession,
-    CreateTwoFactor, CreateUser, CreateVerification, ErrorMessageResponse, HealthCheckResponse,
-    HttpMethod, Invitation, InvitationStatus, ListUsersParams, OkResponse, Passkey,
-    RateLimitErrorResponse, Session, StatusMessageResponse, StatusResponse, SuccessMessageResponse,
-    SuccessResponse, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey,
-    UpdateUser, UpdateUserRequest, UpdateUserResponse, User, ValidationErrorResponse, Verification,
+    CreateTwoFactor, CreateUser, CreateVerification, ErrorCodeMessageResponse,
+    ErrorMessageResponse, HealthCheckResponse, HttpMethod, Invitation, InvitationStatus,
+    ListUsersParams, OkResponse, Passkey, RateLimitErrorResponse, Session, StatusMessageResponse,
+    StatusResponse, SuccessMessageResponse, SuccessResponse, TwoFactor, UpdateAccount,
+    UpdateApiKey, UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest,
+    UpdateUserResponse, User, ValidationErrorResponse, Verification,
 };
 pub use utils::password::{PasswordHasher, hash_password, verify_password};

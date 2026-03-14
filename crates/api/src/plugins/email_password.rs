@@ -282,7 +282,10 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
 
     // Check if user already exists
     if ctx.database.get_user_by_email(&body.email).await?.is_some() {
-        return Err(AuthError::conflict("A user with this email already exists"));
+        // NOTE: matches TS behavior — uses 422 UNPROCESSABLE_ENTITY, not 409 CONFLICT
+        return Err(AuthError::UnprocessableEntity(
+            "User already exists. Use another email.".to_string(),
+        ));
     }
 
     // Hash password

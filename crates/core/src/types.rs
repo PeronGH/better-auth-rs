@@ -617,6 +617,14 @@ pub struct ErrorMessageResponse {
     pub message: String,
 }
 
+/// Error body `{ code: String, message: String }` matching the TS better-auth
+/// error response shape.
+#[derive(Debug, Serialize)]
+pub struct ErrorCodeMessageResponse {
+    pub code: String,
+    pub message: String,
+}
+
 /// Middleware error response `{ code: String, message: String }`.
 #[derive(Debug, Serialize)]
 pub struct CodeMessageResponse {
