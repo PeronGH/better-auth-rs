@@ -223,6 +223,33 @@ pub struct AuthRequest {
     pub(crate) virtual_user_id: Option<String>,
 }
 
+/// Metadata extracted from an incoming request for session creation.
+///
+/// Centralizes extraction of IP address and user-agent so that core
+/// functions do not need the full [`AuthRequest`].
+#[derive(Debug, Clone, Default)]
+pub struct RequestMeta {
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+}
+
+impl RequestMeta {
+    /// Extract metadata from an [`AuthRequest`]'s headers.
+    ///
+    /// IP address is read from `x-forwarded-for` (preferred), falling back
+    /// to `x-real-ip`. User-agent is read from the `user-agent` header.
+    pub fn from_request(req: &AuthRequest) -> Self {
+        Self {
+            ip_address: req
+                .headers
+                .get("x-forwarded-for")
+                .or_else(|| req.headers.get("x-real-ip"))
+                .cloned(),
+            user_agent: req.headers.get("user-agent").cloned(),
+        }
+    }
+}
+
 /// Authentication response wrapper
 #[derive(Debug, Clone)]
 pub struct AuthResponse {

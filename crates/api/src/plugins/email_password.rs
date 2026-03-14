@@ -9,6 +9,7 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
     AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod, PASSWORD_HASH_KEY,
+    RequestMeta,
 };
 
 use super::email_verification::EmailVerificationPlugin;
@@ -190,7 +191,8 @@ impl EmailPasswordPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        let (response, session_token) = sign_up_core(&signup_req, &self.config, req, ctx).await?;
+        let meta = RequestMeta::from_request(req);
+        let (response, session_token) = sign_up_core(&signup_req, &self.config, &meta, ctx).await?;
 
         if let Some(token) = session_token {
             let cookie_header = create_session_cookie(&token, &ctx.config);
@@ -210,11 +212,12 @@ impl EmailPasswordPlugin {
             Err(resp) => return Ok(resp),
         };
 
+        let meta = RequestMeta::from_request(req);
         match sign_in_core(
             &signin_req,
             &self.config,
             self.email_verification.as_deref(),
-            req,
+            &meta,
             ctx,
         )
         .await?
@@ -239,11 +242,12 @@ impl EmailPasswordPlugin {
             Err(resp) => return Ok(resp),
         };
 
+        let meta = RequestMeta::from_request(req);
         match sign_in_username_core(
             &signin_req,
             &self.config,
             self.email_verification.as_deref(),
-            req,
+            &meta,
             ctx,
         )
         .await?
@@ -270,7 +274,7 @@ impl EmailPasswordPlugin {
 pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
     body: &SignUpRequest,
     config: &EmailPasswordConfig,
-    req: &AuthRequest,
+    meta: &RequestMeta,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<(SignUpResponse<DB::User>, Option<String>)> {
     if !config.enable_signup {
@@ -319,15 +323,9 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
     let user = ctx.database.create_user(create_user).await?;
 
     if config.auto_sign_in {
-        let ip_address = req
-            .headers
-            .get("x-forwarded-for")
-            .or_else(|| req.headers.get("x-real-ip"))
-            .cloned();
-        let user_agent = req.headers.get("user-agent").cloned();
         let session = ctx
             .session_manager()
-            .create_session(&user, ip_address, user_agent)
+            .create_session(&user, meta.ip_address.clone(), meta.user_agent.clone())
             .await?;
         let token = session.token().to_string();
 
@@ -349,7 +347,7 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
     callback_url: Option<&str>,
-    req: &AuthRequest,
+    meta: &RequestMeta,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SignInCoreResult<DB::User>> {
     // Verify password
@@ -388,16 +386,9 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
         );
     }
 
-    // Create session with ip_address and user_agent from the request
-    let ip_address = req
-        .headers
-        .get("x-forwarded-for")
-        .or_else(|| req.headers.get("x-real-ip"))
-        .cloned();
-    let user_agent = req.headers.get("user-agent").cloned();
     let session = ctx
         .session_manager()
-        .create_session(&user, ip_address, user_agent)
+        .create_session(&user, meta.ip_address.clone(), meta.user_agent.clone())
         .await?;
     let token = session.token().to_string();
 
@@ -415,7 +406,7 @@ pub(crate) async fn sign_in_core<DB: DatabaseAdapter>(
     body: &SignInRequest,
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
-    req: &AuthRequest,
+    meta: &RequestMeta,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SignInCoreResult<DB::User>> {
     let user = ctx
@@ -430,7 +421,7 @@ pub(crate) async fn sign_in_core<DB: DatabaseAdapter>(
         config,
         email_verification,
         body.callback_url.as_deref(),
-        req,
+        meta,
         ctx,
     )
     .await
@@ -441,7 +432,7 @@ pub(crate) async fn sign_in_username_core<DB: DatabaseAdapter>(
     body: &SignInUsernameRequest,
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
-    req: &AuthRequest,
+    meta: &RequestMeta,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SignInCoreResult<DB::User>> {
     let user = ctx
@@ -456,7 +447,7 @@ pub(crate) async fn sign_in_username_core<DB: DatabaseAdapter>(
         config,
         email_verification,
         None,
-        req,
+        meta,
         ctx,
     )
     .await
@@ -543,10 +534,10 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<SignUpRequest>,
     ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        // TODO: extract ip_address and user_agent from axum request headers
-        let auth_req = AuthRequest::new(HttpMethod::Post, "/sign-up/email");
-        let (response, session_token) =
-            sign_up_core(&body, &plugin.config, &auth_req, &ctx).await?;
+        // Axum handlers do not yet extract IP/UA from the axum request.
+        // When needed, add `HeaderMap` extractor and build RequestMeta from it.
+        let meta = RequestMeta::default();
+        let (response, session_token) = sign_up_core(&body, &plugin.config, &meta, &ctx).await?;
 
         if let Some(token) = session_token {
             let cookie = state.session_cookie(&token);
@@ -576,13 +567,12 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<SignInRequest>,
     ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        // TODO: extract ip_address and user_agent from axum request headers
-        let auth_req = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
+        let meta = RequestMeta::default();
         let result = sign_in_core(
             &body,
             &plugin.config,
             plugin.email_verification.as_deref(),
-            &auth_req,
+            &meta,
             &ctx,
         )
         .await?;
@@ -595,13 +585,12 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<SignInUsernameRequest>,
     ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        // TODO: extract ip_address and user_agent from axum request headers
-        let auth_req = AuthRequest::new(HttpMethod::Post, "/sign-in/username");
+        let meta = RequestMeta::default();
         let result = sign_in_username_core(
             &body,
             &plugin.config,
             plugin.email_verification.as_deref(),
-            &auth_req,
+            &meta,
             &ctx,
         )
         .await?;
