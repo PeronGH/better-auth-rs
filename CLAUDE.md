@@ -66,14 +66,14 @@ If any of these are missing, stop and ask.
 
 ```bash
 cargo fmt --check
-cargo clippy --workspace
+cargo clippy --workspace                       # must produce zero warnings
+cargo clippy --workspace --features axum       # also check with axum feature
 cargo test --workspace --lib                   # library unit tests
 cargo test --test dual_server_tests            # dual-server comparison (needs ref server)
 ./scripts/alignment-check.sh                   # full alignment pipeline (all 3 layers)
 ./scripts/alignment-check.sh --skip-build      # skip cargo build step
-cd compat-tests/client-tests && npm run test:ts    # client tests against TS only
-cd compat-tests/client-tests && npm run test:rust  # client tests against Rust only
-bash compat-tests/client-tests/run-against-both.sh  # client tests against both
+cd compat-tests/client-tests && node --test tests/*.test.mjs  # client tests (set AUTH_BASE_URL)
+bash compat-tests/client-tests/run-against-both.sh            # client tests against both
 ```
 
 ### JavaScript tooling
@@ -86,11 +86,7 @@ reference server requires `better-sqlite3` which needs native Node.
 
 ## Feedback Loop
 
-Your first task before touching any endpoint code is to build the
-alignment testing infrastructure. This is the most important thing in
-the project — without it, nothing else matters.
-
-### Infrastructure (implemented)
+### Alignment check
 
 The alignment check script is `scripts/alignment-check.sh`. It:
 
@@ -107,7 +103,7 @@ Preflight: check that `node` is available and that
 `compat-tests/reference-server/node_modules` exists. Fail with an
 actionable error message if not.
 
-### What the dual-server tests compare (implemented)
+### What the dual-server tests compare
 
 The dual-server tests (`tests/dual_server_tests.rs`) compare all of:
 
@@ -138,13 +134,6 @@ Tests must actually hit both servers. If the reference server is not
 available, skip with a diagnostic. Never let a skipped test pass
 silently in CI when the reference server should be running.
 
-### Validation
-
-Once the infrastructure is built, run the alignment check on the
-Phase 0 endpoints (`/ok`, `/error`, `/sign-up/email`, `/sign-in/email`,
-`/get-session`, `/sign-out`). This will produce the first real alignment
-report. Commit the infrastructure, then start fixing mismatches.
-
 ### Three-layer testing strategy
 
 1. **Unit/integration tests** (`cargo test --workspace --lib`) — Rust-only,
@@ -162,7 +151,7 @@ report. Commit the infrastructure, then start fixing mismatches.
    The client handles cookies, session state, and error parsing — bugs
    in any of these are invisible to raw HTTP comparison.
 
-   - `compat-tests/client-tests/` — Bun test project with the client SDK
+   - `compat-tests/client-tests/` — node:test project with the client SDK
    - `compat-tests/rust-server/` — Minimal Axum server matching the
      reference server config exactly (same secret, same basePath)
    - `compat-tests/client-tests/run-against-both.sh` — Starts both
@@ -259,6 +248,10 @@ Match the TS error behavior exactly. If the TS server returns
 `{ "code": "USER_NOT_FOUND" }` with status 404, the Rust server must
 do the same. Do not invent error codes or change status codes.
 
+`AuthError::to_auth_response()` converts errors to `AuthResponse`.
+Do not name inherent methods `into_response` — that collides with
+Axum's `IntoResponse` trait when the `axum` feature is enabled.
+
 ### Cookie Handling
 
 Cookie behavior is a core part of the auth contract. The session token
@@ -273,21 +266,17 @@ related comments and docs in the same change.
 
 ### Testing
 
-**100% function coverage is required.** Every public and internal
-function must be exercised by at least one test. Add tests for new
-behavior and regressions. Only test code that has meaningful logic
-(branching, transformations, error handling). Do not test code that
-can only break if the language, runtime, or a dependency breaks.
+Add tests for new behavior and regressions. Only test code that has
+meaningful logic (branching, transformations, error handling). Do not
+test code that can only break if the language, runtime, or a dependency
+breaks.
 
 ### Git
 
 Use conventional commits (`feat:`, `fix:`, `refactor:`, `test:`,
 `docs:`, `chore:`). Commit frequently and autonomously instead of
 batching large changes. Each commit must pass `cargo fmt --check`,
-`cargo clippy`, and `cargo test`.
-
-Create a branch (`<type>/<description>`) for substantial or risky
-changes. Direct commits to `main` are acceptable for low-risk work.
+`cargo clippy` (zero warnings), and `cargo test`.
 
 ### Refactoring
 
@@ -298,15 +287,12 @@ written this way from the beginning.
 
 ### Lint Policy
 
-The workspace has a strict Clippy and rustc lint configuration. Follow
-it. Do not add `#[allow(...)]` or `#[expect(...)]` attributes to silence
-lints without a genuine justification in the `reason` field. If a lint
-fires, fix the code — do not suppress the lint to make progress faster.
+Zero warnings. Both `cargo clippy --workspace` and
+`cargo clippy --workspace --features axum` must produce zero warnings.
 
-### Performance
-
-Hot paths must have benchmarks. Any performance regression must be
-explained to the human before committing.
+Do not use `#[allow(...)]`. Use `#[expect(...)]` with a `reason` field
+only when suppression is genuinely justified. If a lint fires, fix the
+code.
 
 ### Workarounds
 
