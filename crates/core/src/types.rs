@@ -544,6 +544,21 @@ impl AuthResponse {
         }
     }
 
+    pub fn html(status: u16, html: impl Into<String>) -> Self {
+        let body = html.into().into_bytes();
+        let mut headers = HashMap::new();
+        _ = headers.insert(
+            "content-type".to_string(),
+            "text/html; charset=utf-8".to_string(),
+        );
+
+        Self {
+            status,
+            headers,
+            body,
+        }
+    }
+
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         _ = self.headers.insert(name.into(), value.into());
         self

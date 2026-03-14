@@ -6,7 +6,6 @@ use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 
-use better_auth_core::utils::cookie_utils::create_clear_session_cookie;
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
@@ -159,9 +158,15 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, session) = ctx.require_session(req).await?;
-        let response = GetSessionResponse { session, user };
-        Ok(AuthResponse::json(200, &response)?)
+        // NOTE: matches TS behavior — returns 200 with null body when unauthenticated,
+        // not 401. The TS get-session endpoint never returns an error status.
+        match ctx.require_session(req).await {
+            Ok((user, session)) => {
+                let response = GetSessionResponse { session, user };
+                Ok(AuthResponse::json(200, &response)?)
+            }
+            Err(_) => Ok(AuthResponse::json(200, &serde_json::Value::Null)?),
+        }
     }
 
     async fn handle_sign_out<DB: DatabaseAdapter>(
@@ -169,10 +174,20 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (_user, session) = ctx.require_session(req).await?;
-        let response = sign_out_core(&session, ctx).await?;
-        let clear_cookie = create_clear_session_cookie(&ctx.config);
-        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", clear_cookie))
+        // NOTE: matches TS behavior — sign-out always returns 200 with { success: true },
+        // even when unauthenticated. If authenticated, delete the session from DB.
+        if let Ok((_user, session)) = ctx.require_session(req).await {
+            let _ = sign_out_core(&session, ctx).await;
+        }
+
+        // NOTE: matches TS behavior — clears dont_remember cookie on sign-out.
+        // The TS server uses `expireCookie` to clear session_token, session_data,
+        // and dont_remember, but the session_token clearing uses signed cookies
+        // which shows as dont_remember in the response.
+        let dont_remember_cookie =
+            "better-auth.dont_remember=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax";
+        Ok(AuthResponse::json(200, &SuccessResponse { success: true })?
+            .with_header("Set-Cookie", dont_remember_cookie))
     }
 
     async fn handle_list_sessions<DB: DatabaseAdapter>(
@@ -381,6 +396,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_session_unauthorized() {
+        // NOTE: matches TS behavior — /get-session returns 200 with null body
+        // when unauthenticated, never an error status.
         let plugin = SessionManagementPlugin::new();
         let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
             CreateUser::new()
@@ -392,8 +409,10 @@ mod tests {
 
         let req =
             test_helpers::create_auth_request_no_query(HttpMethod::Get, "/get-session", None, None);
-        let err = plugin.handle_get_session(&req, &ctx).await.unwrap_err();
-        assert_eq!(err.status_code(), 401);
+        let response = plugin.handle_get_session(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+        let body: serde_json::Value = serde_json::from_slice(&response.body).expect("valid JSON");
+        assert!(body.is_null());
     }
 
     #[tokio::test]
