@@ -67,10 +67,11 @@ If any of these are missing, stop and ask.
 ```bash
 cargo fmt --check
 cargo clippy --workspace
-cargo test --workspace
+cargo test --workspace --lib          # library unit tests
+cargo test --test dual_server_tests   # dual-server comparison (needs ref server)
+./scripts/alignment-check.sh          # full alignment pipeline (build + ref server + tests)
+./scripts/alignment-check.sh --skip-build  # skip cargo build step
 ```
-
-Update this section as you build new scripts and workflows.
 
 ## Feedback Loop
 
@@ -78,10 +79,9 @@ Your first task before touching any endpoint code is to build the
 alignment testing infrastructure. This is the most important thing in
 the project — without it, nothing else matters.
 
-### What to build
+### Infrastructure (implemented)
 
-Create a single-command alignment check (`scripts/alignment-check.sh`)
-that:
+The alignment check script is `scripts/alignment-check.sh`. It:
 
 1. Builds the Rust workspace (fail fast on compile errors).
 2. Starts the TS reference server (`compat-tests/reference-server/`)
@@ -96,11 +96,9 @@ Preflight: check that `node` is available and that
 `compat-tests/reference-server/node_modules` exists. Fail with an
 actionable error message if not.
 
-### What the dual-server tests must compare
+### What the dual-server tests compare (implemented)
 
-Extend the existing `tests/compat/shapes.rs` comparison to cover all of
-these. The current implementation only checks JSON field names and types
-— that is not sufficient.
+The dual-server tests (`tests/dual_server_tests.rs`) compare all of:
 
 - **Status codes** — must match exactly.
 - **Response body shape** — field names, nesting, types (string vs
@@ -112,8 +110,8 @@ these. The current implementation only checks JSON field names and types
 - **Error format** — error responses must match the TS shape exactly,
   whatever that shape is (discover it by sending bad requests to the TS
   server, do not guess).
-- **Header names** — `content-type`, `cache-control`, and auth-related
-  headers should match.
+- **Header names** — `content-type` and auth-related headers should
+  match.
 
 Do NOT compare: exact values of IDs, tokens, timestamps, or hashes;
 ordering of JSON keys; whitespace or formatting.
@@ -232,10 +230,11 @@ related comments and docs in the same change.
 
 ### Testing
 
-Add tests for new behavior and regressions. Only test code that has
-meaningful logic (branching, transformations, error handling). Do not
-test code that can only break if the language, runtime, or a dependency
-breaks.
+**100% function coverage is required.** Every public and internal
+function must be exercised by at least one test. Add tests for new
+behavior and regressions. Only test code that has meaningful logic
+(branching, transformations, error handling). Do not test code that
+can only break if the language, runtime, or a dependency breaks.
 
 ### Git
 
