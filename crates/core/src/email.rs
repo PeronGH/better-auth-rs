@@ -29,18 +29,19 @@ impl EmailProvider for ConsoleEmailProvider {
 }
 
 #[cfg(test)]
-#[allow(clippy::type_complexity)]
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
 
+    type SentMessages = Arc<Mutex<Vec<(String, String, String, String)>>>;
+
     /// Mock email provider for testing.
     struct MockEmailProvider {
-        sent: Arc<Mutex<Vec<(String, String, String, String)>>>,
+        sent: SentMessages,
     }
 
     impl MockEmailProvider {
-        fn new() -> (Self, Arc<Mutex<Vec<(String, String, String, String)>>>) {
+        fn new() -> (Self, SentMessages) {
             let sent = Arc::new(Mutex::new(Vec::new()));
             (Self { sent: sent.clone() }, sent)
         }

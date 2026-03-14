@@ -17,17 +17,22 @@
 //! ## Prerequisites
 //!
 //! ```bash
-//! cd compat-tests/reference-server && npm install
+//! cd compat-tests/reference-server && bun install
 //! ```
 //!
-//! If `node_modules` is missing, all tests are skipped with a diagnostic.
+//! If `node_modules` is missing or the reference server cannot start, tests
+//! skip locally with a diagnostic. In CI, or when
+//! `BETTER_AUTH_REQUIRE_REFERENCE_SERVER=1` is set, that condition is a hard
+//! failure.
 
 // Integration test file — panicking on setup failures and using expect/unwrap
 // is the standard pattern for test assertions and error reporting.
-#![allow(
+#![expect(
     clippy::expect_used,
+    reason = "test code — panicking on failures is the correct behavior"
+)]
+#![expect(
     clippy::panic,
-    clippy::allow_attributes,
     reason = "test code — panicking on failures is the correct behavior"
 )]
 
@@ -47,29 +52,39 @@ use tokio::sync::Mutex as TokioMutex;
 const REFERENCE_PORT: u16 = 3100;
 const REFERENCE_BASE: &str = "http://localhost:3100/api/auth";
 
+fn env_flag_set(name: &str) -> bool {
+    std::env::var(name)
+        .map(|value| !value.is_empty() && value != "0" && !value.eq_ignore_ascii_case("false"))
+        .unwrap_or(false)
+}
+
+fn reference_server_required() -> bool {
+    env_flag_set("CI") || env_flag_set("BETTER_AUTH_REQUIRE_REFERENCE_SERVER")
+}
+
 async fn reference_server_available() -> bool {
     let client = reqwest::Client::builder()
+        .no_proxy()
         .timeout(Duration::from_secs(2))
         .build()
         .unwrap_or_default();
 
     client
-        .get(format!("http://localhost:{REFERENCE_PORT}/__health"))
+        .get(format!("http://127.0.0.1:{REFERENCE_PORT}/__health"))
         .send()
         .await
         .map(|r| r.status().is_success())
         .unwrap_or(false)
 }
 
-fn try_start_reference_server() -> Option<std::process::Child> {
+fn try_start_reference_server() -> Result<std::process::Child, String> {
     let server_dir = std::path::Path::new("compat-tests/reference-server");
     if !server_dir.join("node_modules").exists() {
-        eprintln!(
-            "[dual-server] node_modules not found in {}, skipping. Run:\n\
-             cd compat-tests/reference-server && npm install",
+        return Err(format!(
+            "node_modules not found in {}. Run:\n  cd {} && bun install",
+            server_dir.display(),
             server_dir.display()
-        );
-        return None;
+        ));
     }
 
     std::process::Command::new("node")
@@ -79,43 +94,52 @@ fn try_start_reference_server() -> Option<std::process::Child> {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .ok()
+        .map_err(|error| {
+            format!(
+                "failed to start reference server in {}: {error}",
+                server_dir.display()
+            )
+        })
 }
 
 static SERIAL: TokioMutex<()> = TokioMutex::const_new(());
 static REF_SERVER: Mutex<Option<std::process::Child>> = Mutex::new(None);
 
-async fn ensure_reference_server() -> bool {
+async fn ensure_reference_server() -> Result<(), String> {
     if reference_server_available().await {
-        return true;
+        return Ok(());
     }
 
     {
         let mut slot = REF_SERVER.lock().unwrap_or_else(|e| e.into_inner());
         if slot.is_none() {
-            match try_start_reference_server() {
-                Some(child) => *slot = Some(child),
-                None => return false,
-            }
+            *slot = Some(try_start_reference_server()?);
         }
     }
 
     for _ in 0..30 {
         tokio::time::sleep(Duration::from_millis(500)).await;
         if reference_server_available().await {
-            return true;
+            return Ok(());
         }
     }
 
-    eprintln!("[dual-server] Reference server did not become ready in 15s, skipping.");
-    false
+    Err("reference server did not become ready within 15 seconds".to_string())
 }
 
-/// Skip guard: returns early from a test if the reference server is not available.
+/// Skip guard: returns early from a local test run if the reference server is
+/// not available. In CI, or when `BETTER_AUTH_REQUIRE_REFERENCE_SERVER=1` is
+/// set, missing reference infrastructure is a hard failure.
 macro_rules! require_ref_server {
     () => {
-        if !ensure_reference_server().await {
-            eprintln!("[dual-server] SKIPPED: reference server not available");
+        if let Err(reason) = ensure_reference_server().await {
+            if reference_server_required() {
+                panic!("[dual-server] reference server is required: {reason}");
+            }
+            eprintln!("[dual-server] SKIPPED locally: {reason}");
+            eprintln!(
+                "[dual-server] Set CI=1 or BETTER_AUTH_REQUIRE_REFERENCE_SERVER=1 to make this a hard failure."
+            );
             return;
         }
     };
@@ -198,6 +222,7 @@ impl RefClient {
     fn new() -> Self {
         Self {
             client: reqwest::Client::builder()
+                .no_proxy()
                 .redirect(reqwest::redirect::Policy::none())
                 .timeout(Duration::from_secs(10))
                 .build()

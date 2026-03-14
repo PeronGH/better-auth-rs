@@ -68,9 +68,12 @@ for dual-server comparison testing.
 
 ```bash
 cd compat-tests/reference-server
-npm install
+bun install
 npm start  # starts on port 3100
 ```
+
+The alignment scripts expect `node_modules` to already exist and fail fast with
+an actionable message if either JS workspace has not been installed yet.
 
 #### Usage
 

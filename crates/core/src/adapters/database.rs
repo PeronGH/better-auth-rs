@@ -91,6 +91,8 @@ pub mod sqlx_adapter {
     }
 
     type SqlxAdapterEntities<U, S, A, O, M, I, V, TF, AK, PK> = (U, S, A, O, M, I, V, TF, AK, PK);
+    type SqlxAdapterMarker<U, S, A, O, M, I, V, TF, AK, PK> =
+        PhantomData<SqlxAdapterEntities<U, S, A, O, M, I, V, TF, AK, PK>>;
 
     /// PostgreSQL database adapter via SQLx.
     ///
@@ -109,8 +111,7 @@ pub mod sqlx_adapter {
         PK = Passkey,
     > {
         pool: PgPool,
-        #[allow(clippy::type_complexity)]
-        _phantom: PhantomData<SqlxAdapterEntities<U, S, A, O, M, I, V, TF, AK, PK>>,
+        _phantom: SqlxAdapterMarker<U, S, A, O, M, I, V, TF, AK, PK>,
     }
 
     /// Constructors for the default (built-in) entity types.

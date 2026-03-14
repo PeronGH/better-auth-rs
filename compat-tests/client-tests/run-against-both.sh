@@ -18,6 +18,7 @@ RUST_PORT=3200
 TS_PID=""
 RUST_PID=""
 SKIP_BUILD=false
+LOCAL_NO_PROXY="localhost,127.0.0.1"
 
 for arg in "$@"; do
   case "$arg" in
@@ -25,6 +26,30 @@ for arg in "$@"; do
     *) echo "Unknown argument: $arg"; exit 1 ;;
   esac
 done
+
+require_node_modules() {
+  local dir="$1"
+  local label="$2"
+
+  if [[ ! -d "$dir/node_modules" ]]; then
+    echo "ERROR: $label dependencies are not installed."
+    echo "Run: cd \"$dir\" && bun install"
+    exit 1
+  fi
+}
+
+wait_for_local_health() {
+  local port="$1"
+
+  for _ in $(seq 1 30); do
+    if curl --noproxy '*' -sf "http://127.0.0.1:$port/__health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  return 1
+}
 
 # ---------------------------------------------------------------------------
 # Cleanup
@@ -59,18 +84,10 @@ if ! command -v bun &>/dev/null; then
 fi
 echo "  bun $(bun --version) ✓"
 
-if [[ ! -d "$REF_SERVER_DIR/node_modules" ]]; then
-  echo "  Installing reference server dependencies..."
-  cd "$REF_SERVER_DIR" && bun install
-  cd "$PROJECT_ROOT"
-fi
+require_node_modules "$REF_SERVER_DIR" "reference-server"
 echo "  reference-server deps ✓"
 
-if [[ ! -d "$CLIENT_DIR/node_modules" ]]; then
-  echo "  Installing client test dependencies..."
-  cd "$CLIENT_DIR" && bun install
-  cd "$PROJECT_ROOT"
-fi
+require_node_modules "$CLIENT_DIR" "client-tests"
 echo "  client-tests deps ✓"
 echo ""
 
@@ -100,13 +117,9 @@ TS_PID=$!
 cd "$PROJECT_ROOT"
 
 READY=false
-for _ in $(seq 1 30); do
-  if curl -sf "http://localhost:$TS_PORT/__health" >/dev/null 2>&1; then
-    READY=true
-    break
-  fi
-  sleep 0.5
-done
+if wait_for_local_health "$TS_PORT"; then
+  READY=true
+fi
 
 if [[ "$READY" != "true" ]]; then
   echo "FAIL: TS reference server did not become ready."
@@ -124,12 +137,11 @@ PORT=$RUST_PORT cargo run --manifest-path "$RUST_SERVER_DIR/Cargo.toml" &
 RUST_PID=$!
 
 READY=false
-for _ in $(seq 1 60); do
-  if curl -sf "http://localhost:$RUST_PORT/__health" >/dev/null 2>&1; then
+for _ in $(seq 1 2); do
+  if wait_for_local_health "$RUST_PORT"; then
     READY=true
     break
   fi
-  sleep 0.5
 done
 
 if [[ "$READY" != "true" ]]; then
@@ -145,7 +157,7 @@ echo ""
 echo "[4/5] Running client tests against TS server..."
 cd "$CLIENT_DIR"
 TS_EXIT=0
-AUTH_BASE_URL="http://localhost:$TS_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-ts.log || TS_EXIT=$?
+NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$TS_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-ts.log || TS_EXIT=$?
 
 if [[ "$TS_EXIT" -eq 0 ]]; then
   echo "  TS tests: PASS ✓"
@@ -159,7 +171,7 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[5/5] Running client tests against Rust server..."
 RUST_EXIT=0
-AUTH_BASE_URL="http://localhost:$RUST_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-rust.log || RUST_EXIT=$?
+NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$RUST_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-rust.log || RUST_EXIT=$?
 
 if [[ "$RUST_EXIT" -eq 0 ]]; then
   echo "  Rust tests: PASS ✓"

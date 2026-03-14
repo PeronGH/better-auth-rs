@@ -21,6 +21,7 @@ RUST_PORT=3200
 REF_PID=""
 RUST_PID=""
 SKIP_BUILD=false
+LOCAL_NO_PROXY="localhost,127.0.0.1"
 
 # Parse arguments
 for arg in "$@"; do
@@ -29,6 +30,30 @@ for arg in "$@"; do
     *) echo "Unknown argument: $arg"; exit 1 ;;
   esac
 done
+
+require_node_modules() {
+  local dir="$1"
+  local label="$2"
+
+  if [[ ! -d "$dir/node_modules" ]]; then
+    echo "ERROR: $label dependencies are not installed."
+    echo "Run: cd \"$dir\" && bun install"
+    exit 1
+  fi
+}
+
+wait_for_local_health() {
+  local port="$1"
+
+  for _ in $(seq 1 30); do
+    if curl --noproxy '*' -sf "http://127.0.0.1:$port/__health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  return 1
+}
 
 # ---------------------------------------------------------------------------
 # Cleanup — always kill servers on exit
@@ -72,18 +97,10 @@ if ! command -v cargo &>/dev/null; then
 fi
 echo "  cargo $(cargo --version | awk '{print $2}') ✓"
 
-if [[ ! -d "$REF_SERVER_DIR/node_modules" ]]; then
-  echo "  Installing reference server dependencies..."
-  cd "$REF_SERVER_DIR" && bun install
-  cd "$PROJECT_ROOT"
-fi
+require_node_modules "$REF_SERVER_DIR" "reference-server"
 echo "  reference-server deps ✓"
 
-if [[ ! -d "$CLIENT_DIR/node_modules" ]]; then
-  echo "  Installing client test dependencies..."
-  cd "$CLIENT_DIR" && bun install
-  cd "$PROJECT_ROOT"
-fi
+require_node_modules "$CLIENT_DIR" "client-tests"
 echo "  client-tests deps ✓"
 
 if [[ ! -f "$PROJECT_ROOT/better-auth.yaml" ]]; then
@@ -138,13 +155,9 @@ cd "$PROJECT_ROOT"
 # Wait for readiness (up to 15 seconds)
 echo "  Waiting for reference server to become ready..."
 READY=false
-for _ in $(seq 1 30); do
-  if curl -sf "http://localhost:$REF_PORT/__health" >/dev/null 2>&1; then
-    READY=true
-    break
-  fi
-  sleep 0.5
-done
+if wait_for_local_health "$REF_PORT"; then
+  READY=true
+fi
 
 if [[ "$READY" != "true" ]]; then
   echo "FAIL: Reference server did not become ready within 15 seconds."
@@ -212,12 +225,11 @@ PORT=$RUST_PORT cargo run --manifest-path "$RUST_SERVER_DIR/Cargo.toml" &
 RUST_PID=$!
 
 READY=false
-for _ in $(seq 1 60); do
-  if curl -sf "http://localhost:$RUST_PORT/__health" >/dev/null 2>&1; then
+for _ in $(seq 1 2); do
+  if wait_for_local_health "$RUST_PORT"; then
     READY=true
     break
   fi
-  sleep 0.5
 done
 
 if [[ "$READY" != "true" ]]; then
@@ -229,10 +241,10 @@ else
 
   cd "$CLIENT_DIR"
   CLIENT_TS_EXIT=0
-  AUTH_BASE_URL="http://localhost:$REF_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-ts.log || CLIENT_TS_EXIT=$?
+  NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$REF_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-ts.log || CLIENT_TS_EXIT=$?
 
   CLIENT_RUST_EXIT=0
-  AUTH_BASE_URL="http://localhost:$RUST_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-rust.log || CLIENT_RUST_EXIT=$?
+  NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$RUST_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-rust.log || CLIENT_RUST_EXIT=$?
 fi
 
 if [[ "$CLIENT_TS_EXIT" -eq 0 ]]; then
