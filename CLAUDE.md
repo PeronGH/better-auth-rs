@@ -72,6 +72,7 @@ cargo test --workspace --lib                   # library unit tests
 cargo test --test dual_server_tests            # dual-server comparison (needs ref server)
 ./scripts/alignment-check.sh                   # full alignment pipeline (all 3 layers)
 ./scripts/alignment-check.sh --skip-build      # skip cargo build step
+cargo tarpaulin --workspace --lib              # measure function coverage
 cd compat-tests/client-tests && node --test tests/*.test.mjs  # client tests (set AUTH_BASE_URL)
 bash compat-tests/client-tests/run-against-both.sh            # client tests against both
 ```

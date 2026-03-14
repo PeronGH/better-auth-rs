@@ -305,6 +305,152 @@ impl<DB: DatabaseAdapter> AuthState<DB> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::MemoryDatabaseAdapter;
+    use crate::adapters::traits::UserOps;
+    use crate::entity::AuthUser;
+
+    #[test]
+    fn auth_route_constructors() {
+        let get = AuthRoute::get("/test", "getTest");
+        assert_eq!(get.method, HttpMethod::Get);
+        assert_eq!(get.path, "/test");
+        assert_eq!(get.operation_id, "getTest");
+
+        let post = AuthRoute::post("/create", "createItem");
+        assert_eq!(post.method, HttpMethod::Post);
+
+        let put = AuthRoute::put("/update", "updateItem");
+        assert_eq!(put.method, HttpMethod::Put);
+
+        let delete = AuthRoute::delete("/remove", "deleteItem");
+        assert_eq!(delete.method, HttpMethod::Delete);
+    }
+
+    #[test]
+    fn auth_route_new() {
+        let route = AuthRoute::new(HttpMethod::Patch, "/patch", "patchIt");
+        assert_eq!(route.method, HttpMethod::Patch);
+        assert_eq!(route.path, "/patch");
+    }
+
+    #[test]
+    fn auth_context_new() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let ctx = AuthContext::new(config.clone(), db);
+        assert!(ctx.email_provider.is_none());
+        assert!(ctx.metadata.is_empty());
+    }
+
+    #[test]
+    fn auth_context_metadata() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let mut ctx = AuthContext::new(config, db);
+
+        ctx.set_metadata("key", serde_json::json!("value"));
+        assert_eq!(ctx.get_metadata("key"), Some(&serde_json::json!("value")));
+        assert!(ctx.get_metadata("missing").is_none());
+    }
+
+    #[test]
+    fn auth_context_email_provider_error_when_none() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let ctx = AuthContext::new(config, db);
+        assert!(ctx.email_provider().is_err());
+    }
+
+    #[test]
+    fn auth_state_clones() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let ctx = AuthContext::new(config.clone(), db.clone());
+        let sm = SessionManager::new(config, db);
+        let state = AuthState::new(&ctx, sm);
+        let cloned = state.clone();
+        assert_eq!(cloned.config.secret, state.config.secret);
+    }
+
+    #[test]
+    fn auth_state_to_context() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let ctx = AuthContext::new(config.clone(), db.clone());
+        let sm = SessionManager::new(config, db);
+        let state = AuthState::new(&ctx, sm);
+        let ctx2 = state.to_context();
+        assert_eq!(ctx2.config.secret, state.config.secret);
+    }
+
+    #[tokio::test]
+    async fn auth_context_require_session_unauthenticated() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let ctx = AuthContext::new(config, db);
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        let result = ctx.require_session(&req).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn auth_context_require_session_with_valid_session() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = Arc::new(MemoryDatabaseAdapter::new());
+
+        // Create a user
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("test@test.com"))
+            .await
+            .unwrap();
+
+        // Create a session
+        let sm = SessionManager::new(config.clone(), db.clone());
+        let session = sm.create_session(&user, None, None).await.unwrap();
+
+        // Build request with the session token
+        let ctx = AuthContext::new(config.clone(), db);
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req.headers.insert(
+            "cookie".into(),
+            format!("better-auth.session_token={}", session.token()),
+        );
+
+        let (found_user, _found_session) = ctx.require_session(&req).await.unwrap();
+        assert_eq!(found_user.id(), user.id());
+    }
+
+    #[test]
+    fn auth_state_session_cookie() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let ctx = AuthContext::new(config.clone(), db.clone());
+        let sm = SessionManager::new(config, db);
+        let state = AuthState::new(&ctx, sm);
+
+        let cookie = state.session_cookie("my-token");
+        assert!(cookie.contains("better-auth.session_token=my-token"));
+        assert!(cookie.contains("HttpOnly"));
+    }
+
+    #[test]
+    fn auth_state_clear_session_cookie() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let ctx = AuthContext::new(config.clone(), db.clone());
+        let sm = SessionManager::new(config, db);
+        let state = AuthState::new(&ctx, sm);
+
+        let cookie = state.clear_session_cookie();
+        assert!(cookie.contains("better-auth.session_token="));
+        // Clear cookie uses expires=UNIX_EPOCH (Thu, 01 Jan 1970)
+        assert!(cookie.contains("1970"));
+    }
+}
+
 /// Plugin trait for axum-native routing.
 ///
 /// Unlike [`AuthPlugin`] which uses the custom `AuthRequest`/`AuthResponse`

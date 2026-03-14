@@ -236,7 +236,7 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Handle an authentication request.
     ///
     /// Errors from plugins and core handlers are automatically converted
-    /// into standardized JSON responses via [`AuthError::into_response`],
+    /// into standardized JSON responses via [`AuthError::to_auth_response`],
     /// producing `{ "message": "..." }` with the appropriate HTTP status code.
     pub async fn handle_request(&self, req: AuthRequest) -> AuthResult<AuthResponse> {
         // Ignore any caller-supplied virtual session value; only internal
@@ -589,5 +589,122 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             .ok_or(AuthError::UserNotFound)?;
 
         Ok(user)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use better_auth_core::MemoryDatabaseAdapter;
+
+    fn test_config() -> AuthConfig {
+        AuthConfig::new("test-secret-min-32-chars-1234567").base_url("http://localhost:3000")
+    }
+
+    async fn build_auth() -> BetterAuth<MemoryDatabaseAdapter> {
+        BetterAuth::<MemoryDatabaseAdapter>::new(test_config())
+            .database(MemoryDatabaseAdapter::new())
+            .build()
+            .await
+            .expect("build should succeed")
+    }
+
+    // ── Builder ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn builder_validates_config() {
+        // Empty secret should fail validation
+        let result = BetterAuth::<MemoryDatabaseAdapter>::new(AuthConfig::default())
+            .database(MemoryDatabaseAdapter::new())
+            .build()
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn builder_with_valid_config_succeeds() {
+        let auth = build_auth().await;
+        assert_eq!(auth.config().base_path, "/api/auth");
+    }
+
+    #[tokio::test]
+    async fn builder_middleware_chaining() {
+        let auth = BetterAuth::<MemoryDatabaseAdapter>::new(test_config())
+            .csrf(CsrfConfig { enabled: false })
+            .rate_limit(RateLimitConfig::default())
+            .cors(CorsConfig::default())
+            .body_limit(BodyLimitConfig::default())
+            .database(MemoryDatabaseAdapter::new())
+            .build()
+            .await
+            .unwrap();
+        // Should build with all middleware configured
+        assert!(auth.plugins().is_empty());
+    }
+
+    // ── Core endpoints ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn ok_endpoint() {
+        let auth = build_auth().await;
+        let req = AuthRequest::new(HttpMethod::Get, "/api/auth/ok");
+        let resp = auth.handle_request(req).await.unwrap();
+        assert_eq!(resp.status, 200);
+        let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+        assert_eq!(body["ok"], true);
+    }
+
+    #[tokio::test]
+    async fn error_endpoint() {
+        let auth = build_auth().await;
+        let mut req = AuthRequest::new(HttpMethod::Get, "/api/auth/error");
+        let _ = req.query.insert("error".into(), "TEST_ERROR".into());
+        let resp = auth.handle_request(req).await.unwrap();
+        assert_eq!(resp.status, 200);
+        let body_str = String::from_utf8_lossy(&resp.body);
+        assert!(body_str.contains("CODE: TEST_ERROR"));
+    }
+
+    #[tokio::test]
+    async fn unknown_route_returns_404() {
+        let auth = build_auth().await;
+        let req = AuthRequest::new(HttpMethod::Get, "/api/auth/nonexistent");
+        let resp = auth.handle_request(req).await.unwrap();
+        assert_eq!(resp.status, 404);
+    }
+
+    #[tokio::test]
+    async fn disabled_path_returns_404() {
+        let config = test_config().disabled_path("/ok");
+        let auth = BetterAuth::<MemoryDatabaseAdapter>::new(config)
+            .database(MemoryDatabaseAdapter::new())
+            .build()
+            .await
+            .unwrap();
+
+        let req = AuthRequest::new(HttpMethod::Get, "/api/auth/ok");
+        let resp = auth.handle_request(req).await.unwrap();
+        assert_eq!(resp.status, 404);
+    }
+
+    // ── Accessors ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn accessors() {
+        let auth = build_auth().await;
+        assert!(auth.plugins().is_empty());
+        assert!(auth.plugin_names().is_empty());
+        assert!(auth.get_plugin("nonexistent").is_none());
+        assert!(auth.routes().is_empty()); // no plugins
+        let _ = auth.session_manager();
+        let _ = auth.database();
+    }
+
+    #[tokio::test]
+    async fn openapi_spec_generation() {
+        let auth = build_auth().await;
+        let spec = auth.openapi_spec();
+        let json = spec.to_json().unwrap();
+        assert!(json.contains("Better Auth"));
     }
 }

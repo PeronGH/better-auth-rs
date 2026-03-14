@@ -1308,3 +1308,274 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::traits::{AccountOps, VerificationOps};
+    use crate::entity::{AuthSession, AuthUser};
+
+    fn adapter() -> MemoryDatabaseAdapter {
+        MemoryDatabaseAdapter::new()
+    }
+
+    // ── User CRUD ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn create_and_get_user() {
+        let db = adapter();
+        let user = db
+            .create_user(
+                CreateUser::new()
+                    .with_email("test@test.com")
+                    .with_name("Test"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(user.email(), Some("test@test.com"));
+        assert_eq!(user.name(), Some("Test"));
+
+        let found = db.get_user_by_id(user.id()).await.unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id(), user.id());
+    }
+
+    #[tokio::test]
+    async fn get_user_by_email() {
+        let db = adapter();
+        let _ = db
+            .create_user(CreateUser::new().with_email("lookup@test.com"))
+            .await
+            .unwrap();
+
+        let found = db.get_user_by_email("lookup@test.com").await.unwrap();
+        assert!(found.is_some());
+
+        let missing = db.get_user_by_email("missing@test.com").await.unwrap();
+        assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn duplicate_email_returns_conflict() {
+        let db = adapter();
+        let _ = db
+            .create_user(CreateUser::new().with_email("dup@test.com"))
+            .await
+            .unwrap();
+
+        let result = db
+            .create_user(CreateUser::new().with_email("dup@test.com"))
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn update_user() {
+        let db = adapter();
+        let user = db
+            .create_user(
+                CreateUser::new()
+                    .with_email("update@test.com")
+                    .with_name("Old"),
+            )
+            .await
+            .unwrap();
+
+        let updated = db
+            .update_user(
+                user.id(),
+                UpdateUser {
+                    name: Some("New".into()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(updated.name(), Some("New"));
+    }
+
+    #[tokio::test]
+    async fn delete_user() {
+        let db = adapter();
+        let user = db
+            .create_user(CreateUser::new().with_email("del@test.com"))
+            .await
+            .unwrap();
+
+        db.delete_user(user.id()).await.unwrap();
+        let found = db.get_user_by_id(user.id()).await.unwrap();
+        assert!(found.is_none());
+    }
+
+    // ── Session CRUD ────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn create_and_get_session() {
+        let db = adapter();
+        let user = db
+            .create_user(CreateUser::new().with_email("sess@test.com"))
+            .await
+            .unwrap();
+
+        let session = db
+            .create_session(CreateSession {
+                user_id: user.id().to_string(),
+                expires_at: Utc::now() + chrono::Duration::hours(1),
+                ip_address: Some("1.2.3.4".into()),
+                user_agent: Some("TestAgent".into()),
+                impersonated_by: None,
+                active_organization_id: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(session.user_id(), user.id());
+
+        let found = db.get_session(session.token()).await.unwrap();
+        assert!(found.is_some());
+    }
+
+    #[tokio::test]
+    async fn get_user_sessions() {
+        let db = adapter();
+        let user = db
+            .create_user(CreateUser::new().with_email("multi@test.com"))
+            .await
+            .unwrap();
+
+        for _ in 0..3 {
+            let _ = db
+                .create_session(CreateSession {
+                    user_id: user.id().to_string(),
+                    expires_at: Utc::now() + chrono::Duration::hours(1),
+                    ip_address: None,
+                    user_agent: None,
+                    impersonated_by: None,
+                    active_organization_id: None,
+                })
+                .await
+                .unwrap();
+        }
+
+        let sessions = db.get_user_sessions(user.id()).await.unwrap();
+        assert_eq!(sessions.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn delete_user_sessions() {
+        let db = adapter();
+        let user = db
+            .create_user(CreateUser::new().with_email("delsess@test.com"))
+            .await
+            .unwrap();
+
+        let _ = db
+            .create_session(CreateSession {
+                user_id: user.id().to_string(),
+                expires_at: Utc::now() + chrono::Duration::hours(1),
+                ip_address: None,
+                user_agent: None,
+                impersonated_by: None,
+                active_organization_id: None,
+            })
+            .await
+            .unwrap();
+
+        db.delete_user_sessions(user.id()).await.unwrap();
+        let sessions = db.get_user_sessions(user.id()).await.unwrap();
+        assert!(sessions.is_empty());
+    }
+
+    // ── Account CRUD ────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn create_and_get_account() {
+        let db = adapter();
+        let user = db
+            .create_user(CreateUser::new().with_email("acct@test.com"))
+            .await
+            .unwrap();
+
+        let account = db
+            .create_account(CreateAccount {
+                user_id: user.id().to_string(),
+                account_id: user.id().to_string(),
+                provider_id: "credential".into(),
+                access_token: None,
+                refresh_token: None,
+                id_token: None,
+                access_token_expires_at: None,
+                refresh_token_expires_at: None,
+                scope: None,
+                password: Some("hashed".into()),
+            })
+            .await
+            .unwrap();
+
+        let found: Option<Account> = db.get_account("credential", user.id()).await.unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, account.id);
+    }
+
+    // ── Verification CRUD ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn create_and_get_verification() {
+        let db = adapter();
+        let v = db
+            .create_verification(CreateVerification {
+                identifier: "test-id".into(),
+                value: "secret-value".into(),
+                expires_at: Utc::now() + chrono::Duration::hours(1),
+            })
+            .await
+            .unwrap();
+
+        let found = db
+            .get_verification("test-id", "secret-value")
+            .await
+            .unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, v.id);
+    }
+
+    #[tokio::test]
+    async fn delete_verification() {
+        let db = adapter();
+        let v = db
+            .create_verification(CreateVerification {
+                identifier: "del-id".into(),
+                value: "val".into(),
+                expires_at: Utc::now() + chrono::Duration::hours(1),
+            })
+            .await
+            .unwrap();
+
+        db.delete_verification(&v.id).await.unwrap();
+        let found = db.get_verification("del-id", "val").await.unwrap();
+        assert!(found.is_none());
+    }
+
+    // ── List users ──────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn list_users_with_limit() {
+        let db = adapter();
+        for i in 0..5 {
+            let _ = db
+                .create_user(CreateUser::new().with_email(format!("list{}@test.com", i)))
+                .await
+                .unwrap();
+        }
+
+        let (users, total) = db
+            .list_users(ListUsersParams {
+                limit: Some(3),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(users.len(), 3);
+        assert_eq!(total, 5);
+    }
+}
