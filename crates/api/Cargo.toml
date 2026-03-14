@@ -6,6 +6,9 @@ license = { workspace = true }
 description = "Plugin implementations for better-auth"
 repository = { workspace = true }
 
+[lints]
+workspace = true
+
 [dependencies]
 better-auth-core = { workspace = true, features = ["derive"] }
 

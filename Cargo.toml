@@ -6,6 +6,9 @@ edition = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
+[lints]
+workspace = true
+
 [workspace]
 resolver = "2"
 members = ["crates/core", "crates/api", "crates/derive"]
@@ -163,6 +166,30 @@ path = "scripts/sync_better_auth_openapi.rs"
 [[bin]]
 name = "openapi_alignment_report"
 path = "scripts/openapi_alignment_report.rs"
+
+[workspace.lints.clippy]
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+unreachable = "warn"
+indexing_slicing = "warn"
+panic_in_result_fn = "warn"
+undocumented_unsafe_blocks = "warn"
+missing_safety_doc = "warn"
+await_holding_lock = "warn"
+await_holding_refcell_ref = "warn"
+unused_async = "warn"
+multiple_unsafe_ops_per_block = "warn"
+unnecessary_safety_comment = "warn"
+
+[workspace.lints.rust]
+unfulfilled_lint_expectations = "warn"
+unreachable_pub = "warn"
+unused_results = "warn"
 
 [profile.release]
 opt-level = 3

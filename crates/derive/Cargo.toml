@@ -6,6 +6,9 @@ license = { workspace = true }
 description = "Derive macros for better-auth entity traits"
 repository = { workspace = true }
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 
