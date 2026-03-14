@@ -373,7 +373,6 @@ mod tests {
 
     #[tokio::test]
     async fn create_and_get_session() {
-        let mgr = test_manager();
         let db = Arc::new(MemoryDatabaseAdapter::new());
         let mgr = SessionManager::new(test_config(), db.clone());
 
