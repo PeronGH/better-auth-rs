@@ -80,7 +80,7 @@ impl OpenApiBuilder {
             tags: vec![tag.to_string()],
             responses: {
                 let mut r = BTreeMap::new();
-                r.insert(
+                _ = r.insert(
                     "200".to_string(),
                     OpenApiResponse {
                         description: "Successful response".to_string(),
@@ -90,7 +90,8 @@ impl OpenApiBuilder {
             },
         };
 
-        self.paths
+        _ = self
+            .paths
             .entry(path.to_string())
             .or_default()
             .insert(method_str.to_string(), operation);

@@ -30,7 +30,7 @@ pub(super) async fn create_verification_token<DB: DatabaseAdapter>(
         expires_at,
     };
 
-    ctx.database
+    let _ = ctx.database
         .create_verification(create_verification)
         .await?;
 
@@ -111,7 +111,7 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
             email_verified: Some(false),
             ..Default::default()
         };
-        ctx.database.update_user(user.id(), update_user).await?;
+        let _ = ctx.database.update_user(user.id(), update_user).await?;
 
         return Ok(StatusMessageResponse {
             status: true,
@@ -178,12 +178,14 @@ pub(crate) async fn change_email_verify_core<DB: DatabaseAdapter>(
 
     let identifier = verification.identifier();
     let parts: Vec<String> = identifier.splitn(3, ':').map(|s| s.to_string()).collect();
-    if parts.len() != 3 || parts[0] != "change_email" {
+    if parts.len() != 3
+        || parts.first().map(|s| s.as_str()) != Some("change_email")
+    {
         return Err(AuthError::bad_request("Invalid verification token"));
     }
 
-    let user_id = &parts[1];
-    let new_email = &parts[2];
+    let user_id = parts.get(1).ok_or_else(|| AuthError::bad_request("Invalid verification token"))?;
+    let new_email = parts.get(2).ok_or_else(|| AuthError::bad_request("Invalid verification token"))?;
     let verification_id = verification.id().to_string();
 
     // Fetch the user
@@ -207,7 +209,7 @@ pub(crate) async fn change_email_verify_core<DB: DatabaseAdapter>(
         ..Default::default()
     };
 
-    ctx.database.update_user(user.id(), update_user).await?;
+    let _ = ctx.database.update_user(user.id(), update_user).await?;
 
     // Consume the verification token
     ctx.database.delete_verification(&verification_id).await?;
@@ -288,11 +290,13 @@ pub(crate) async fn delete_user_verify_core<DB: DatabaseAdapter>(
 
     let identifier = verification.identifier();
     let parts: Vec<String> = identifier.splitn(2, ':').map(|s| s.to_string()).collect();
-    if parts.len() != 2 || parts[0] != "delete_user" {
+    if parts.len() != 2
+        || parts.first().map(|s| s.as_str()) != Some("delete_user")
+    {
         return Err(AuthError::bad_request("Invalid verification token"));
     }
 
-    let user_id = &parts[1];
+    let user_id = parts.get(1).ok_or_else(|| AuthError::bad_request("Invalid verification token"))?;
     let verification_id = verification.id().to_string();
 
     // Fetch the user

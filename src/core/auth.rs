@@ -225,7 +225,7 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
 
 impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Create a new BetterAuth builder.
-    #[allow(clippy::new_ret_no_self)]
+    #[expect(clippy::new_ret_no_self, reason = "returns AuthBuilder by design — builder pattern entry point")]
     pub fn new(config: AuthConfig) -> AuthBuilder {
         AuthBuilder::new(config)
     }
@@ -435,7 +435,8 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             metadata: update_req.metadata,
         };
 
-        self.database
+        _ = self
+            .database
             .update_user(current_user.id(), update_user)
             .await?;
 
@@ -498,7 +499,8 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             metadata: None,
         };
 
-        self.database
+        _ = self
+            .database
             .update_user(current_user.id(), update_user)
             .await?;
 

@@ -236,13 +236,14 @@ pub(crate) async fn refresh_token_core<DB: DatabaseAdapter>(
         .await
         .map_err(|e| AuthError::internal(format!("Failed to parse refresh response: {}", e)))?;
 
-    let new_access_token = token_data["access_token"]
-        .as_str()
+    let new_access_token = token_data
+        .get("access_token")
+        .and_then(|v| v.as_str())
         .ok_or_else(|| AuthError::internal("Missing access_token in refresh response"))?;
 
-    let new_refresh_token = token_data["refresh_token"].as_str().map(String::from);
-    let expires_in = token_data["expires_in"].as_i64();
-    let new_scope = token_data["scope"].as_str().map(String::from);
+    let new_refresh_token = token_data.get("refresh_token").and_then(|v| v.as_str()).map(String::from);
+    let expires_in = token_data.get("expires_in").and_then(|v| v.as_i64());
+    let new_scope = token_data.get("scope").and_then(|v| v.as_str()).map(String::from);
 
     let access_token_expires_at = expires_in.map(|secs| Utc::now() + Duration::seconds(secs));
 
@@ -252,7 +253,8 @@ pub(crate) async fn refresh_token_core<DB: DatabaseAdapter>(
         new_refresh_token.clone(),
         None,
     )?;
-    ctx.database
+    let _ = ctx
+        .database
         .update_account(
             account.id(),
             UpdateAccount {
@@ -306,7 +308,8 @@ async fn initiate_oauth_flow_core<DB: DatabaseAdapter>(
         "scopes": effective_scopes.join(" "),
     });
 
-    ctx.database
+    let _ = ctx
+        .database
         .create_verification(CreateVerification {
             identifier: format!("oauth:{}", state),
             value: payload.to_string(),
@@ -333,7 +336,7 @@ async fn initiate_oauth_flow_core<DB: DatabaseAdapter>(
 // Old handlers (rewritten to call core)
 // ---------------------------------------------------------------------------
 
-pub async fn handle_social_sign_in<DB: DatabaseAdapter>(
+pub(crate) async fn handle_social_sign_in<DB: DatabaseAdapter>(
     config: &OAuthConfig,
     req: &AuthRequest,
     ctx: &AuthContext<DB>,
@@ -363,25 +366,28 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
     let payload: serde_json::Value = serde_json::from_str(verification.value())
         .map_err(|e| AuthError::internal(format!("Invalid state payload: {}", e)))?;
 
-    let stored_provider = payload["provider"]
-        .as_str()
+    let stored_provider = payload
+        .get("provider")
+        .and_then(|v| v.as_str())
         .ok_or_else(|| AuthError::internal("Missing provider in state"))?;
 
     if stored_provider != provider_name {
         return Err(AuthError::bad_request("Provider mismatch"));
     }
 
-    let callback_url = payload["callback_url"]
-        .as_str()
+    let callback_url = payload
+        .get("callback_url")
+        .and_then(|v| v.as_str())
         .ok_or_else(|| AuthError::internal("Missing callback_url in state"))?;
 
-    let code_verifier = payload["code_verifier"]
-        .as_str()
+    let code_verifier = payload
+        .get("code_verifier")
+        .and_then(|v| v.as_str())
         .ok_or_else(|| AuthError::internal("Missing code_verifier in state"))?;
 
-    let link_user_id = payload["link_user_id"].as_str().map(String::from);
+    let link_user_id = payload.get("link_user_id").and_then(|v| v.as_str()).map(String::from);
 
-    let scopes = payload["scopes"].as_str().map(String::from);
+    let scopes = payload.get("scopes").and_then(|v| v.as_str()).map(String::from);
 
     // Delete the verification now that we've used it
     ctx.database.delete_verification(verification.id()).await?;
@@ -424,13 +430,14 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
         .await
         .map_err(|e| AuthError::internal(format!("Failed to parse token response: {}", e)))?;
 
-    let access_token = token_data["access_token"]
-        .as_str()
+    let access_token = token_data
+        .get("access_token")
+        .and_then(|v| v.as_str())
         .ok_or_else(|| AuthError::internal("Missing access_token in token response"))?;
 
-    let refresh_token = token_data["refresh_token"].as_str().map(String::from);
-    let id_token = token_data["id_token"].as_str().map(String::from);
-    let expires_in = token_data["expires_in"].as_i64();
+    let refresh_token = token_data.get("refresh_token").and_then(|v| v.as_str()).map(String::from);
+    let id_token = token_data.get("id_token").and_then(|v| v.as_str()).map(String::from);
+    let expires_in = token_data.get("expires_in").and_then(|v| v.as_i64());
 
     // Fetch user info
     let user_info_resp = client
@@ -486,7 +493,7 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
         // Create account link (encrypt tokens if configured)
         let tokens =
             encrypt_token_set(ctx, Some(access_token.to_string()), refresh_token, id_token)?;
-        ctx.database
+        let _ = ctx.database
             .create_account(CreateAccount {
                 user_id: link_user_id,
                 account_id: user_info.id,
@@ -518,7 +525,7 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
                 refresh_token.clone(),
                 id_token.clone(),
             )?;
-            ctx.database
+            let _ = ctx.database
                 .update_account(
                     existing_account.id(),
                     UpdateAccount {
@@ -571,7 +578,7 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
                 if let Some(image) = &user_info.image {
                     update.image = Some(image.clone());
                 }
-                ctx.database.update_user(existing_user.id(), update).await?;
+                let _ = ctx.database.update_user(existing_user.id(), update).await?;
                 // Re-fetch the user to get updated fields
                 ctx.database
                     .get_user_by_id(existing_user.id())
@@ -597,7 +604,7 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
 
     // Create account (encrypt tokens if configured)
     let tokens = encrypt_token_set(ctx, Some(access_token.to_string()), refresh_token, id_token)?;
-    ctx.database
+    let _ = ctx.database
         .create_account(CreateAccount {
             user_id: user.id().to_string(),
             account_id: user_info.id,
@@ -615,7 +622,7 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
     create_oauth_session_tuple(user, ctx).await
 }
 
-pub async fn handle_callback<DB: DatabaseAdapter>(
+pub(crate) async fn handle_callback<DB: DatabaseAdapter>(
     config: &OAuthConfig,
     provider_name: &str,
     req: &AuthRequest,
@@ -641,7 +648,7 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
     Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
 }
 
-pub async fn handle_link_social<DB: DatabaseAdapter>(
+pub(crate) async fn handle_link_social<DB: DatabaseAdapter>(
     config: &OAuthConfig,
     req: &AuthRequest,
     ctx: &AuthContext<DB>,
@@ -655,7 +662,7 @@ pub async fn handle_link_social<DB: DatabaseAdapter>(
     AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
-pub async fn handle_get_access_token<DB: DatabaseAdapter>(
+pub(crate) async fn handle_get_access_token<DB: DatabaseAdapter>(
     config: &OAuthConfig,
     req: &AuthRequest,
     ctx: &AuthContext<DB>,
@@ -670,7 +677,7 @@ pub async fn handle_get_access_token<DB: DatabaseAdapter>(
     AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
-pub async fn handle_refresh_token<DB: DatabaseAdapter>(
+pub(crate) async fn handle_refresh_token<DB: DatabaseAdapter>(
     config: &OAuthConfig,
     req: &AuthRequest,
     ctx: &AuthContext<DB>,

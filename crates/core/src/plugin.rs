@@ -216,7 +216,7 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
     }
 
     pub fn set_metadata(&mut self, key: impl Into<String>, value: serde_json::Value) {
-        self.metadata.insert(key.into(), value);
+        _ = self.metadata.insert(key.into(), value);
     }
 
     pub fn get_metadata(&self, key: &str) -> Option<&serde_json::Value> {

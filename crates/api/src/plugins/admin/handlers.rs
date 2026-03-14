@@ -58,14 +58,14 @@ pub(crate) async fn create_user_core<DB: DatabaseAdapter>(
 
     let metadata_value = body.data.clone().unwrap_or(serde_json::json!({}));
     let metadata = if let serde_json::Value::Object(mut obj) = metadata_value {
-        obj.insert(
+        let _ = obj.insert(
             PASSWORD_HASH_KEY.to_string(),
             serde_json::json!(password_hash),
         );
         serde_json::Value::Object(obj)
     } else {
         let mut obj = serde_json::Map::new();
-        obj.insert(
+        let _ = obj.insert(
             PASSWORD_HASH_KEY.to_string(),
             serde_json::json!(password_hash),
         );
@@ -81,7 +81,7 @@ pub(crate) async fn create_user_core<DB: DatabaseAdapter>(
 
     let user = ctx.database.create_user(create_user).await?;
 
-    ctx.database
+    let _ = ctx.database
         .create_account(CreateAccount {
             user_id: user.id().to_string(),
             account_id: user.id().to_string(),
@@ -181,7 +181,7 @@ pub(crate) async fn ban_user_core<DB: DatabaseAdapter>(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
 
-    ctx.session_manager()
+    let _ = ctx.session_manager()
         .revoke_all_user_sessions(&body.user_id)
         .await?;
 
@@ -306,7 +306,7 @@ pub(crate) async fn revoke_user_sessions_core<DB: DatabaseAdapter>(
         .await?
         .ok_or_else(|| AuthError::not_found("User not found"))?;
 
-    ctx.session_manager()
+    let _ = ctx.session_manager()
         .revoke_all_user_sessions(&body.user_id)
         .await?;
 
@@ -360,7 +360,7 @@ pub(crate) async fn set_user_password_core<DB: DatabaseAdapter>(
 
     let mut metadata = user.metadata().clone();
     if let Some(obj) = metadata.as_object_mut() {
-        obj.insert(
+        let _ = obj.insert(
             PASSWORD_HASH_KEY.to_string(),
             serde_json::json!(password_hash),
         );
@@ -374,7 +374,7 @@ pub(crate) async fn set_user_password_core<DB: DatabaseAdapter>(
         metadata: Some(metadata),
         ..Default::default()
     };
-    ctx.database.update_user(&body.user_id, update).await?;
+    let _ = ctx.database.update_user(&body.user_id, update).await?;
 
     let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
     let has_credential = accounts.iter().any(|a| a.provider_id() == "credential");
@@ -386,14 +386,14 @@ pub(crate) async fn set_user_password_core<DB: DatabaseAdapter>(
                     password: Some(password_hash.clone()),
                     ..Default::default()
                 };
-                ctx.database
+                let _ = ctx.database
                     .update_account(account.id(), account_update)
                     .await?;
                 break;
             }
         }
     } else {
-        ctx.database
+        let _ = ctx.database
             .create_account(CreateAccount {
                 user_id: body.user_id.clone(),
                 account_id: body.user_id.clone(),
@@ -412,7 +412,7 @@ pub(crate) async fn set_user_password_core<DB: DatabaseAdapter>(
     Ok(StatusResponse { status: true })
 }
 
-pub(crate) async fn has_permission_core<DB: DatabaseAdapter>(
+pub(crate) fn has_permission_core<DB: DatabaseAdapter>(
     body: &HasPermissionRequest,
     user: &DB::User,
     config: &AdminConfig,

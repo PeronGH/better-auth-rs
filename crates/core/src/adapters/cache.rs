@@ -3,7 +3,7 @@ use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::error::AuthResult;
+use crate::error::{AuthError, AuthResult};
 
 /// Cache adapter trait for session caching
 #[async_trait]
@@ -47,9 +47,10 @@ impl MemoryCacheAdapter {
 
     /// Clean up expired entries
     fn cleanup_expired(&self) {
-        let mut data = self.data.lock().unwrap();
-        let now = Utc::now();
-        data.retain(|_, entry| entry.expires_at > now);
+        if let Ok(mut data) = self.data.lock() {
+            let now = Utc::now();
+            data.retain(|_, entry| entry.expires_at > now);
+        }
     }
 }
 
@@ -70,8 +71,11 @@ impl CacheAdapter for MemoryCacheAdapter {
             expires_at,
         };
 
-        let mut data = self.data.lock().unwrap();
-        data.insert(key.to_string(), entry);
+        let mut data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
+        let _ = data.insert(key.to_string(), entry);
 
         Ok(())
     }
@@ -79,7 +83,10 @@ impl CacheAdapter for MemoryCacheAdapter {
     async fn get(&self, key: &str) -> AuthResult<Option<String>> {
         self.cleanup_expired();
 
-        let data = self.data.lock().unwrap();
+        let data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
         let now = Utc::now();
 
         if let Some(entry) = data.get(key) {
@@ -94,15 +101,21 @@ impl CacheAdapter for MemoryCacheAdapter {
     }
 
     async fn delete(&self, key: &str) -> AuthResult<()> {
-        let mut data = self.data.lock().unwrap();
-        data.remove(key);
+        let mut data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
+        let _ = data.remove(key);
         Ok(())
     }
 
     async fn exists(&self, key: &str) -> AuthResult<bool> {
         self.cleanup_expired();
 
-        let data = self.data.lock().unwrap();
+        let data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
         let now = Utc::now();
 
         if let Some(entry) = data.get(key) {
@@ -113,7 +126,10 @@ impl CacheAdapter for MemoryCacheAdapter {
     }
 
     async fn expire(&self, key: &str, expires_in: Duration) -> AuthResult<()> {
-        let mut data = self.data.lock().unwrap();
+        let mut data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
 
         if let Some(entry) = data.get_mut(key) {
             entry.expires_at = Utc::now() + expires_in;
@@ -123,7 +139,10 @@ impl CacheAdapter for MemoryCacheAdapter {
     }
 
     async fn clear(&self) -> AuthResult<()> {
-        let mut data = self.data.lock().unwrap();
+        let mut data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
         data.clear();
         Ok(())
     }

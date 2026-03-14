@@ -304,7 +304,7 @@ impl AdminPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = has_permission_core::<DB>(&body, &user, &self.config).await?;
+        let response = has_permission_core::<DB>(&body, &user, &self.config)?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 }
@@ -474,7 +474,7 @@ mod axum_impl {
         CurrentSession { user, .. }: CurrentSession<DB>,
         ValidatedJson(body): ValidatedJson<HasPermissionRequest>,
     ) -> Result<Json<PermissionResponse>, AuthError> {
-        let response = has_permission_core::<DB>(&body, &user, &ps.config).await?;
+        let response = has_permission_core::<DB>(&body, &user, &ps.config)?;
         Ok(Json(response))
     }
 

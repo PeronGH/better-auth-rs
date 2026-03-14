@@ -58,11 +58,11 @@ impl OAuthProvider {
             ],
             map_user_info: |v| {
                 Ok(OAuthUserInfo {
-                    id: v["sub"].as_str().ok_or("missing sub")?.to_string(),
-                    email: v["email"].as_str().ok_or("missing email")?.to_string(),
-                    name: v["name"].as_str().map(String::from),
-                    image: v["picture"].as_str().map(String::from),
-                    email_verified: v["email_verified"].as_bool().unwrap_or(false),
+                    id: v.get("sub").and_then(|v| v.as_str()).ok_or("missing sub")?.to_string(),
+                    email: v.get("email").and_then(|v| v.as_str()).ok_or("missing email")?.to_string(),
+                    name: v.get("name").and_then(|v| v.as_str()).map(String::from),
+                    image: v.get("picture").and_then(|v| v.as_str()).map(String::from),
+                    email_verified: v.get("email_verified").and_then(|v| v.as_bool()).unwrap_or(false),
                 })
             },
         }
@@ -78,14 +78,14 @@ impl OAuthProvider {
             scopes: vec!["user:email".to_string()],
             map_user_info: |v| {
                 Ok(OAuthUserInfo {
-                    id: v["id"]
-                        .as_i64()
+                    id: v.get("id")
+                        .and_then(|v| v.as_i64())
                         .map(|i| i.to_string())
-                        .or_else(|| v["id"].as_str().map(String::from))
+                        .or_else(|| v.get("id").and_then(|v| v.as_str()).map(String::from))
                         .ok_or("missing id")?,
-                    email: v["email"].as_str().ok_or("missing email")?.to_string(),
-                    name: v["name"].as_str().map(String::from),
-                    image: v["avatar_url"].as_str().map(String::from),
+                    email: v.get("email").and_then(|v| v.as_str()).ok_or("missing email")?.to_string(),
+                    name: v.get("name").and_then(|v| v.as_str()).map(String::from),
+                    image: v.get("avatar_url").and_then(|v| v.as_str()).map(String::from),
                     email_verified: true,
                 })
             },
@@ -102,17 +102,17 @@ impl OAuthProvider {
             scopes: vec!["identify".to_string(), "email".to_string()],
             map_user_info: |v| {
                 Ok(OAuthUserInfo {
-                    id: v["id"].as_str().ok_or("missing id")?.to_string(),
-                    email: v["email"].as_str().ok_or("missing email")?.to_string(),
-                    name: v["username"].as_str().map(String::from),
-                    image: v["avatar"].as_str().map(|a| {
+                    id: v.get("id").and_then(|v| v.as_str()).ok_or("missing id")?.to_string(),
+                    email: v.get("email").and_then(|v| v.as_str()).ok_or("missing email")?.to_string(),
+                    name: v.get("username").and_then(|v| v.as_str()).map(String::from),
+                    image: v.get("avatar").and_then(|v| v.as_str()).map(|a| {
                         format!(
                             "https://cdn.discordapp.com/avatars/{}/{}.png",
-                            v["id"].as_str().unwrap_or(""),
+                            v.get("id").and_then(|v| v.as_str()).unwrap_or(""),
                             a
                         )
                     }),
-                    email_verified: v["verified"].as_bool().unwrap_or(false),
+                    email_verified: v.get("verified").and_then(|v| v.as_bool()).unwrap_or(false),
                 })
             },
         }

@@ -31,7 +31,7 @@ impl OAuthPlugin {
     }
 
     pub fn add_provider(mut self, name: &str, provider: OAuthProvider) -> Self {
-        self.config.providers.insert(name.to_string(), provider);
+        let _ = self.config.providers.insert(name.to_string(), provider);
         self
     }
 }

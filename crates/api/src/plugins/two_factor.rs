@@ -55,7 +55,7 @@ pub(crate) struct GetTotpUriRequest {
 pub(crate) struct VerifyTotpRequest {
     code: String,
     #[serde(rename = "trustDevice")]
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "deserialized from request but not yet used")]
     trust_device: Option<String>,
 }
 
@@ -63,7 +63,7 @@ pub(crate) struct VerifyTotpRequest {
 pub(crate) struct VerifyOtpRequest {
     code: String,
     #[serde(rename = "trustDevice")]
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "deserialized from request but not yet used")]
     trust_device: Option<String>,
 }
 
@@ -76,10 +76,10 @@ pub(crate) struct GenerateBackupCodesRequest {
 pub(crate) struct VerifyBackupCodeRequest {
     code: String,
     #[serde(rename = "disableSession")]
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "deserialized from request but not yet used")]
     disable_session: Option<String>,
     #[serde(rename = "trustDevice")]
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "deserialized from request but not yet used")]
     trust_device: Option<String>,
 }
 
@@ -195,7 +195,8 @@ async fn enable_core<DB: DatabaseAdapter>(
     let hashed_codes = hash_backup_codes(&backup_codes).await?;
 
     // Store 2FA record
-    ctx.database
+    let _ = ctx
+        .database
         .create_two_factor(CreateTwoFactor {
             user_id: user.id().to_string(),
             secret: secret_encoded,
@@ -204,7 +205,8 @@ async fn enable_core<DB: DatabaseAdapter>(
         .await?;
 
     // Update user flag
-    ctx.database
+    let _ = ctx
+        .database
         .update_user(
             user.id(),
             UpdateUser {
@@ -229,7 +231,8 @@ async fn disable_core<DB: DatabaseAdapter>(
 
     ctx.database.delete_two_factor(user.id()).await?;
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_user(
             user.id(),
             UpdateUser {
@@ -281,7 +284,8 @@ async fn generate_backup_codes_core<DB: DatabaseAdapter>(
     let backup_codes = generate_backup_codes(config);
     let hashed_codes = hash_backup_codes(&backup_codes).await?;
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_two_factor_backup_codes(user.id(), &hashed_codes)
         .await?;
 
@@ -388,7 +392,8 @@ async fn send_otp_core<DB: DatabaseAdapter>(
 
     // Store the OTP verification (expires in 5 minutes)
     let expires_at = chrono::Utc::now() + chrono::Duration::minutes(5);
-    ctx.database
+    let _ = ctx
+        .database
         .create_verification(CreateVerification {
             identifier: format!("2fa_otp:{}", user.id()),
             value: otp.clone(),
@@ -490,12 +495,13 @@ async fn verify_backup_code_core<DB: DatabaseAdapter>(
 
     // Remove used code and update
     let mut remaining_codes = hashed_codes;
-    remaining_codes.remove(idx);
+    let _ = remaining_codes.remove(idx);
 
     let updated_codes_json =
         serde_json::to_string(&remaining_codes).map_err(|e| AuthError::internal(e.to_string()))?;
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_two_factor_backup_codes(user.id(), &updated_codes_json)
         .await?;
 

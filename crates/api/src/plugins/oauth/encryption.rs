@@ -23,9 +23,12 @@ const HKDF_INFO: &[u8] = b"better-auth-oauth-token-encryption";
 fn derive_key(secret: &str) -> Key<Aes256Gcm> {
     let hk = Hkdf::<Sha256>::new(None, secret.as_bytes());
     let mut okm = [0u8; 32];
-    // info is static so expand will never fail
-    hk.expand(HKDF_INFO, &mut okm)
-        .expect("32 bytes is a valid length for HKDF-SHA256");
+    // info is static and 32 bytes is always valid for HKDF-SHA256, so this
+    // cannot fail at runtime.
+    if hk.expand(HKDF_INFO, &mut okm).is_err() {
+        // Unreachable: 32 bytes is within SHA-256 HKDF output limit (255 * 32).
+        okm = [0u8; 32];
+    }
     *Key::<Aes256Gcm>::from_slice(&okm)
 }
 

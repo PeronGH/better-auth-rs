@@ -523,7 +523,7 @@ impl AuthResponse {
     pub fn json<T: Serialize>(status: u16, data: &T) -> Result<Self, serde_json::Error> {
         let body = serde_json::to_vec(data)?;
         let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "application/json".to_string());
+        _ = headers.insert("content-type".to_string(), "application/json".to_string());
 
         Ok(Self {
             status,
@@ -535,7 +535,7 @@ impl AuthResponse {
     pub fn text(status: u16, text: impl Into<String>) -> Self {
         let body = text.into().into_bytes();
         let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "text/plain".to_string());
+        _ = headers.insert("content-type".to_string(), "text/plain".to_string());
 
         Self {
             status,
@@ -545,7 +545,7 @@ impl AuthResponse {
     }
 
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
-        self.headers.insert(name.into(), value.into());
+        _ = self.headers.insert(name.into(), value.into());
         self
     }
 }

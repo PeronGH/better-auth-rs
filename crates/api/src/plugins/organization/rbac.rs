@@ -57,43 +57,43 @@ pub fn default_roles() -> HashMap<String, Role> {
     let mut roles = HashMap::new();
 
     // Owner - full permissions
-    roles.insert(
+    let _ = roles.insert(
         "owner".to_string(),
         Role {
             name: "owner".to_string(),
             permissions: {
                 let mut p = HashMap::new();
-                p.insert(Resource::Organization, vec![Action::Update, Action::Delete]);
-                p.insert(
+                let _ = p.insert(Resource::Organization, vec![Action::Update, Action::Delete]);
+                let _ = p.insert(
                     Resource::Member,
                     vec![Action::Create, Action::Update, Action::Delete],
                 );
-                p.insert(Resource::Invitation, vec![Action::Create, Action::Cancel]);
+                let _ = p.insert(Resource::Invitation, vec![Action::Create, Action::Cancel]);
                 p
             },
         },
     );
 
     // Admin - most permissions except org deletion
-    roles.insert(
+    let _ = roles.insert(
         "admin".to_string(),
         Role {
             name: "admin".to_string(),
             permissions: {
                 let mut p = HashMap::new();
-                p.insert(Resource::Organization, vec![Action::Update]);
-                p.insert(
+                let _ = p.insert(Resource::Organization, vec![Action::Update]);
+                let _ = p.insert(
                     Resource::Member,
                     vec![Action::Create, Action::Update, Action::Delete],
                 );
-                p.insert(Resource::Invitation, vec![Action::Create, Action::Cancel]);
+                let _ = p.insert(Resource::Invitation, vec![Action::Create, Action::Cancel]);
                 p
             },
         },
     );
 
     // Member - read-only
-    roles.insert(
+    let _ = roles.insert(
         "member".to_string(),
         Role {
             name: "member".to_string(),

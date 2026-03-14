@@ -56,7 +56,7 @@ impl std::fmt::Debug for EmailPasswordConfig {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[allow(dead_code)]
+#[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignUpRequest {
     #[validate(length(min = 1, message = "Name is required"))]
     name: String,
@@ -72,7 +72,7 @@ pub(crate) struct SignUpRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[allow(dead_code)]
+#[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignInRequest {
     #[validate(email(message = "Invalid email address"))]
     email: String,
@@ -85,7 +85,7 @@ pub(crate) struct SignInRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[allow(dead_code)]
+#[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignInUsernameRequest {
     #[validate(length(min = 1, message = "Username is required"))]
     username: String,
@@ -124,7 +124,7 @@ pub(crate) enum SignInCoreResult<U: Serialize> {
 }
 
 impl EmailPasswordPlugin {
-    #[allow(clippy::new_without_default)]
+    #[expect(clippy::new_without_default, reason = "plugin construction is intentionally explicit")]
     pub fn new() -> Self {
         Self {
             config: EmailPasswordConfig::default(),
@@ -288,7 +288,7 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
 
     let metadata = {
         let mut m = serde_json::Map::new();
-        m.insert(
+        let _ = m.insert(
             PASSWORD_HASH_KEY.to_string(),
             serde_json::Value::String(password_hash),
         );
@@ -343,7 +343,8 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
     // Check if 2FA is enabled
     if user.two_factor_enabled() {
         let pending_token = format!("2fa_{}", uuid::Uuid::new_v4());
-        ctx.database
+        let _ = ctx
+            .database
             .create_verification(CreateVerification {
                 identifier: format!("2fa_pending:{}", pending_token),
                 value: user.id().to_string(),

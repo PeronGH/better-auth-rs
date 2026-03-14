@@ -109,9 +109,9 @@ where
     type User = U;
 
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<U> {
-        let mut users = self.users.lock().unwrap();
-        let mut email_index = self.email_index.lock().unwrap();
-        let mut username_index = self.username_index.lock().unwrap();
+        let mut users = self.users.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut email_index = self.email_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut username_index = self.username_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         let id = create_user
             .id
@@ -135,26 +135,26 @@ where
         let now = Utc::now();
         let user = U::from_create(id.clone(), &create_user, now);
 
-        users.insert(id.clone(), user.clone());
+        let _ = users.insert(id.clone(), user.clone());
 
         if let Some(email) = &create_user.email {
-            email_index.insert(email.clone(), id.clone());
+            let _ = email_index.insert(email.clone(), id.clone());
         }
         if let Some(username) = &create_user.username {
-            username_index.insert(username.clone(), id);
+            let _ = username_index.insert(username.clone(), id);
         }
 
         Ok(user)
     }
 
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<U>> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(users.get(id).cloned())
     }
 
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<U>> {
-        let email_index = self.email_index.lock().unwrap();
-        let users = self.users.lock().unwrap();
+        let email_index = self.email_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let users = self.users.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         if let Some(user_id) = email_index.get(email) {
             Ok(users.get(user_id).cloned())
@@ -164,8 +164,8 @@ where
     }
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<U>> {
-        let username_index = self.username_index.lock().unwrap();
-        let users = self.users.lock().unwrap();
+        let username_index = self.username_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let users = self.users.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         if let Some(user_id) = username_index.get(username) {
             Ok(users.get(user_id).cloned())
@@ -175,25 +175,25 @@ where
     }
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<U> {
-        let mut users = self.users.lock().unwrap();
-        let mut email_index = self.email_index.lock().unwrap();
-        let mut username_index = self.username_index.lock().unwrap();
+        let mut users = self.users.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut email_index = self.email_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut username_index = self.username_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         let user = users.get_mut(id).ok_or(AuthError::UserNotFound)?;
 
         // Update indices BEFORE mutation (read old values via trait getters)
         if let Some(new_email) = &update.email {
             if let Some(old_email) = user.email() {
-                email_index.remove(old_email);
+                let _ = email_index.remove(old_email);
             }
-            email_index.insert(new_email.clone(), id.to_string());
+            let _ = email_index.insert(new_email.clone(), id.to_string());
         }
 
         if let Some(ref new_username) = update.username {
             if let Some(old_username) = user.username() {
-                username_index.remove(old_username);
+                let _ = username_index.remove(old_username);
             }
-            username_index.insert(new_username.clone(), id.to_string());
+            let _ = username_index.insert(new_username.clone(), id.to_string());
         }
 
         user.apply_update(&update);
@@ -201,16 +201,16 @@ where
     }
 
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
-        let mut users = self.users.lock().unwrap();
-        let mut email_index = self.email_index.lock().unwrap();
-        let mut username_index = self.username_index.lock().unwrap();
+        let mut users = self.users.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut email_index = self.email_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut username_index = self.username_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         if let Some(user) = users.remove(id) {
             if let Some(email) = user.email() {
-                email_index.remove(email);
+                let _ = email_index.remove(email);
             }
             if let Some(username) = user.username() {
-                username_index.remove(username);
+                let _ = username_index.remove(username);
             }
         }
 
@@ -218,7 +218,7 @@ where
     }
 
     async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<U>, usize)> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let mut result: Vec<U> = users.values().cloned().collect();
 
         // Apply search filter
@@ -304,24 +304,24 @@ where
     type Session = S;
 
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<S> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = self.sessions.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         let id = Uuid::new_v4().to_string();
         let token = format!("session_{}", Uuid::new_v4());
         let now = Utc::now();
         let session = S::from_create(id, token.clone(), &create_session, now);
 
-        sessions.insert(token, session.clone());
+        let _ = sessions.insert(token, session.clone());
         Ok(session)
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<S>> {
-        let sessions = self.sessions.lock().unwrap();
+        let sessions = self.sessions.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(sessions.get(token).cloned())
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S>> {
-        let sessions = self.sessions.lock().unwrap();
+        let sessions = self.sessions.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(sessions
             .values()
             .filter(|s| s.user_id() == user_id && s.active())
@@ -334,7 +334,7 @@ where
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> AuthResult<()> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = self.sessions.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         if let Some(session) = sessions.get_mut(token) {
             session.set_expires_at(expires_at);
             session.set_updated_at(Utc::now());
@@ -343,19 +343,19 @@ where
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        let mut sessions = self.sessions.lock().unwrap();
-        sessions.remove(token);
+        let mut sessions = self.sessions.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let _ = sessions.remove(token);
         Ok(())
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = self.sessions.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         sessions.retain(|_, s| s.user_id() != user_id);
         Ok(())
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = self.sessions.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let now = Utc::now();
         let initial_count = sessions.len();
         sessions.retain(|_, s| s.expires_at() > now && s.active());
@@ -367,7 +367,7 @@ where
         token: &str,
         organization_id: Option<&str>,
     ) -> AuthResult<S> {
-        let mut sessions = self.sessions.lock().unwrap();
+        let mut sessions = self.sessions.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let session = sessions.get_mut(token).ok_or(AuthError::SessionNotFound)?;
         session.set_active_organization_id(organization_id.map(|s| s.to_string()));
         session.set_updated_at(Utc::now());
@@ -392,13 +392,13 @@ where
     type Account = A;
 
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<A> {
-        let mut accounts = self.accounts.lock().unwrap();
+        let mut accounts = self.accounts.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
         let account = A::from_create(id.clone(), &create_account, now);
 
-        accounts.insert(id, account.clone());
+        let _ = accounts.insert(id, account.clone());
         Ok(account)
     }
 
@@ -407,7 +407,7 @@ where
         provider: &str,
         provider_account_id: &str,
     ) -> AuthResult<Option<A>> {
-        let accounts = self.accounts.lock().unwrap();
+        let accounts = self.accounts.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(accounts
             .values()
             .find(|acc| acc.provider_id() == provider && acc.account_id() == provider_account_id)
@@ -415,7 +415,7 @@ where
     }
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<A>> {
-        let accounts = self.accounts.lock().unwrap();
+        let accounts = self.accounts.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(accounts
             .values()
             .filter(|acc| acc.user_id() == user_id)
@@ -424,7 +424,7 @@ where
     }
 
     async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<A> {
-        let mut accounts = self.accounts.lock().unwrap();
+        let mut accounts = self.accounts.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let account = accounts
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Account not found"))?;
@@ -433,8 +433,8 @@ where
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
-        let mut accounts = self.accounts.lock().unwrap();
-        accounts.remove(id);
+        let mut accounts = self.accounts.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let _ = accounts.remove(id);
         Ok(())
     }
 }
@@ -456,18 +456,18 @@ where
     type Verification = V;
 
     async fn create_verification(&self, create_verification: CreateVerification) -> AuthResult<V> {
-        let mut verifications = self.verifications.lock().unwrap();
+        let mut verifications = self.verifications.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
         let verification = V::from_create(id.clone(), &create_verification, now);
 
-        verifications.insert(id, verification.clone());
+        let _ = verifications.insert(id, verification.clone());
         Ok(verification)
     }
 
     async fn get_verification(&self, identifier: &str, value: &str) -> AuthResult<Option<V>> {
-        let verifications = self.verifications.lock().unwrap();
+        let verifications = self.verifications.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let now = Utc::now();
         Ok(verifications
             .values()
@@ -476,7 +476,7 @@ where
     }
 
     async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<V>> {
-        let verifications = self.verifications.lock().unwrap();
+        let verifications = self.verifications.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let now = Utc::now();
         Ok(verifications
             .values()
@@ -485,7 +485,7 @@ where
     }
 
     async fn get_verification_by_identifier(&self, identifier: &str) -> AuthResult<Option<V>> {
-        let verifications = self.verifications.lock().unwrap();
+        let verifications = self.verifications.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let now = Utc::now();
         Ok(verifications
             .values()
@@ -494,7 +494,7 @@ where
     }
 
     async fn consume_verification(&self, identifier: &str, value: &str) -> AuthResult<Option<V>> {
-        let mut verifications = self.verifications.lock().unwrap();
+        let mut verifications = self.verifications.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let now = Utc::now();
 
         let matched_id = verifications
@@ -520,13 +520,13 @@ where
     }
 
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
-        let mut verifications = self.verifications.lock().unwrap();
-        verifications.remove(id);
+        let mut verifications = self.verifications.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let _ = verifications.remove(id);
         Ok(())
     }
 
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
-        let mut verifications = self.verifications.lock().unwrap();
+        let mut verifications = self.verifications.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let now = Utc::now();
         let initial_count = verifications.len();
         verifications.retain(|_, v| v.expires_at() > now);
@@ -551,8 +551,8 @@ where
     type Organization = O;
 
     async fn create_organization(&self, create_org: CreateOrganization) -> AuthResult<O> {
-        let mut organizations = self.organizations.lock().unwrap();
-        let mut slug_index = self.slug_index.lock().unwrap();
+        let mut organizations = self.organizations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut slug_index = self.slug_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         if slug_index.contains_key(&create_org.slug) {
             return Err(AuthError::conflict("Organization slug already exists"));
@@ -565,20 +565,20 @@ where
         let now = Utc::now();
         let organization = O::from_create(id.clone(), &create_org, now);
 
-        organizations.insert(id.clone(), organization.clone());
-        slug_index.insert(create_org.slug.clone(), id);
+        let _ = organizations.insert(id.clone(), organization.clone());
+        let _ = slug_index.insert(create_org.slug.clone(), id);
 
         Ok(organization)
     }
 
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<O>> {
-        let organizations = self.organizations.lock().unwrap();
+        let organizations = self.organizations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(organizations.get(id).cloned())
     }
 
     async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<O>> {
-        let slug_index = self.slug_index.lock().unwrap();
-        let organizations = self.organizations.lock().unwrap();
+        let slug_index = self.slug_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let organizations = self.organizations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         if let Some(org_id) = slug_index.get(slug) {
             Ok(organizations.get(org_id).cloned())
@@ -588,8 +588,8 @@ where
     }
 
     async fn update_organization(&self, id: &str, update: UpdateOrganization) -> AuthResult<O> {
-        let mut organizations = self.organizations.lock().unwrap();
-        let mut slug_index = self.slug_index.lock().unwrap();
+        let mut organizations = self.organizations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut slug_index = self.slug_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         let org = organizations
             .get_mut(id)
@@ -602,8 +602,8 @@ where
                 if slug_index.contains_key(new_slug.as_str()) {
                     return Err(AuthError::conflict("Organization slug already exists"));
                 }
-                slug_index.remove(&current_slug);
-                slug_index.insert(new_slug.clone(), id.to_string());
+                let _ = slug_index.remove(&current_slug);
+                let _ = slug_index.insert(new_slug.clone(), id.to_string());
             }
         }
 
@@ -612,13 +612,13 @@ where
     }
 
     async fn delete_organization(&self, id: &str) -> AuthResult<()> {
-        let mut organizations = self.organizations.lock().unwrap();
-        let mut slug_index = self.slug_index.lock().unwrap();
-        let mut members = self.members.lock().unwrap();
-        let mut invitations = self.invitations.lock().unwrap();
+        let mut organizations = self.organizations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut slug_index = self.slug_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut members = self.members.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut invitations = self.invitations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         if let Some(org) = organizations.remove(id) {
-            slug_index.remove(org.slug());
+            let _ = slug_index.remove(org.slug());
         }
 
         members.retain(|_, m| m.organization_id() != id);
@@ -628,8 +628,8 @@ where
     }
 
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<O>> {
-        let members = self.members.lock().unwrap();
-        let organizations = self.organizations.lock().unwrap();
+        let members = self.members.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let organizations = self.organizations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         let org_ids: Vec<String> = members
             .values()
@@ -663,7 +663,7 @@ where
     type Member = M;
 
     async fn create_member(&self, create_member: CreateMember) -> AuthResult<M> {
-        let mut members = self.members.lock().unwrap();
+        let mut members = self.members.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         let exists = members.values().any(|m| {
             m.organization_id() == create_member.organization_id
@@ -680,12 +680,12 @@ where
         let now = Utc::now();
         let member = M::from_create(id.clone(), &create_member, now);
 
-        members.insert(id, member.clone());
+        let _ = members.insert(id, member.clone());
         Ok(member)
     }
 
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<M>> {
-        let members = self.members.lock().unwrap();
+        let members = self.members.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(members
             .values()
             .find(|m| m.organization_id() == organization_id && m.user_id() == user_id)
@@ -693,12 +693,12 @@ where
     }
 
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<M>> {
-        let members = self.members.lock().unwrap();
+        let members = self.members.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(members.get(id).cloned())
     }
 
     async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<M> {
-        let mut members = self.members.lock().unwrap();
+        let mut members = self.members.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let member = members
             .get_mut(member_id)
             .ok_or_else(|| AuthError::not_found("Member not found"))?;
@@ -707,13 +707,13 @@ where
     }
 
     async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
-        let mut members = self.members.lock().unwrap();
-        members.remove(member_id);
+        let mut members = self.members.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let _ = members.remove(member_id);
         Ok(())
     }
 
     async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<M>> {
-        let members = self.members.lock().unwrap();
+        let members = self.members.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(members
             .values()
             .filter(|m| m.organization_id() == organization_id)
@@ -722,7 +722,7 @@ where
     }
 
     async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
-        let members = self.members.lock().unwrap();
+        let members = self.members.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(members
             .values()
             .filter(|m| m.organization_id() == organization_id)
@@ -730,7 +730,7 @@ where
     }
 
     async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize> {
-        let members = self.members.lock().unwrap();
+        let members = self.members.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(members
             .values()
             .filter(|m| m.organization_id() == organization_id && m.role() == "owner")
@@ -755,18 +755,18 @@ where
     type Invitation = I;
 
     async fn create_invitation(&self, create_inv: CreateInvitation) -> AuthResult<I> {
-        let mut invitations = self.invitations.lock().unwrap();
+        let mut invitations = self.invitations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
         let invitation = I::from_create(id.clone(), &create_inv, now);
 
-        invitations.insert(id, invitation.clone());
+        let _ = invitations.insert(id, invitation.clone());
         Ok(invitation)
     }
 
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<I>> {
-        let invitations = self.invitations.lock().unwrap();
+        let invitations = self.invitations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(invitations.get(id).cloned())
     }
 
@@ -775,7 +775,7 @@ where
         organization_id: &str,
         email: &str,
     ) -> AuthResult<Option<I>> {
-        let invitations = self.invitations.lock().unwrap();
+        let invitations = self.invitations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(invitations
             .values()
             .find(|i| {
@@ -787,7 +787,7 @@ where
     }
 
     async fn update_invitation_status(&self, id: &str, status: InvitationStatus) -> AuthResult<I> {
-        let mut invitations = self.invitations.lock().unwrap();
+        let mut invitations = self.invitations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let invitation = invitations
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
@@ -796,7 +796,7 @@ where
     }
 
     async fn list_organization_invitations(&self, organization_id: &str) -> AuthResult<Vec<I>> {
-        let invitations = self.invitations.lock().unwrap();
+        let invitations = self.invitations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(invitations
             .values()
             .filter(|i| i.organization_id() == organization_id)
@@ -805,7 +805,7 @@ where
     }
 
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<I>> {
-        let invitations = self.invitations.lock().unwrap();
+        let invitations = self.invitations.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let now = Utc::now();
         Ok(invitations
             .values()
@@ -836,7 +836,7 @@ where
     type TwoFactor = TwoFactor;
 
     async fn create_two_factor(&self, create: CreateTwoFactor) -> AuthResult<TwoFactor> {
-        let mut two_factors = self.two_factors.lock().unwrap();
+        let mut two_factors = self.two_factors.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         // Check if user already has 2FA
         if two_factors.values().any(|tf| tf.user_id == create.user_id) {
@@ -849,12 +849,12 @@ where
         let now = Utc::now();
         let two_factor: TwoFactor = MemoryTwoFactor::from_create(id.clone(), &create, now);
 
-        two_factors.insert(id, two_factor.clone());
+        let _ = two_factors.insert(id, two_factor.clone());
         Ok(two_factor)
     }
 
     async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>> {
-        let two_factors = self.two_factors.lock().unwrap();
+        let two_factors = self.two_factors.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(two_factors
             .values()
             .find(|tf| tf.user_id == user_id)
@@ -866,7 +866,7 @@ where
         user_id: &str,
         backup_codes: &str,
     ) -> AuthResult<TwoFactor> {
-        let mut two_factors = self.two_factors.lock().unwrap();
+        let mut two_factors = self.two_factors.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let two_factor = two_factors
             .values_mut()
             .find(|tf| tf.user_id == user_id)
@@ -876,7 +876,7 @@ where
     }
 
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
-        let mut two_factors = self.two_factors.lock().unwrap();
+        let mut two_factors = self.two_factors.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         two_factors.retain(|_, tf| tf.user_id != user_id);
         Ok(())
     }
@@ -899,7 +899,7 @@ where
     type ApiKey = ApiKey;
 
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey> {
-        let mut api_keys = self.api_keys.lock().unwrap();
+        let mut api_keys = self.api_keys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         if api_keys.values().any(|k| k.key_hash == input.key_hash) {
             return Err(AuthError::conflict("API key already exists"));
@@ -909,22 +909,22 @@ where
         let now = Utc::now();
         let api_key: ApiKey = MemoryApiKey::from_create(id.clone(), &input, now);
 
-        api_keys.insert(id, api_key.clone());
+        let _ = api_keys.insert(id, api_key.clone());
         Ok(api_key)
     }
 
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
-        let api_keys = self.api_keys.lock().unwrap();
+        let api_keys = self.api_keys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(api_keys.get(id).cloned())
     }
 
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
-        let api_keys = self.api_keys.lock().unwrap();
+        let api_keys = self.api_keys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(api_keys.values().find(|k| k.key_hash == hash).cloned())
     }
 
     async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<ApiKey>> {
-        let api_keys = self.api_keys.lock().unwrap();
+        let api_keys = self.api_keys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let mut keys: Vec<ApiKey> = api_keys
             .values()
             .filter(|k| k.user_id == user_id)
@@ -935,7 +935,7 @@ where
     }
 
     async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<ApiKey> {
-        let mut api_keys = self.api_keys.lock().unwrap();
+        let mut api_keys = self.api_keys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let api_key = api_keys
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("API key not found"))?;
@@ -944,13 +944,13 @@ where
     }
 
     async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
-        let mut api_keys = self.api_keys.lock().unwrap();
-        api_keys.remove(id);
+        let mut api_keys = self.api_keys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let _ = api_keys.remove(id);
         Ok(())
     }
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
-        let mut api_keys = self.api_keys.lock().unwrap();
+        let mut api_keys = self.api_keys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let now = Utc::now();
         let initial_count = api_keys.len();
         api_keys.retain(|_, k| {
@@ -982,8 +982,8 @@ where
     type Passkey = P;
 
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<P> {
-        let mut credential_index = self.passkey_credential_index.lock().unwrap();
-        let mut passkeys = self.passkeys.lock().unwrap();
+        let mut credential_index = self.passkey_credential_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut passkeys = self.passkeys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         if credential_index.contains_key(&input.credential_id) {
             return Err(AuthError::conflict(
@@ -995,23 +995,23 @@ where
         let now = Utc::now();
         let passkey = P::from_create(id.clone(), &input, now);
 
-        credential_index.insert(input.credential_id.clone(), id.clone());
-        passkeys.insert(id, passkey.clone());
+        let _ = credential_index.insert(input.credential_id.clone(), id.clone());
+        let _ = passkeys.insert(id, passkey.clone());
         Ok(passkey)
     }
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<P>> {
-        let passkeys = self.passkeys.lock().unwrap();
+        let passkeys = self.passkeys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         Ok(passkeys.get(id).cloned())
     }
 
     async fn get_passkey_by_credential_id(&self, credential_id: &str) -> AuthResult<Option<P>> {
         let passkey_id = {
-            let credential_index = self.passkey_credential_index.lock().unwrap();
+            let credential_index = self.passkey_credential_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
             credential_index.get(credential_id).cloned()
         };
 
-        let passkeys = self.passkeys.lock().unwrap();
+        let passkeys = self.passkeys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         if let Some(id) = passkey_id {
             Ok(passkeys.get(&id).cloned())
@@ -1021,7 +1021,7 @@ where
     }
 
     async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<P>> {
-        let passkeys = self.passkeys.lock().unwrap();
+        let passkeys = self.passkeys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let mut matched: Vec<P> = passkeys
             .values()
             .filter(|p| p.user_id() == user_id)
@@ -1032,7 +1032,7 @@ where
     }
 
     async fn update_passkey_counter(&self, id: &str, counter: u64) -> AuthResult<P> {
-        let mut passkeys = self.passkeys.lock().unwrap();
+        let mut passkeys = self.passkeys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let passkey = passkeys
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
@@ -1041,7 +1041,7 @@ where
     }
 
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<P> {
-        let mut passkeys = self.passkeys.lock().unwrap();
+        let mut passkeys = self.passkeys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
         let passkey = passkeys
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
@@ -1050,11 +1050,11 @@ where
     }
 
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
-        let mut credential_index = self.passkey_credential_index.lock().unwrap();
-        let mut passkeys = self.passkeys.lock().unwrap();
+        let mut credential_index = self.passkey_credential_index.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
+        let mut passkeys = self.passkeys.lock().map_err(|_| AuthError::internal("Lock poisoned"))?;
 
         if let Some(passkey) = passkeys.remove(id) {
-            credential_index.remove(passkey.credential_id());
+            let _ = credential_index.remove(passkey.credential_id());
         }
         Ok(())
     }

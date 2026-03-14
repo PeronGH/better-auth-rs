@@ -62,7 +62,7 @@ impl RateLimitConfig {
         window: Duration,
         max_requests: u32,
     ) -> Self {
-        self.per_endpoint.insert(
+        _ = self.per_endpoint.insert(
             path.into(),
             EndpointRateLimit {
                 window,
@@ -131,7 +131,10 @@ impl Middleware for RateLimitMiddleware {
         let now = Instant::now();
         let window = limit.window;
 
-        let mut buckets = self.buckets.lock().unwrap();
+        let mut buckets = self
+            .buckets
+            .lock()
+            .map_err(|_| crate::error::AuthError::internal("Rate-limit lock poisoned"))?;
         let timestamps = buckets.entry(key).or_default();
 
         // Remove timestamps outside the window

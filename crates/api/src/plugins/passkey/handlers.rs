@@ -114,7 +114,7 @@ pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
     // Store challenge as a verification token
     let identifier = format!("passkey_reg:{}", user.id());
     let expires_at = chrono::Utc::now() + chrono::Duration::seconds(config.challenge_ttl_secs);
-    ctx.database
+    let _ = ctx.database
         .create_verification(CreateVerification {
             identifier: identifier.clone(),
             value: challenge.clone(),
@@ -134,7 +134,9 @@ pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
             if let Some(transports) = pk.transports()
                 && let Ok(t) = serde_json::from_str::<Vec<String>>(transports)
             {
-                cred["transports"] = serde_json::json!(t);
+                if let Some(obj) = cred.as_object_mut() {
+                    let _ = obj.insert("transports".to_string(), serde_json::json!(t));
+                }
             }
             cred
         })
@@ -288,7 +290,9 @@ pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
                 if let Some(transports) = pk.transports()
                     && let Ok(t) = serde_json::from_str::<Vec<String>>(transports)
                 {
-                    cred["transports"] = serde_json::json!(t);
+                    if let Some(obj) = cred.as_object_mut() {
+                        let _ = obj.insert("transports".to_string(), serde_json::json!(t));
+                    }
                 }
                 cred
             })
