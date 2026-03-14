@@ -227,7 +227,7 @@ mod tests {
             .handle_request(request)
             .await
             .expect("Second signup request failed");
-        // NOTE: matches TS behavior — duplicate email returns 422, not 409
+        // TS returns 422 for duplicate email
         assert_eq!(response2.status, 422);
     }
 

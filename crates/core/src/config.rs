@@ -400,8 +400,8 @@ impl Default for SessionConfig {
             disable_session_refresh: false,
             fresh_age: None,
             cookie_name: "better-auth.session_token".to_string(),
-            // NOTE: matches TS behavior — Secure defaults based on base_url scheme.
-            // Default base_url is http://localhost:3000, so Secure defaults to false.
+            // Secure flag is derived from base_url scheme (HTTPS → true).
+            // Default base_url is http://localhost:3000, so default is false.
             cookie_secure: false,
             cookie_http_only: true,
             cookie_same_site: SameSite::Lax,

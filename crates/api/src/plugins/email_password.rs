@@ -290,7 +290,7 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
 
     // Check if user already exists
     if ctx.database.get_user_by_email(&body.email).await?.is_some() {
-        // NOTE: matches TS behavior — uses 422 UNPROCESSABLE_ENTITY, not 409 CONFLICT
+        // TS returns 422 UNPROCESSABLE_ENTITY for duplicate email
         return Err(AuthError::UnprocessableEntity(
             "User already exists. Use another email.".to_string(),
         ));

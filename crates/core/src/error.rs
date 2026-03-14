@@ -16,7 +16,6 @@ pub enum AuthError {
     #[error("Validation error: {0}")]
     Validation(String),
 
-    // NOTE: matches TS better-auth error message exactly
     #[error("Invalid email or password")]
     InvalidCredentials,
 
@@ -273,7 +272,7 @@ pub fn validation_error_response(
         message,
     };
 
-    // NOTE: matches TS behavior — validation errors return 400, not 422
+    // Validation errors return 400 (not 422) per the TS spec
     crate::types::AuthResponse::json(400, &body)
         .unwrap_or_else(|_| crate::types::AuthResponse::text(400, "Validation failed"))
 }

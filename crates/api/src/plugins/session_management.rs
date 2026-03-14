@@ -158,8 +158,7 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        // NOTE: matches TS behavior — returns 200 with null body when unauthenticated,
-        // not 401. The TS get-session endpoint never returns an error status.
+        // Returns 200 with null body when unauthenticated (never an error status).
         match ctx.require_session(req).await {
             Ok((user, session)) => {
                 let response = GetSessionResponse { session, user };
@@ -174,8 +173,8 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        // NOTE: matches TS behavior — sign-out always returns 200 with { success: true },
-        // even when unauthenticated. If authenticated, delete the session from DB.
+        // Sign-out always returns 200 with { success: true }. If authenticated,
+        // the session is deleted from the DB first.
         if let Ok((_user, session)) = ctx.require_session(req).await {
             let _ = sign_out_core(&session, ctx).await;
         }
@@ -395,8 +394,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_session_unauthorized() {
-        // NOTE: matches TS behavior — /get-session returns 200 with null body
-        // when unauthenticated, never an error status.
+        // /get-session returns 200 with null body when unauthenticated.
         let plugin = SessionManagementPlugin::new();
         let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
             CreateUser::new()
