@@ -67,11 +67,9 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
   broadly usable across many applications, not specialized to a single
   product or demo.
 - **`platform` is a reference consumer** — `/home/peron/dev/platform` is
-  an important non-demo adopter and pressure test for real-world
-  usability. Its migration belongs in a dedicated adoption phase once
-  better-auth-rs has the capabilities it actually needs. It may be
-  rewritten substantially to fit the Rust-native interface, but it is
-  only one consumer among many.
+  an important downstream non-demo adopter and pressure test for
+  real-world usability. Treat it as an external compatibility signal,
+  not as a project whose migration work can be planned or assumed here.
 - **Do not optimize for the demo** — demos and compat harnesses are
   validation tools, not the product target.
 - **PaaS surface coverage is required** — the interface list in
@@ -203,23 +201,44 @@ structural mismatches. Layer 3 catches client-visible integration bugs.
 ### Workflow
 
 1. Stay in the current phase until it has zero alignment diffs.
-2. Within capability phases, pick the next missing behavior or
-   interface that most improves better-auth-rs itself.
-3. Then pick the next uncovered capability from
+2. Break capability work into the smallest phase that can be finished
+   cleanly. If a feature family mixes nearly-done endpoints with cold
+   or obviously unfinished endpoints, split the family instead of
+   keeping it bundled together.
+3. Prefer finishing already-implemented or already-tested endpoints
+   before starting colder surfaces.
+4. Then pick the next uncovered capability from
    `/home/peron/downloads/better-auth-paas-api-surface.md`.
-4. Once better-auth-rs has the capabilities `/home/peron/dev/platform`
-   actually needs, use its dedicated adoption phase to validate that a
-   real non-demo consumer can use the Rust-native interface without
-   product-specific contortions in better-auth-rs.
-5. Read the TS source for that capability to understand the full
+5. Use `/home/peron/dev/platform` only as a downstream compatibility
+   reference for prioritization and sanity checks; do not plan work that
+   assumes control over changes in that repo.
+6. Read the TS source for that capability to understand the full
    behavior, including edge cases and error paths.
-6. Implement or fix the Rust version.
-7. Run the dual-server test for that capability.
-8. Iterate until the diff is clean.
-9. Commit.
+7. Implement or fix the Rust version.
+8. Run the dual-server test for that capability whenever possible.
+9. Iterate until the diff is clean.
+10. Commit.
 
 Do not batch multiple endpoint fixes into one commit. Each endpoint or
 behavior fix is its own commit.
+
+### Phase Completion Rule
+
+A phase is only valid if it is self-contained: every endpoint and
+behavior in that phase must be end-to-end testable using only the
+capabilities from that phase and the phases before it.
+
+A phase is only complete when all of the following are true:
+
+1. Every endpoint or behavior in the phase has meaningful Rust-side
+   tests at the right layer.
+2. Every endpoint or behavior in the phase has dual-server TS
+   comparison coverage whenever a reference-server comparison is
+   possible.
+
+Do not use a generic "remaining capability" phase. When a new TS feature
+family becomes in scope, add a new explicit phase with its own
+self-contained test plan.
 
 ### Alignment phases
 
@@ -232,50 +251,99 @@ behavior fix is its own commit.
 `/revoke-other-sessions`, `/refresh-token`, `/get-access-token`,
 `/request-password-reset`, `/reset-password`, `/change-password`
 
-**Phase 2 — Login and account lifecycle:**
-`/sign-in/social`, `/callback`, `/update-session`, `/verify-password`,
-`/set-password`, `/send-verification-email`, `/verify-email`,
-`/change-email`, `/update-user`, `/delete-user`,
-`/delete-user/callback`, `/list-accounts`, `/link-social`,
-`/unlink-account`, `/account-info`
+**Phase 2 — User self-service and verification:**
+`/update-user`, `/delete-user`, `/delete-user/callback`,
+`/change-email`, `/send-verification-email`, `/verify-email`,
+`/set-password`
 
-Phase 2 exists to make GitHub login and the surrounding account
-lifecycle complete and Rust-native. Match TS behavior, but shape the
-Rust integration around an idiomatic mounted router, request extractors,
-and hooks/onboarding story rather than around demo-specific integration
-patterns.
+Phase 2 is self-contained on top of Phases 0 and 1. Completion requires
+direct end-to-end coverage for each endpoint in this group.
 
-**Phase 3 — Machine and API auth:**
-Bearer token behavior, `/api-key/create`, `/api-key/list`,
-`/api-key/get`, `/api-key/update`, `/api-key/delete`, `/token`
+**Phase 3 — Social-linked account surface:**
+`/sign-in/social`, `/callback`, `/link-social`, `/list-accounts`,
+`/unlink-account`
 
-Phase 3 exists to make browser, API, CLI, and service-to-service auth
-complete and Rust-native, including `Authorization: Bearer` flows and
-`x-api-key` flows.
+Phase 3 is self-contained on top of Phases 0, 1, and 2. Completion
+requires dual-server coverage for the GitHub/mock-OAuth flows in this
+group, including callback behavior.
 
-**Phase 4 — Platform adoption:**
-Adapt `/home/peron/dev/platform` to the Rust-native interface once
-Phases 2 and 3 provide everything it actually needs. This phase is not
-the end of the roadmap; it is the point where platform-specific adoption
-work happens. The platform may be rewritten substantially. If adoption
-exposes missing generic capability that platform truly needs, add that
-capability in better-auth-rs rather than adding platform-specific
-shortcuts.
+**Phase 4 — Machine auth and API-key CRUD:**
+Bearer behavior, `/api-key/create`, `/api-key/list`, `/api-key/get`,
+`/api-key/update`, `/api-key/delete`, `/api-key/verify`
 
-**Phase 5 — PaaS organization surface:**
-All `/organization/*` endpoints from
-`/home/peron/downloads/better-auth-paas-api-surface.md`,
-including organization CRUD, members, invitations, teams, and dynamic
-RBAC role management.
+Phase 4 is self-contained on top of Phases 0 and 1. Completion requires
+both endpoint tests and end-to-end request-path tests using
+`Authorization: Bearer` and `x-api-key`.
 
-**Phase 6 — PaaS admin/support surface:**
-All `/admin/*` endpoints from
-`/home/peron/downloads/better-auth-paas-api-surface.md`.
+**Phase 5 — Organization core:**
+`/organization/create`, `/organization/check-slug`,
+`/organization/update`, `/organization/delete`,
+`/organization/get-full-organization`, `/organization/set-active`,
+`/organization/list`, `/organization/list-members`,
+`/organization/get-active-member`,
+`/organization/get-active-member-role`,
+`/organization/update-member-role`,
+`/organization/remove-member`, `/organization/leave`,
+`/organization/invite-member`,
+`/organization/accept-invitation`,
+`/organization/reject-invitation`,
+`/organization/cancel-invitation`,
+`/organization/get-invitation`,
+`/organization/list-invitations`,
+`/organization/list-user-invitations`,
+`/organization/has-permission`
 
-**Phase 7 — Remaining Better Auth capability:**
-`/two-factor/*`, `/passkey/*`, additional social/provider breadth, and
-any remaining TS Better Auth capability not already required by the
-PaaS surface checklist.
+Phase 5 comes before colder surfaces because organization CRUD,
+membership, and invitation flows already have meaningful local coverage.
+
+**Phase 6 — Admin core:**
+`/admin/list-users`, `/admin/create-user`, `/admin/remove-user`,
+`/admin/set-user-password`, `/admin/set-role`,
+`/admin/has-permission`
+
+Phase 6 finishes the admin endpoints with the strongest current local
+coverage before moving to less-proven admin flows.
+
+**Phase 7 — Passkey surface:**
+All `/passkey/*` endpoints.
+
+Phase 7 is still relatively early because passkey option generation,
+management, and error-shape paths are already implemented and tested.
+
+**Phase 8 — Organization advanced:**
+`/organization/create-team`, `/organization/remove-team`,
+`/organization/update-team`, `/organization/list-teams`,
+`/organization/set-active-team`, `/organization/list-user-teams`,
+`/organization/list-team-members`,
+`/organization/add-team-member`,
+`/organization/remove-team-member`,
+`/organization/create-role`, `/organization/delete-role`,
+`/organization/list-roles`, `/organization/get-role`,
+`/organization/update-role`
+
+Phase 8 depends on Phase 5 and is otherwise self-contained.
+
+**Phase 9 — Admin extended support flows:**
+`/admin/get-user`, `/admin/update-user`, `/admin/ban-user`,
+`/admin/unban-user`, `/admin/impersonate-user`,
+`/admin/stop-impersonating`, `/admin/list-user-sessions`,
+`/admin/revoke-user-session`, `/admin/revoke-user-sessions`
+
+Phase 9 depends on Phase 6 and is otherwise self-contained.
+
+**Phase 10 — Two-factor authentication:**
+All `/two-factor/*` endpoints.
+
+Phase 10 is intentionally isolated because the 2FA surface has its own
+state machine and needs dedicated end-to-end coverage.
+
+**Phase 11 — Cold account and token surfaces:**
+`/verify-password`, `/update-session`, `/account-info`, `/token`
+
+Phase 11 is reserved for the smaller cold surfaces that are not yet
+proven enough to bundle into the earlier hot-path phases. Complete this
+phase only once each endpoint has its own direct end-to-end test
+coverage and, where possible, dual-server comparison coverage.
 
 Work the phases in order. Do not start Phase N+1 until Phase N has zero
 alignment diffs.
