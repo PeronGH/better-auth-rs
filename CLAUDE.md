@@ -44,13 +44,15 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
 
 1. **TypeScript better-auth runtime behavior** — the reference server in
    `compat-tests/reference-server/` is the oracle. Its behavior must stay
-   aligned with the local Better Auth checkout at `/home/peron/dev/better-auth`.
+   aligned with the pinned reference version `better-auth@1.4.19`.
    When in doubt, send a request to both servers and observe what the TS
    server actually does.
 2. **TypeScript better-auth source code** — use the local checkout at
    `/home/peron/dev/better-auth` to understand intent, edge cases, schema
-   generation, and hook semantics that the OpenAPI spec does not capture.
-   The pinned package version in that checkout is `better-auth@1.4.19`.
+   generation, and hook semantics that the OpenAPI spec does not capture
+   when it is available. The portable reference harness itself must not
+   depend on that checkout at runtime; it uses the published package
+   pinned to `better-auth@1.4.19`.
 3. **`better-auth.yaml` OpenAPI spec** — the structural contract for
    endpoints, request/response schemas, and field names.
 4. **better-auth documentation** (https://www.better-auth.com/docs) —
@@ -59,7 +61,9 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
 ## Capability and Consumer Policy
 
 - **TS better-auth decides behavior** — runtime behavior and feature
-  capability are anchored to `/home/peron/dev/better-auth`.
+  capability are anchored to the pinned reference version
+  `better-auth@1.4.19`. Use the local checkout when available for source
+  inspection, not as a runtime dependency of the compatibility harness.
 - **Rust should be Rust-native** — builders, traits, extractors, router
   integration, hooks, and embedding APIs should follow Rust idioms
   rather than mirroring TS ergonomics mechanically.
@@ -84,12 +88,14 @@ and leave a `// NOTE: matches TS bug — <link>` comment; do not
 
 Before writing any code, you MUST have:
 
-- The TS better-auth source available locally at `/home/peron/dev/better-auth`.
 - The reference server dependencies installed
   (`cd compat-tests/reference-server && bun install`).
 - The `better-auth.yaml` spec in the workspace root.
 
-If any of these are missing, stop and ask.
+If the local Better Auth checkout is available at
+`/home/peron/dev/better-auth`, use it for source inspection. If it is
+not available, the portable Bun reference harness remains the runtime
+oracle.
 
 ## Commands
 
@@ -187,10 +193,9 @@ focused on transport semantics and non-client-exercised surfaces.
      both servers and invoke the Bun phase suites
 
    Port allocation:
-   | Server | Port | Purpose |
-   |--------|------|---------|
-   | TS reference | 3100 | Canonical TS better-auth |
-   | Rust compat | 3200 | Rust server for client tests |
+   The ignored Rust client-compat tests allocate ephemeral localhost
+   ports automatically. Ports `3100` and `3200` remain the default
+   manual-debug ports for the convenience wrapper and ad hoc runs.
 
 Use all three layers. Layer 1 catches logic bugs fast. Layer 2 catches
 transport regressions the client does not expose well. Layer 3 is the
