@@ -98,7 +98,8 @@ cargo fmt --check
 cargo clippy --workspace                       # must produce zero warnings
 cargo clippy --workspace --features axum       # also check with axum feature
 cargo test --workspace --lib                   # library unit tests
-cargo test --test dual_server_tests            # dual-server comparison (needs ref server)
+cargo test --test dual_server_phase0_tests --test dual_server_phase1_tests  # dual-server comparison for completed phases
+cargo test --features axum --test axum_integration_tests                    # feature-gated Axum HTTP integration
 ./scripts/alignment-check.sh                   # full alignment pipeline (all 3 layers)
 ./scripts/alignment-check.sh --skip-build      # skip cargo build step
 cargo tarpaulin --workspace --lib              # measure function coverage
@@ -123,10 +124,12 @@ The alignment check script is `scripts/alignment-check.sh`. It:
 1. Builds the Rust workspace (fail fast on compile errors).
 2. Starts the TS reference server (`compat-tests/reference-server/`)
    on port 3100 as a background process.
-3. Runs the dual-server comparison tests against both servers.
-4. Runs the spec coverage report.
-5. Prints a clear pass/fail summary.
-6. Cleans up the reference server process on exit (including on
+3. Runs the phase-scoped dual-server comparison tests against both servers.
+4. Runs the feature-gated Axum integration tests.
+5. Runs the spec coverage report.
+6. Runs the client integration tests against both servers.
+7. Prints a clear pass/fail summary.
+8. Cleans up the reference server process on exit (including on
    failure or Ctrl-C).
 
 Preflight: check that `node` is available and that
@@ -135,18 +138,24 @@ actionable error message if not.
 
 ### What the dual-server tests compare
 
-The dual-server tests (`tests/dual_server_tests.rs`) compare all of:
+The phase-scoped dual-server tests (`tests/dual_server_phase0_tests.rs`,
+`tests/dual_server_phase1_tests.rs`, and later phases as they are split out)
+compare all of:
 
 - **Status codes** — must match exactly.
 - **Response body shape** — field names, nesting, types (string vs
   number vs boolean vs null). Dynamic values (IDs, tokens, timestamps)
-  are compared by type, not value.
+  are compared by type, not value. Shape drift should be minimized, but
+  documented best-effort differences may remain if they are
+  demonstrably inert for `better-auth/client` now and unlikely to become
+  client-visible later.
 - **Cookie names and attributes** — `better-auth.session_token` and
   related cookies must have matching names, `Path`, `HttpOnly`,
   `SameSite`, and `Secure` attributes.
-- **Error format** — error responses must match the TS shape exactly,
-  whatever that shape is (discover it by sending bad requests to the TS
-  server, do not guess).
+- **Error format** — status codes and client-observed error fields must
+  match TS. Extra or missing error-shape fields are still drift and
+  should be fixed by default, but may be accepted only as documented
+  best-effort deviations when they are client-inert.
 - **Header names** — `content-type` and auth-related headers should
   match.
 
@@ -169,7 +178,7 @@ silently in CI when the reference server should be running.
 1. **Unit/integration tests** (`cargo test --workspace --lib`) — Rust-only,
    in-process. Tests individual functions and modules without network I/O.
 
-2. **Dual-server shape comparison** (`cargo test --test dual_server_tests`) —
+2. **Dual-server shape comparison** (`cargo test --test dual_server_phase0_tests --test dual_server_phase1_tests`) —
    Raw HTTP requests sent to both the Rust server (in-process) and the
    TS reference server (port 3100). Compares status codes, response
    bodies, cookies, headers, and error shapes structurally.
@@ -195,6 +204,10 @@ silently in CI when the reference server should be running.
 
 Use all three layers. Layer 1 catches logic bugs fast. Layer 2 catches
 structural mismatches. Layer 3 catches client-visible integration bugs.
+Layer 3 is the hard compatibility gate: any `better-auth/client` drift
+is unacceptable. Layer 2 remains a wire-compatibility gate, but
+documented best-effort drift may remain only when it is client-inert and
+the reasoning is recorded in the dual-server test helpers.
 
 ## How to Work
 
@@ -384,9 +397,11 @@ idioms instead of transliterating the TypeScript pattern.
 Use `thiserror` for library errors, `anyhow` in binary/CLI layers.
 Handle every `Result` — never silently discard.
 
-Match the TS error behavior exactly. If the TS server returns
-`{ "code": "USER_NOT_FOUND" }` with status 404, the Rust server must
-do the same. Do not invent error codes or change status codes.
+Match the TS error behavior by default. If the TS server returns
+`{ "code": "USER_NOT_FOUND" }` with status 404, the Rust server should
+do the same. Do not invent error codes or change status codes. The only
+acceptable exception is a documented, client-inert best-effort
+response-shape drift; status-code drift is never acceptable.
 
 `AuthError::to_auth_response()` converts errors to `AuthResponse`.
 Do not name inherent methods `into_response` — that collides with
@@ -414,7 +429,9 @@ that affects meaningful logic (branching, transformations, error
 handling, compatibility-critical flows) should have tests at the right
 layer. Prefer tests that exercise real behavior over low-value tests for
 code that can only break if the language, runtime, or a dependency
-breaks.
+breaks. When test layers disagree, treat `better-auth/client` drift as a
+release blocker, fix unclassified dual-server wire drift by default, and
+allow only documented, client-inert best-effort wire drift to remain.
 
 ### Git
 
