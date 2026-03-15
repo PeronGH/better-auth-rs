@@ -292,7 +292,7 @@ mod tests {
             response_json["message"]
                 .as_str()
                 .unwrap_or("")
-                .contains("Password must be at least")
+                .contains("Password too short")
         );
     }
 

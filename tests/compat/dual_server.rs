@@ -50,8 +50,8 @@ fn try_start_reference_server() -> Result<std::process::Child, String> {
         ));
     }
 
-    std::process::Command::new("node")
-        .arg("server.mjs")
+    std::process::Command::new("bun")
+        .args(["run", "server.ts"])
         .current_dir(server_dir)
         .env("PORT", REFERENCE_PORT.to_string())
         .stdout(std::process::Stdio::null())

@@ -1,0 +1,153 @@
+import { parseSetCookie } from "set-cookie-parser";
+import { jsonShape } from "./normalize";
+
+export type TraceEntry = {
+  actor: string;
+  method: string;
+  path: string;
+  requestBodyShape: unknown;
+  responseStatus: number;
+  responseHeaders: Record<string, string>;
+  responseCookies: Record<string, unknown>;
+  responseBodyShape: unknown;
+};
+
+type CookieJar = Map<string, string>;
+
+function normalizeRequestBody(body: BodyInit | null | undefined) {
+  if (!body) {
+    return null;
+  }
+
+  if (typeof body === "string") {
+    try {
+      return jsonShape(JSON.parse(body));
+    } catch {
+      return "string";
+    }
+  }
+
+  if (body instanceof URLSearchParams) {
+    return jsonShape(Object.fromEntries(body.entries()));
+  }
+
+  return typeof body;
+}
+
+async function normalizeResponseBody(response: Response) {
+  const clone = response.clone();
+  const contentType = clone.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    try {
+      return jsonShape(await clone.json());
+    } catch {
+      return "non-json";
+    }
+  }
+
+  const text = await clone.text();
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return jsonShape(JSON.parse(text));
+  } catch {
+    return "string";
+  }
+}
+
+function pickHeaders(headers: Headers) {
+  const selected = ["content-type", "location"];
+  return Object.fromEntries(
+    selected.flatMap((header) => {
+      const value = headers.get(header);
+      return value ? [[header, value.split(";")[0]!.trim()]] : [];
+    }),
+  );
+}
+
+function normalizeCookies(response: Response) {
+  const cookies = parseSetCookie(response, { map: true, silent: true }) as Record<
+    string,
+    Record<string, unknown>
+  >;
+
+  return Object.fromEntries(
+    Object.entries(cookies).map(([name, cookie]) => [
+      name,
+      {
+        path: cookie.path ?? null,
+        httpOnly: cookie.httpOnly === true,
+        secure: cookie.secure === true,
+        sameSite: cookie.sameSite ?? null,
+        maxAge: cookie.maxAge ?? null,
+      },
+    ]),
+  );
+}
+
+function getSetCookieValues(response: Response) {
+  if (typeof response.headers.getSetCookie === "function") {
+    return response.headers.getSetCookie();
+  }
+
+  const single = response.headers.get("set-cookie");
+  return single ? [single] : [];
+}
+
+function applyCookiesToJar(jar: CookieJar, response: Response) {
+  for (const cookie of parseSetCookie(response, {
+    silent: true,
+  }) as Array<Record<string, unknown>>) {
+    if (typeof cookie.name === "string" && typeof cookie.value === "string") {
+      jar.set(cookie.name, `${cookie.name}=${cookie.value}`);
+    }
+  }
+}
+
+function buildCookieHeader(jar: CookieJar) {
+  return [...jar.values()].join("; ");
+}
+
+export function createTracingFetch(
+  baseURL: string,
+  actor: string,
+  traces: TraceEntry[],
+) {
+  const jar: CookieJar = new Map();
+
+  return async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url, baseURL);
+    const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+
+    if (jar.size > 0 && !headers.has("cookie")) {
+      headers.set("cookie", buildCookieHeader(jar));
+    }
+    if (!headers.has("origin")) {
+      headers.set("origin", baseURL);
+    }
+
+    const method = init?.method || (input instanceof Request ? input.method : "GET");
+    const response = await fetch(url, {
+      ...init,
+      method,
+      headers,
+    });
+
+    applyCookiesToJar(jar, response);
+
+    traces.push({
+      actor,
+      method,
+      path: `${url.pathname}${url.search}`,
+      requestBodyShape: normalizeRequestBody(init?.body),
+      responseStatus: response.status,
+      responseHeaders: pickHeaders(response.headers),
+      responseCookies: normalizeCookies(response),
+      responseBodyShape: await normalizeResponseBody(response),
+    });
+
+    return response;
+  };
+}

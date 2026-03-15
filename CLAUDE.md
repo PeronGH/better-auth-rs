@@ -98,13 +98,18 @@ cargo fmt --check
 cargo clippy --workspace                       # must produce zero warnings
 cargo clippy --workspace --features axum       # also check with axum feature
 cargo test --workspace --lib                   # library unit tests
-cargo test --test dual_server_phase0_tests --test dual_server_phase1_tests  # dual-server comparison for completed phases
+cargo test --test wire_compat_smoke_tests -- --nocapture                    # thin raw wire-compat smoke suite
 cargo test --features axum --test axum_integration_tests                    # feature-gated Axum HTTP integration
+cargo test --test client_compat_tests phase0_client_compat -- --ignored --nocapture
+cargo test --test client_compat_tests phase1_client_compat -- --ignored --nocapture
+cargo test --test client_compat_tests full_client_compat -- --ignored --nocapture
 ./scripts/alignment-check.sh                   # full alignment pipeline (all 3 layers)
 ./scripts/alignment-check.sh --skip-build      # skip cargo build step
 cargo tarpaulin --workspace --lib              # measure function coverage
-cd compat-tests/client-tests && node --test tests/*.test.mjs  # client tests (set AUTH_BASE_URL)
-bash compat-tests/client-tests/run-against-both.sh            # client tests against both
+cd compat-tests/client-tests && bun test tests/phase0
+cd compat-tests/client-tests && bun test tests/phase1
+bash compat-tests/client-tests/run-against-both.sh phase0
+bash compat-tests/client-tests/run-against-both.sh phase1
 ```
 
 ### JavaScript tooling
@@ -112,8 +117,9 @@ bash compat-tests/client-tests/run-against-both.sh            # client tests aga
 **Bun** is the package manager (not npm). Use `bun install` to manage
 dependencies. All JS projects use `bun.lock` (no `package-lock.json`).
 
-**Node.js** is the runtime. Use `node` to run servers and tests. The
-reference server requires `better-sqlite3` which needs native Node.
+**Bun** is the preferred runtime for compatibility infrastructure. The
+portable TS reference harness should run under Bun and use `bun:sqlite`.
+Use Node only when a specific upstream/tooling task still requires it.
 
 ## Feedback Loop
 
@@ -122,79 +128,63 @@ reference server requires `better-sqlite3` which needs native Node.
 The alignment check script is `scripts/alignment-check.sh`. It:
 
 1. Builds the Rust workspace (fail fast on compile errors).
-2. Starts the TS reference server (`compat-tests/reference-server/`)
-   on port 3100 as a background process.
-3. Runs the phase-scoped dual-server comparison tests against both servers.
-4. Runs the feature-gated Axum integration tests.
-5. Runs the spec coverage report.
-6. Runs the client integration tests against both servers.
-7. Prints a clear pass/fail summary.
-8. Cleans up the reference server process on exit (including on
-   failure or Ctrl-C).
+2. Runs the thin raw wire-compat smoke suite.
+3. Runs the feature-gated Axum integration tests.
+4. Runs the spec coverage report.
+5. Runs the ignored Rust client-compat harness for both servers.
+6. Prints a clear pass/fail summary.
 
-Preflight: check that `node` is available and that
-`compat-tests/reference-server/node_modules` exists. Fail with an
-actionable error message if not.
+Preflight: check that `bun` is available and that the Bun workspaces in
+`compat-tests/reference-server/` and `compat-tests/client-tests/` have
+been installed. Fail with an actionable error message if not.
 
-### What the dual-server tests compare
+### What the raw wire smoke tests compare
 
-The phase-scoped dual-server tests (`tests/dual_server_phase0_tests.rs`,
-`tests/dual_server_phase1_tests.rs`, and later phases as they are split out)
-compare all of:
+The thin raw wire-compat smoke tests (`tests/wire_compat_smoke_tests.rs`)
+compare only the parts of the contract that `better-auth/client` cannot
+prove well on its own:
 
 - **Status codes** — must match exactly.
-- **Response body shape** — field names, nesting, types (string vs
-  number vs boolean vs null). Dynamic values (IDs, tokens, timestamps)
-  are compared by type, not value. Shape drift should be minimized, but
-  documented best-effort differences may remain if they are
-  demonstrably inert for `better-auth/client` now and unlikely to become
-  client-visible later.
 - **Cookie names and attributes** — `better-auth.session_token` and
   related cookies must have matching names, `Path`, `HttpOnly`,
   `SameSite`, and `Secure` attributes.
-- **Error format** — status codes and client-observed error fields must
-  match TS. Extra or missing error-shape fields are still drift and
-  should be fixed by default, but may be accepted only as documented
-  best-effort deviations when they are client-inert.
-- **Header names** — `content-type` and auth-related headers should
-  match.
+- **Header names** — `content-type`, redirect, and auth-related headers
+  that the client layer does not normalize away should match.
+- **Response body shape** — only for the retained smoke cases where the
+  client cannot express the transport semantics cleanly.
 
 Do NOT compare: exact values of IDs, tokens, timestamps, or hashes;
 ordering of JSON keys; whitespace or formatting.
 
 ### Test structure
 
-Every endpoint must have a dual-server comparison test that sends at
-least: a happy-path request, a request with missing required fields, a
-request with invalid input, and a request with/without auth as
-appropriate.
-
-Tests must actually hit both servers. If the reference server is not
-available, skip with a diagnostic. Never let a skipped test pass
-silently in CI when the reference server should be running.
+The broad happy-path endpoint matrices belong in the client-compat Bun
+suite, not in the raw wire smoke layer. Keep the raw layer narrow and
+focused on transport semantics and non-client-exercised surfaces.
 
 ### Three-layer testing strategy
 
 1. **Unit/integration tests** (`cargo test --workspace --lib`) — Rust-only,
    in-process. Tests individual functions and modules without network I/O.
 
-2. **Dual-server shape comparison** (`cargo test --test dual_server_phase0_tests --test dual_server_phase1_tests`) —
-   Raw HTTP requests sent to both the Rust server (in-process) and the
-   TS reference server (port 3100). Compares status codes, response
-   bodies, cookies, headers, and error shapes structurally.
+2. **Raw wire smoke tests** (`cargo test --test wire_compat_smoke_tests -- --nocapture`) —
+   Small retained raw comparisons for cookie/header/null-session and
+   other transport details the client layer cannot prove well.
 
-3. **Client integration tests** (`compat-tests/client-tests/`) — Uses the
-   real `better-auth/client` JavaScript SDK (`createAuthClient`) to
-   exercise both backends. This proves that a real app using the
-   better-auth client can switch between TS and Rust at zero cost.
-   The client handles cookies, session state, and error parsing — bugs
-   in any of these are invisible to raw HTTP comparison.
+3. **Client compatibility tests** (`cargo test --test client_compat_tests ... --ignored --nocapture`) —
+   Uses the real `better-auth/client` SDK inside Bun to run the same
+   scenario against both backends, compare client-visible results, and
+   attach raw trace diffs for debugging. This is the primary
+   compatibility system.
 
-   - `compat-tests/client-tests/` — node:test project with the client SDK
+   - `compat-tests/client-tests/` — Bun test project with phase-scoped
+     scenarios and a shared TS-vs-Rust diff harness
+   - `compat-tests/reference-server/` — Bun-native TS reference server
+     using `bun:sqlite` and the published `better-auth@1.4.19`
    - `compat-tests/rust-server/` — Minimal Axum server matching the
      reference server config exactly (same secret, same basePath)
-   - `compat-tests/client-tests/run-against-both.sh` — Starts both
-     servers and runs the same test suite against each
+   - `tests/client_compat_tests.rs` — ignored Rust tests that orchestrate
+     both servers and invoke the Bun phase suites
 
    Port allocation:
    | Server | Port | Purpose |
@@ -203,11 +193,11 @@ silently in CI when the reference server should be running.
    | Rust compat | 3200 | Rust server for client tests |
 
 Use all three layers. Layer 1 catches logic bugs fast. Layer 2 catches
-structural mismatches. Layer 3 catches client-visible integration bugs.
-Layer 3 is the hard compatibility gate: any `better-auth/client` drift
-is unacceptable. Layer 2 remains a wire-compatibility gate, but
-documented best-effort drift may remain only when it is client-inert and
-the reasoning is recorded in the dual-server test helpers.
+transport regressions the client does not expose well. Layer 3 is the
+hard compatibility gate: any `better-auth/client` drift is
+unacceptable. Raw response-shape drift should still be minimized, but it
+is best-effort unless it is client-visible or otherwise clearly
+consumer-relevant.
 
 ## How to Work
 

@@ -100,17 +100,12 @@ pub fn validate_password(
     let config = &ctx.config.password;
 
     if password.len() < min_length {
-        return Err(AuthError::bad_request(format!(
-            "Password must be at least {} characters long",
-            config.min_length
-        )));
+        let _ = config;
+        return Err(AuthError::bad_request("Password too short"));
     }
 
     if password.len() > max_length {
-        return Err(AuthError::bad_request(format!(
-            "Password must be at most {} characters long",
-            max_length
-        )));
+        return Err(AuthError::bad_request("Password too long"));
     }
 
     if config.require_uppercase && !password.chars().any(|c| c.is_uppercase()) {

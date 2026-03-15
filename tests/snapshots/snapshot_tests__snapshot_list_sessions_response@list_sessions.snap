@@ -6,7 +6,7 @@ expression: redact(&body)
 - createdAt: "[timestamp]"
   expiresAt: "[timestamp]"
   id: "[uuid]"
-  ipAddress: ~
+  ipAddress: ""
   token: "[session_token]"
   updatedAt: "[timestamp]"
   userAgent: ~
