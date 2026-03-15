@@ -666,9 +666,9 @@ mod axum_impl {
 mod tests {
     use super::*;
     use better_auth_core::AuthContext;
-    use better_auth_core::DefaultDatabase;
-    use better_auth_core::adapters::UserOps;
     use better_auth_core::config::AuthConfig;
+    use better_auth_core::hooks::AuthStore;
+    use better_auth_core::store::UserOps;
     use std::collections::HashMap;
     use std::sync::Arc;
 

@@ -205,31 +205,6 @@ pub enum DatabaseError {
     Transaction(String),
 }
 
-#[cfg(feature = "sqlx-postgres")]
-impl From<sqlx::Error> for DatabaseError {
-    fn from(err: sqlx::Error) -> Self {
-        match err {
-            sqlx::Error::Database(db_err) => {
-                if db_err.is_unique_violation() {
-                    DatabaseError::Constraint(db_err.to_string())
-                } else {
-                    DatabaseError::Query(db_err.to_string())
-                }
-            }
-            sqlx::Error::PoolClosed => DatabaseError::Connection("Pool closed".to_string()),
-            sqlx::Error::PoolTimedOut => DatabaseError::Connection("Pool timed out".to_string()),
-            _ => DatabaseError::Query(err.to_string()),
-        }
-    }
-}
-
-#[cfg(feature = "sqlx-postgres")]
-impl From<sqlx::Error> for AuthError {
-    fn from(err: sqlx::Error) -> Self {
-        AuthError::Database(DatabaseError::from(err))
-    }
-}
-
 pub type AuthResult<T> = Result<T, AuthError>;
 
 #[cfg(feature = "axum")]

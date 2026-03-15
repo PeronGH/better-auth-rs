@@ -4,16 +4,16 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::adapters::OrganizationOps;
 use crate::error::AuthResult;
+use crate::store::OrganizationOps;
 use crate::types_org::{CreateOrganization, Organization, UpdateOrganization};
 
 use super::entities;
 use super::entities::organization::{ActiveModel, Column, Entity};
-use super::{SeaOrmAdapter, map_db_err};
+use super::{SeaOrmStore, map_db_err};
 
 #[async_trait::async_trait]
-impl OrganizationOps for SeaOrmAdapter {
+impl OrganizationOps for SeaOrmStore {
     type Organization = Organization;
 
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Self::Organization> {

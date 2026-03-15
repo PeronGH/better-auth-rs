@@ -2,16 +2,17 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
-use crate::adapters::DatabaseAdapter;
-use crate::adapters::database::{
+use crate::error::AuthResult;
+use crate::store::SeaOrmStore;
+use crate::store::database::{
     AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, PasskeyOps, SessionOps,
     TwoFactorOps, UserOps, VerificationOps,
 };
-use crate::error::AuthResult;
 use crate::types::{
-    CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization, CreatePasskey,
-    CreateSession, CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus,
-    ListUsersParams, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
+    Account, ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember,
+    CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
+    CreateVerification, InvitationStatus, ListUsersParams, Passkey, Session, TwoFactor,
+    UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser, User, Verification,
 };
 
 /// Database lifecycle hooks for intercepting operations.
@@ -19,16 +20,14 @@ use crate::types::{
 /// All methods have default no-op implementations. Override only the hooks
 /// you need. Returning `Err` from a `before_*` hook aborts the operation.
 ///
-/// The `DB` type parameter determines the concrete entity types used in
-/// `after_*` hooks (e.g., `after_create_user` receives `&DB::User`).
 #[async_trait]
-pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
+pub trait DatabaseHooks: Send + Sync {
     async fn before_create_user(&self, user: &mut CreateUser) -> AuthResult<()> {
         let _ = user;
         Ok(())
     }
 
-    async fn after_create_user(&self, user: &DB::User) -> AuthResult<()> {
+    async fn after_create_user(&self, user: &User) -> AuthResult<()> {
         let _ = user;
         Ok(())
     }
@@ -38,7 +37,7 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
         Ok(())
     }
 
-    async fn after_update_user(&self, user: &DB::User) -> AuthResult<()> {
+    async fn after_update_user(&self, user: &User) -> AuthResult<()> {
         let _ = user;
         Ok(())
     }
@@ -58,7 +57,7 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
         Ok(())
     }
 
-    async fn after_create_session(&self, session: &DB::Session) -> AuthResult<()> {
+    async fn after_create_session(&self, session: &Session) -> AuthResult<()> {
         let _ = session;
         Ok(())
     }
@@ -80,7 +79,7 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
         Ok(())
     }
 
-    async fn after_create_account(&self, account: &DB::Account) -> AuthResult<()> {
+    async fn after_create_account(&self, account: &Account) -> AuthResult<()> {
         let _ = account;
         Ok(())
     }
@@ -90,7 +89,7 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
         Ok(())
     }
 
-    async fn after_update_account(&self, account: &DB::Account) -> AuthResult<()> {
+    async fn after_update_account(&self, account: &Account) -> AuthResult<()> {
         let _ = account;
         Ok(())
     }
@@ -115,7 +114,7 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
         Ok(())
     }
 
-    async fn after_create_verification(&self, verification: &DB::Verification) -> AuthResult<()> {
+    async fn after_create_verification(&self, verification: &Verification) -> AuthResult<()> {
         let _ = verification;
         Ok(())
     }
@@ -132,25 +131,25 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
 }
 
 /// A database adapter wrapper that calls hooks around the inner adapter's operations.
-pub struct HookedDatabaseAdapter<DB: DatabaseAdapter> {
-    inner: Arc<DB>,
-    hooks: Vec<Arc<dyn DatabaseHooks<DB>>>,
+pub struct AuthStore {
+    inner: Arc<SeaOrmStore>,
+    hooks: Vec<Arc<dyn DatabaseHooks>>,
 }
 
-impl<DB: DatabaseAdapter> HookedDatabaseAdapter<DB> {
-    pub fn new(inner: Arc<DB>) -> Self {
+impl AuthStore {
+    pub fn new(inner: Arc<SeaOrmStore>) -> Self {
         Self {
             inner,
             hooks: Vec::new(),
         }
     }
 
-    pub fn with_hook(mut self, hook: Arc<dyn DatabaseHooks<DB>>) -> Self {
+    pub fn with_hook(mut self, hook: Arc<dyn DatabaseHooks>) -> Self {
         self.hooks.push(hook);
         self
     }
 
-    pub fn add_hook(&mut self, hook: Arc<dyn DatabaseHooks<DB>>) {
+    pub fn add_hook(&mut self, hook: Arc<dyn DatabaseHooks>) {
         self.hooks.push(hook);
     }
 }
@@ -204,8 +203,8 @@ macro_rules! hooked_delete {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> UserOps for HookedDatabaseAdapter<DB> {
-    type User = DB::User;
+impl UserOps for AuthStore {
+    type User = User;
 
     async fn create_user(&self, mut user: CreateUser) -> AuthResult<Self::User> {
         hooked_create!(
@@ -250,8 +249,8 @@ impl<DB: DatabaseAdapter> UserOps for HookedDatabaseAdapter<DB> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> SessionOps for HookedDatabaseAdapter<DB> {
-    type Session = DB::Session;
+impl SessionOps for AuthStore {
+    type Session = Session;
 
     async fn create_session(&self, mut session: CreateSession) -> AuthResult<Self::Session> {
         hooked_create!(
@@ -309,8 +308,8 @@ impl<DB: DatabaseAdapter> SessionOps for HookedDatabaseAdapter<DB> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AccountOps for HookedDatabaseAdapter<DB> {
-    type Account = DB::Account;
+impl AccountOps for AuthStore {
+    type Account = Account;
 
     async fn create_account(&self, mut account: CreateAccount) -> AuthResult<Self::Account> {
         hooked_create!(
@@ -361,8 +360,8 @@ impl<DB: DatabaseAdapter> AccountOps for HookedDatabaseAdapter<DB> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
-    type Verification = DB::Verification;
+impl VerificationOps for AuthStore {
+    type Verification = Verification;
 
     async fn create_verification(
         &self,
@@ -423,8 +422,8 @@ impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> OrganizationOps for HookedDatabaseAdapter<DB> {
-    type Organization = DB::Organization;
+impl OrganizationOps for AuthStore {
+    type Organization = crate::Organization;
 
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Self::Organization> {
         self.inner.create_organization(org).await
@@ -456,8 +455,8 @@ impl<DB: DatabaseAdapter> OrganizationOps for HookedDatabaseAdapter<DB> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> MemberOps for HookedDatabaseAdapter<DB> {
-    type Member = DB::Member;
+impl MemberOps for AuthStore {
+    type Member = crate::Member;
 
     async fn create_member(&self, member: CreateMember) -> AuthResult<Self::Member> {
         self.inner.create_member(member).await
@@ -500,8 +499,8 @@ impl<DB: DatabaseAdapter> MemberOps for HookedDatabaseAdapter<DB> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> InvitationOps for HookedDatabaseAdapter<DB> {
-    type Invitation = DB::Invitation;
+impl InvitationOps for AuthStore {
+    type Invitation = crate::Invitation;
 
     async fn create_invitation(
         &self,
@@ -547,8 +546,8 @@ impl<DB: DatabaseAdapter> InvitationOps for HookedDatabaseAdapter<DB> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> TwoFactorOps for HookedDatabaseAdapter<DB> {
-    type TwoFactor = DB::TwoFactor;
+impl TwoFactorOps for AuthStore {
+    type TwoFactor = TwoFactor;
 
     async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<Self::TwoFactor> {
         self.inner.create_two_factor(two_factor).await
@@ -577,8 +576,8 @@ impl<DB: DatabaseAdapter> TwoFactorOps for HookedDatabaseAdapter<DB> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> ApiKeyOps for HookedDatabaseAdapter<DB> {
-    type ApiKey = DB::ApiKey;
+impl ApiKeyOps for AuthStore {
+    type ApiKey = ApiKey;
 
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<Self::ApiKey> {
         self.inner.create_api_key(input).await
@@ -610,8 +609,8 @@ impl<DB: DatabaseAdapter> ApiKeyOps for HookedDatabaseAdapter<DB> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> PasskeyOps for HookedDatabaseAdapter<DB> {
-    type Passkey = DB::Passkey;
+impl PasskeyOps for AuthStore {
+    type Passkey = Passkey;
 
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Self::Passkey> {
         self.inner.create_passkey(input).await
@@ -648,12 +647,23 @@ impl<DB: DatabaseAdapter> PasskeyOps for HookedDatabaseAdapter<DB> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::MemoryDatabaseAdapter;
+    use crate::sea_orm::Database;
+    use crate::store::{SeaOrmStore, run_migrations};
     use crate::types::{
         Account, CreateAccount, CreateUser, CreateVerification, UpdateAccount, UpdateUser, User,
         Verification,
     };
     use std::sync::atomic::{AtomicU32, Ordering};
+
+    async fn test_database() -> Arc<SeaOrmStore> {
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .expect("sqlite test database should connect");
+        run_migrations(&database)
+            .await
+            .expect("sqlite test migrations should run");
+        Arc::new(SeaOrmStore::new(database))
+    }
 
     // ── Unified counting hook ──────────────────────────────────────────
     //
@@ -707,7 +717,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl DatabaseHooks<MemoryDatabaseAdapter> for CountingHook {
+    impl DatabaseHooks for CountingHook {
         // user hooks
         async fn before_create_user(&self, _user: &mut CreateUser) -> AuthResult<()> {
             self.before_create_user_count.fetch_add(1, Ordering::SeqCst);
@@ -812,8 +822,7 @@ mod tests {
     #[tokio::test]
     async fn test_hooks_called_on_create_user() {
         let hook = Arc::new(CountingHook::new());
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(hook.clone());
+        let db = AuthStore::new(test_database().await).with_hook(hook.clone());
 
         let create = CreateUser::new()
             .with_email("test@example.com")
@@ -827,8 +836,7 @@ mod tests {
     #[tokio::test]
     async fn test_hooks_called_on_update_user() {
         let hook = Arc::new(CountingHook::new());
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(hook.clone());
+        let db = AuthStore::new(test_database().await).with_hook(hook.clone());
 
         let create = CreateUser::new()
             .with_email("test@example.com")
@@ -858,8 +866,7 @@ mod tests {
     #[tokio::test]
     async fn test_hooks_called_on_delete_user() {
         let hook = Arc::new(CountingHook::new());
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(hook.clone());
+        let db = AuthStore::new(test_database().await).with_hook(hook.clone());
 
         let create = CreateUser::new()
             .with_email("test@example.com")
@@ -877,14 +884,13 @@ mod tests {
         struct RejectHook;
 
         #[async_trait]
-        impl DatabaseHooks<MemoryDatabaseAdapter> for RejectHook {
+        impl DatabaseHooks for RejectHook {
             async fn before_create_user(&self, _user: &mut CreateUser) -> AuthResult<()> {
                 Err(crate::error::AuthError::forbidden("Hook rejected"))
             }
         }
 
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(Arc::new(RejectHook));
+        let db = AuthStore::new(test_database().await).with_hook(Arc::new(RejectHook));
 
         let create = CreateUser::new()
             .with_email("test@example.com")
@@ -899,7 +905,7 @@ mod tests {
     async fn test_multiple_hooks() {
         let hook1 = Arc::new(CountingHook::new());
         let hook2 = Arc::new(CountingHook::new());
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+        let db = AuthStore::new(test_database().await)
             .with_hook(hook1.clone())
             .with_hook(hook2.clone());
 
@@ -916,7 +922,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_passthrough_operations() {
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()));
+        let db = AuthStore::new(test_database().await);
 
         let result = db.get_user_by_email("nonexistent@test.com").await.unwrap();
         assert!(result.is_none());
@@ -927,8 +933,7 @@ mod tests {
     #[tokio::test]
     async fn test_account_hooks_create() {
         let hook = Arc::new(CountingHook::new());
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(hook.clone());
+        let db = AuthStore::new(test_database().await).with_hook(hook.clone());
 
         let user = db
             .create_user(CreateUser::new().with_email("test@example.com"))
@@ -946,8 +951,7 @@ mod tests {
     #[tokio::test]
     async fn test_account_hooks_update() {
         let hook = Arc::new(CountingHook::new());
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(hook.clone());
+        let db = AuthStore::new(test_database().await).with_hook(hook.clone());
 
         let user = db
             .create_user(CreateUser::new().with_email("test@example.com"))
@@ -972,8 +976,7 @@ mod tests {
     #[tokio::test]
     async fn test_account_hooks_delete() {
         let hook = Arc::new(CountingHook::new());
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(hook.clone());
+        let db = AuthStore::new(test_database().await).with_hook(hook.clone());
 
         let user = db
             .create_user(CreateUser::new().with_email("test@example.com"))
@@ -996,14 +999,13 @@ mod tests {
         struct RejectAccountHook;
 
         #[async_trait]
-        impl DatabaseHooks<MemoryDatabaseAdapter> for RejectAccountHook {
+        impl DatabaseHooks for RejectAccountHook {
             async fn before_create_account(&self, _account: &mut CreateAccount) -> AuthResult<()> {
                 Err(crate::error::AuthError::forbidden("Account hook rejected"))
             }
         }
 
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(Arc::new(RejectAccountHook));
+        let db = AuthStore::new(test_database().await).with_hook(Arc::new(RejectAccountHook));
 
         let user = db
             .create_user(CreateUser::new().with_email("test@example.com"))
@@ -1021,8 +1023,7 @@ mod tests {
     #[tokio::test]
     async fn test_verification_hooks_create() {
         let hook = Arc::new(CountingHook::new());
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(hook.clone());
+        let db = AuthStore::new(test_database().await).with_hook(hook.clone());
 
         let verification = CreateVerification {
             identifier: "email_verification:test@example.com".to_string(),
@@ -1044,8 +1045,7 @@ mod tests {
     #[tokio::test]
     async fn test_verification_hooks_delete() {
         let hook = Arc::new(CountingHook::new());
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(hook.clone());
+        let db = AuthStore::new(test_database().await).with_hook(hook.clone());
 
         let verification = CreateVerification {
             identifier: "email_verification:test@example.com".to_string(),
@@ -1071,7 +1071,7 @@ mod tests {
         struct RejectVerificationHook;
 
         #[async_trait]
-        impl DatabaseHooks<MemoryDatabaseAdapter> for RejectVerificationHook {
+        impl DatabaseHooks for RejectVerificationHook {
             async fn before_create_verification(
                 &self,
                 _v: &mut CreateVerification,
@@ -1082,8 +1082,7 @@ mod tests {
             }
         }
 
-        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
-            .with_hook(Arc::new(RejectVerificationHook));
+        let db = AuthStore::new(test_database().await).with_hook(Arc::new(RejectVerificationHook));
 
         let verification = CreateVerification {
             identifier: "test".to_string(),

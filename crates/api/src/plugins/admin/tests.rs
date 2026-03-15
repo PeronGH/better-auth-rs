@@ -1,8 +1,8 @@
 use super::*;
 use crate::plugins::test_helpers;
-use better_auth_core::DefaultDatabase;
-use better_auth_core::adapters::{AccountOps, SessionOps, UserOps};
 use better_auth_core::entity::{AuthAccount, AuthSession};
+use better_auth_core::hooks::AuthStore;
+use better_auth_core::store::{AccountOps, SessionOps, UserOps};
 use better_auth_core::{AuthPlugin, HttpMethod};
 use better_auth_core::{CreateSession, CreateUser, Session, User};
 use chrono::{Duration, Utc};

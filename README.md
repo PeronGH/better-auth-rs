@@ -78,16 +78,14 @@ Better Auth RS ships with a rich set of plugins. Enable only what you need:
 | Feature | Description |
 |---------|-------------|
 | `axum` | Axum web framework integration |
-| `derive` | Derive macros for compatibility helpers |
 
 ## Crate Structure
 
 | Crate | Description |
 |-------|-------------|
 | [`better-auth`](https://crates.io/crates/better-auth) | Main crate — re-exports and framework integration |
-| [`better-auth-core`](https://crates.io/crates/better-auth-core) | Core abstractions: traits, config, middleware, error handling |
+| [`better-auth-core`](https://crates.io/crates/better-auth-core) | Core auth runtime, store, middleware, and error handling |
 | [`better-auth-api`](https://crates.io/crates/better-auth-api) | Plugin implementations |
-| [`better-auth-derive`](https://crates.io/crates/better-auth-derive) | Derive macros for custom entity types |
 
 ## Documentation
 

@@ -11,8 +11,8 @@ workspace = true
 
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/api", "crates/derive"]
-exclude = ["examples/sqlx-custom-entities", "examples/sea-orm-migration", "examples/fullstack/backend", "compat-tests/rust-server"]
+members = ["crates/core", "crates/api"]
+exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compat-tests/rust-server"]
 
 [workspace.package]
 version = "0.9.0"
@@ -24,20 +24,11 @@ repository = "https://github.com/better-auth-rs/better-auth-rs"
 # Sub-crates
 better-auth-core = { version = "0.9.0", path = "crates/core" }
 better-auth-api = { version = "0.9.0", path = "crates/api" }
-better-auth-derive = { version = "0.9.0", path = "crates/derive" }
+better-auth-macros = { version = "0.9.0", path = "crates/derive", package = "better-auth-macros" }
 
 # Asynchronous runtime
 tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"
-
-# SQL
-sqlx = { version = "0.8", features = [
-    "runtime-tokio-rustls",
-    "postgres",
-    "chrono",
-    "uuid",
-    "json",
-] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -92,8 +83,6 @@ syn = { version = "2", features = ["full"] }
 [features]
 default = []
 axum = ["dep:axum", "dep:tower", "dep:url", "better-auth-core/axum", "better-auth-api/axum"]
-derive = ["better-auth-core/derive"]
-sqlx-postgres = ["dep:sqlx", "better-auth-core/sqlx-postgres"]
 redis-cache = ["dep:redis"]
 
 [dependencies]
@@ -131,9 +120,6 @@ axum = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 
-# Database (optional)
-sqlx = { workspace = true, optional = true }
-
 # Cache (optional)
 redis = { workspace = true, optional = true }
 
@@ -153,7 +139,6 @@ required-features = ["axum"]
 
 [[example]]
 name = "postgres_usage"
-required-features = ["sqlx-postgres"]
 
 [[bin]]
 name = "sync_better_auth_openapi"

@@ -5,15 +5,15 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::adapters::MemberOps;
 use crate::error::AuthResult;
+use crate::store::MemberOps;
 use crate::types_org::{CreateMember, Member};
 
 use super::entities::member::{ActiveModel, Column, Entity};
-use super::{SeaOrmAdapter, map_db_err};
+use super::{SeaOrmStore, map_db_err};
 
 #[async_trait::async_trait]
-impl MemberOps for SeaOrmAdapter {
+impl MemberOps for SeaOrmStore {
     type Member = Member;
 
     async fn create_member(&self, member: CreateMember) -> AuthResult<Self::Member> {

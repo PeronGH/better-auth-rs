@@ -1,8 +1,8 @@
 use super::*;
 use crate::plugins::test_helpers;
 use async_trait::async_trait;
-use better_auth_core::DefaultDatabase;
-use better_auth_core::adapters::{UserOps, VerificationOps};
+use better_auth_core::hooks::AuthStore;
+use better_auth_core::store::{UserOps, VerificationOps};
 use better_auth_core::{AuthResult, CreateUser, CreateVerification, UpdateUser};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;

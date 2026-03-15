@@ -20,11 +20,11 @@ use sea_orm::{DatabaseConnection, DbErr, SqlErr};
 use crate::error::{AuthError, DatabaseError};
 
 #[derive(Clone)]
-pub struct SeaOrmAdapter {
+pub struct SeaOrmStore {
     db: DatabaseConnection,
 }
 
-impl SeaOrmAdapter {
+impl SeaOrmStore {
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
     }

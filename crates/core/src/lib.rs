@@ -12,7 +12,6 @@
     )
 )]
 
-pub mod adapters;
 pub mod config;
 pub mod email;
 pub mod entity;
@@ -23,25 +22,14 @@ pub mod middleware;
 pub mod openapi;
 pub mod plugin;
 pub mod session;
+pub mod store;
 pub mod types;
 pub mod types_impls;
 pub mod types_org;
 pub mod utils;
 
-// Re-export derive macros when the `derive` feature is enabled
-#[cfg(feature = "derive")]
-pub use better_auth_derive::*;
-
 // Re-export commonly used items
-pub use adapters::{
-    AccountOps, ApiKeyOps, AuthDatabase, AuthMigrator, CacheAdapter, DatabaseAdapter,
-    InvitationOps, MemberOps, MemoryAccount, MemoryApiKey, MemoryCacheAdapter,
-    MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization, MemoryPasskey,
-    MemorySession, MemoryTwoFactor, MemoryUser, MemoryVerification, OrganizationOps, PasskeyOps,
-    SeaOrmAdapter, SessionOps, TwoFactorOps, UserOps, VerificationOps, run_migrations,
-};
-#[cfg(feature = "sqlx-postgres")]
-pub use adapters::{SqlxAdapter, SqlxEntity};
+pub use better_auth_macros::PluginConfig;
 pub use config::{
     AccountConfig, AccountLinkingConfig, AdvancedConfig, AdvancedDatabaseConfig, Argon2Config,
     AuthConfig, CookieAttributes, CookieCacheConfig, CookieCacheStrategy, CookieOverride,
@@ -50,10 +38,8 @@ pub use config::{
 };
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
-    AuthAccount, AuthAccountMeta, AuthApiKey, AuthApiKeyMeta, AuthInvitation, AuthInvitationMeta,
-    AuthMember, AuthMemberMeta, AuthOrganization, AuthOrganizationMeta, AuthPasskey,
-    AuthPasskeyMeta, AuthSession, AuthSessionMeta, AuthTwoFactor, AuthTwoFactorMeta, AuthUser,
-    AuthUserMeta, AuthVerification, AuthVerificationMeta, MemberUserView, PASSWORD_HASH_KEY,
+    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
+    AuthSession, AuthTwoFactor, AuthUser, AuthVerification, MemberUserView, PASSWORD_HASH_KEY,
 };
 pub use error::{
     AuthError, AuthResult, DatabaseError, validate_request_body, validation_error_response,
@@ -63,7 +49,7 @@ pub use extractors::{
     AdminRole, AdminSession, AuthRequestExt, AxumAuthResponse, CurrentSession, OptionalSession,
     Pending2faToken, ValidatedJson,
 };
-pub use hooks::{DatabaseHooks, HookedDatabaseAdapter};
+pub use hooks::DatabaseHooks;
 pub use middleware::{
     BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig, CsrfMiddleware,
     EndpointRateLimit, Middleware, RateLimitConfig, RateLimitMiddleware,
@@ -74,7 +60,7 @@ pub use plugin::AxumPlugin;
 pub use plugin::{AuthContext, AuthPlugin, AuthRoute, AuthState, BeforeRequestAction};
 pub use sea_orm;
 pub use session::SessionManager;
-pub type DefaultDatabase = HookedDatabaseAdapter<SeaOrmAdapter>;
+pub use store::{AuthMigrator, CacheAdapter, MemoryCacheAdapter, run_migrations};
 pub use types::{
     Account, ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
     CreateInvitation, CreateMember, CreateOrganization, CreatePasskey, CreateSession,

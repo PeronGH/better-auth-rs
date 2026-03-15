@@ -4,15 +4,15 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::adapters::ApiKeyOps;
 use crate::error::{AuthError, AuthResult};
+use crate::store::ApiKeyOps;
 use crate::types::{ApiKey, CreateApiKey, UpdateApiKey};
 
 use super::entities::api_key::{ActiveModel, Column, Entity};
-use super::{SeaOrmAdapter, map_db_err, parse_optional_rfc3339, to_i32, to_optional_i32};
+use super::{SeaOrmStore, map_db_err, parse_optional_rfc3339, to_i32, to_optional_i32};
 
 #[async_trait::async_trait]
-impl ApiKeyOps for SeaOrmAdapter {
+impl ApiKeyOps for SeaOrmStore {
     type ApiKey = ApiKey;
 
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<Self::ApiKey> {

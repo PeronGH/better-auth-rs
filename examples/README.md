@@ -13,16 +13,6 @@ These live in the workspace and are run via `cargo run --example`.
 
 These are separate Cargo projects (excluded from the workspace) under `examples/`. Run them with `cargo run --manifest-path <path-to-Cargo.toml>`.
 
-### `sea-orm-migration`
-
-Sea-ORM + better-auth sharing the same PostgreSQL connection pool. Schema migrations are written in Rust using `sea-orm-migration` instead of raw SQL.
-
-```bash
-createdb better_auth_example
-export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
-cargo run --manifest-path examples/sea-orm-migration/Cargo.toml
-```
-
 ### `fullstack`
 
 Full-stack integration example using the [better-auth](https://www.better-auth.com/) **frontend SDK** (Next.js / React) with a **better-auth-rs** (Rust / Axum) backend. Demonstrates email/password sign-up, sign-in, cookie-based sessions, and protected routes.

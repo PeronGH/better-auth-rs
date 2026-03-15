@@ -282,7 +282,7 @@ dependencies = [
  "argon2",
  "async-trait",
  "base64",
- "better-auth-derive",
+ "better-auth-macros",
  "chrono",
  "cookie",
  "glob-match",
@@ -297,7 +297,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "better-auth-derive"
+name = "better-auth-macros"
 version = "0.8.0"
 dependencies = [
  "proc-macro2",

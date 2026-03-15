@@ -1,6 +1,6 @@
 use super::*;
 use crate::plugins::test_helpers::TestDatabase;
-use better_auth_core::adapters::{ApiKeyOps, SessionOps, UserOps};
+use better_auth_core::store::{ApiKeyOps, SessionOps, UserOps};
 use better_auth_core::{
     AuthContext, AuthPlugin, CreateSession, CreateUser, HttpMethod, Session, User,
 };
@@ -1152,9 +1152,8 @@ async fn test_concurrent_rate_limiting() {
     assert_eq!(fail_count, 3, "3 out of 5 should be rate-limited");
 }
 
-// 8. Database compatibility: test delete_expired_api_keys on memory
-//    adapter (the SQL fix is in the SqlxAdapter; memory adapter tests
-//    prove the trait contract works).
+// 8. Database compatibility: test delete_expired_api_keys through the
+//    in-repo auth store implementation.
 #[tokio::test]
 async fn test_delete_expired_api_keys_memory_adapter() {
     let (ctx, _user, session) = create_test_context_with_user().await;

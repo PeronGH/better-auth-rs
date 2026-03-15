@@ -2,7 +2,7 @@ mod compat;
 
 use better_auth::BetterAuth;
 use better_auth::{run_migrations, sea_orm::Database};
-use better_auth_core::{SeaOrmAdapter, UserOps};
+use better_auth_core::store::{SeaOrmStore, UserOps};
 use compat::helpers::*;
 use std::sync::Arc;
 
@@ -1267,7 +1267,6 @@ async fn test_axum_duplicate_email() {
     assert_eq!(response2.status(), StatusCode::CONFLICT);
 }
 
-#[cfg(feature = "sqlx-postgres")]
 mod postgres_tests {
     use super::*;
     use better_auth::{run_migrations, sea_orm::Database};
@@ -2223,7 +2222,7 @@ async fn test_get_user_by_username_adapter() {
 
     let database = Database::connect("sqlite::memory:").await.unwrap();
     run_migrations(&database).await.unwrap();
-    let db = SeaOrmAdapter::new(database);
+    let db = SeaOrmStore::new(database);
 
     // Create user with username
     let create = CreateUser::new()
@@ -2231,14 +2230,15 @@ async fn test_get_user_by_username_adapter() {
         .with_name("DB Test")
         .with_username("db_user");
 
-    let user = db.create_user(create).await.unwrap();
+    let user: better_auth_core::User = db.create_user(create).await.unwrap();
 
     // Lookup by username
-    let found = db.get_user_by_username("db_user").await.unwrap();
+    let found: Option<better_auth_core::User> = db.get_user_by_username("db_user").await.unwrap();
     assert!(found.is_some());
     assert_eq!(found.unwrap().id, user.id);
 
     // Lookup nonexistent
-    let not_found = db.get_user_by_username("no_user").await.unwrap();
+    let not_found: Option<better_auth_core::User> =
+        db.get_user_by_username("no_user").await.unwrap();
     assert!(not_found.is_none());
 }

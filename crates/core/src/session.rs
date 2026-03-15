@@ -1,10 +1,10 @@
 use chrono::Utc;
 use std::sync::Arc;
 
-use crate::adapters::AuthDatabase;
 use crate::config::AuthConfig;
 use crate::entity::{AuthSession, AuthUser};
 use crate::error::AuthResult;
+use crate::store::AuthDatabase;
 use crate::types::{CreateSession, Session};
 
 /// Session manager handles session creation, validation, and cleanup
@@ -210,9 +210,9 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::{AuthDatabase, DatabaseAdapter, SeaOrmAdapter, run_migrations};
     use crate::entity::AuthSession;
     use crate::sea_orm::Database;
+    use crate::store::{AuthDatabase, SeaOrmStore, run_migrations};
     use crate::types::AuthRequest;
     use crate::types::HttpMethod;
     use chrono::Duration;
@@ -228,7 +228,7 @@ mod tests {
         run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        Arc::new(SeaOrmAdapter::new(database))
+        Arc::new(SeaOrmStore::new(database))
     }
 
     fn test_manager() -> SessionManager {

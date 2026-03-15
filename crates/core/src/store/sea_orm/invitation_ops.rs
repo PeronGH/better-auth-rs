@@ -4,15 +4,15 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::adapters::InvitationOps;
 use crate::error::AuthResult;
+use crate::store::InvitationOps;
 use crate::types_org::{CreateInvitation, Invitation, InvitationStatus};
 
 use super::entities::invitation::{ActiveModel, Column, Entity};
-use super::{SeaOrmAdapter, map_db_err};
+use super::{SeaOrmStore, map_db_err};
 
 #[async_trait::async_trait]
-impl InvitationOps for SeaOrmAdapter {
+impl InvitationOps for SeaOrmStore {
     type Invitation = Invitation;
 
     async fn create_invitation(

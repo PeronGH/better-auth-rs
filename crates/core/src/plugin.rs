@@ -2,12 +2,12 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::adapters::AuthDatabase;
 use crate::config::AuthConfig;
 use crate::email::EmailProvider;
 use crate::entity::AuthSession;
 use crate::error::{AuthError, AuthResult};
 use crate::session::SessionManager;
+use crate::store::AuthDatabase;
 use crate::types::{AuthRequest, AuthResponse, HttpMethod, Session, User};
 
 /// Action returned by [`AuthPlugin::before_request`].
@@ -298,9 +298,9 @@ impl AuthState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::{DatabaseAdapter, SeaOrmAdapter, run_migrations};
     use crate::entity::AuthUser;
     use crate::sea_orm::Database;
+    use crate::store::{SeaOrmStore, run_migrations};
 
     async fn test_database() -> Arc<AuthDatabase> {
         let database = Database::connect("sqlite::memory:")
@@ -309,7 +309,7 @@ mod tests {
         run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        Arc::new(SeaOrmAdapter::new(database))
+        Arc::new(SeaOrmStore::new(database))
     }
 
     #[test]

@@ -7,13 +7,13 @@
 
 use std::sync::{Arc, Once};
 
-use better_auth_core::DefaultDatabase;
-use better_auth_core::adapters::{AccountOps, SeaOrmAdapter, UserOps, VerificationOps};
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
+use better_auth_core::hooks::AuthStore;
+use better_auth_core::store::{AccountOps, SeaOrmStore, UserOps, VerificationOps};
 use better_auth_core::{
     AccountConfig, AccountLinkingConfig, AuthConfig, AuthContext, AuthPlugin, AuthRequest,
-    CreateAccount, CreateUser, CreateVerification, HookedDatabaseAdapter, HttpMethod,
-    SessionManager, run_migrations, sea_orm::Database,
+    CreateAccount, CreateUser, CreateVerification, HttpMethod, SessionManager, run_migrations,
+    sea_orm::Database,
 };
 
 use better_auth_api::AccountManagementPlugin;
@@ -79,7 +79,7 @@ fn test_config_allow_unlinking_all() -> AuthConfig {
 
 /// Helper: create a user + OAuth account + session, returning (user_id, session_token).
 async fn setup_user_with_account(
-    db: &Arc<DefaultDatabase>,
+    db: &Arc<AuthStore>,
     config: &Arc<AuthConfig>,
     email: &str,
     provider: &str,
@@ -124,12 +124,10 @@ async fn setup_user_with_account(
     (user_id, token)
 }
 
-async fn create_test_database() -> Arc<DefaultDatabase> {
+async fn create_test_database() -> Arc<AuthStore> {
     let database = Database::connect("sqlite::memory:").await.unwrap();
     run_migrations(&database).await.unwrap();
-    Arc::new(HookedDatabaseAdapter::new(Arc::new(SeaOrmAdapter::new(
-        database,
-    ))))
+    Arc::new(AuthStore::new(Arc::new(SeaOrmStore::new(database))))
 }
 
 /// Start a mock HTTP server that responds to OAuth token + userinfo requests.

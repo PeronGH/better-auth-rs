@@ -5,15 +5,15 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::adapters::SessionOps;
 use crate::error::{AuthError, AuthResult};
+use crate::store::SessionOps;
 use crate::types::{CreateSession, Session};
 
 use super::entities::session::{Column, Entity};
-use super::{SeaOrmAdapter, map_db_err};
+use super::{SeaOrmStore, map_db_err};
 
 #[async_trait::async_trait]
-impl SessionOps for SeaOrmAdapter {
+impl SessionOps for SeaOrmStore {
     type Session = Session;
 
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<Self::Session> {

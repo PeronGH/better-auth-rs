@@ -4,15 +4,15 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::adapters::PasskeyOps;
 use crate::error::{AuthError, AuthResult};
+use crate::store::PasskeyOps;
 use crate::types::{CreatePasskey, Passkey};
 
 use super::entities::passkey::{ActiveModel, Column, Entity};
-use super::{SeaOrmAdapter, map_db_err};
+use super::{SeaOrmStore, map_db_err};
 
 #[async_trait::async_trait]
-impl PasskeyOps for SeaOrmAdapter {
+impl PasskeyOps for SeaOrmStore {
     type Passkey = Passkey;
 
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Self::Passkey> {

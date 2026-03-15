@@ -4,15 +4,15 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::adapters::AccountOps;
 use crate::error::AuthResult;
+use crate::store::AccountOps;
 use crate::types::{Account, CreateAccount, UpdateAccount};
 
 use super::entities::account::{ActiveModel, Column, Entity};
-use super::{SeaOrmAdapter, map_db_err};
+use super::{SeaOrmStore, map_db_err};
 
 #[async_trait::async_trait]
-impl AccountOps for SeaOrmAdapter {
+impl AccountOps for SeaOrmStore {
     type Account = Account;
 
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<Self::Account> {

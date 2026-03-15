@@ -2,15 +2,15 @@ use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 use uuid::Uuid;
 
-use crate::adapters::VerificationOps;
 use crate::error::AuthResult;
+use crate::store::VerificationOps;
 use crate::types::{CreateVerification, Verification};
 
 use super::entities::verification::{ActiveModel, Column, Entity};
-use super::{SeaOrmAdapter, map_db_err};
+use super::{SeaOrmStore, map_db_err};
 
 #[async_trait::async_trait]
-impl VerificationOps for SeaOrmAdapter {
+impl VerificationOps for SeaOrmStore {
     type Verification = Verification;
 
     async fn create_verification(

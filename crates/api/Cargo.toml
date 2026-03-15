@@ -10,7 +10,7 @@ repository = { workspace = true }
 workspace = true
 
 [dependencies]
-better-auth-core = { workspace = true, features = ["derive"] }
+better-auth-core = { workspace = true }
 
 # Asynchronous runtime
 async-trait = { workspace = true }

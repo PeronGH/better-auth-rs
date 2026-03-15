@@ -2,15 +2,15 @@ use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};
 use uuid::Uuid;
 
-use crate::adapters::TwoFactorOps;
 use crate::error::AuthResult;
+use crate::store::TwoFactorOps;
 use crate::types::{CreateTwoFactor, TwoFactor};
 
 use super::entities::two_factor::{ActiveModel, Column, Entity};
-use super::{SeaOrmAdapter, map_db_err};
+use super::{SeaOrmStore, map_db_err};
 
 #[async_trait::async_trait]
-impl TwoFactorOps for SeaOrmAdapter {
+impl TwoFactorOps for SeaOrmStore {
     type TwoFactor = TwoFactor;
 
     async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<Self::TwoFactor> {

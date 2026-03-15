@@ -21,17 +21,18 @@ pub(crate) struct StatusResponse {
 
 #[cfg(test)]
 pub(crate) mod test_helpers {
-    use better_auth_core::adapters::{SeaOrmAdapter, SessionOps, UserOps};
     use better_auth_core::config::AuthConfig;
+    use better_auth_core::hooks::AuthStore;
+    use better_auth_core::store::{SeaOrmStore, SessionOps, UserOps};
     use better_auth_core::{
-        AuthContext, AuthRequest, CreateSession, CreateUser, DefaultDatabase,
-        HookedDatabaseAdapter, HttpMethod, Session, User, run_migrations, sea_orm::Database,
+        AuthContext, AuthRequest, CreateSession, CreateUser, HttpMethod, Session, User,
+        run_migrations, sea_orm::Database,
     };
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    pub type TestDatabase = DefaultDatabase;
+    pub type TestDatabase = AuthStore;
 
     pub fn create_test_config() -> AuthConfig {
         AuthConfig::new("test-secret-key-at-least-32-chars-long")
@@ -44,9 +45,7 @@ pub(crate) mod test_helpers {
         run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        Arc::new(HookedDatabaseAdapter::new(Arc::new(SeaOrmAdapter::new(
-            database,
-        ))))
+        Arc::new(AuthStore::new(Arc::new(SeaOrmStore::new(database))))
     }
 
     pub async fn create_test_context() -> AuthContext {

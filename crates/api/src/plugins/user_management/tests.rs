@@ -3,7 +3,7 @@ use crate::plugins::test_helpers;
 use crate::plugins::test_helpers::TestDatabase;
 use async_trait::async_trait;
 use better_auth_core::CreateUser;
-use better_auth_core::adapters::{UserOps, VerificationOps};
+use better_auth_core::store::{UserOps, VerificationOps};
 use chrono::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;

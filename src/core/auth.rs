@@ -3,16 +3,18 @@ use std::sync::Arc;
 use serde::Deserialize;
 
 use better_auth_core::{
-    AuthConfig, AuthContext, AuthDatabase, AuthError, AuthPlugin, AuthRequest, AuthResponse,
-    AuthResult, BeforeRequestAction, DatabaseHooks, EmailProvider, HookedDatabaseAdapter,
-    HttpMethod, OkResponse, OpenApiBuilder, OpenApiSpec, SeaOrmAdapter, SessionManager,
-    StatusMessageResponse, SuccessMessageResponse, UpdateUser, UpdateUserRequest, core_paths,
+    AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
+    BeforeRequestAction, DatabaseHooks, EmailProvider, HttpMethod, OkResponse, OpenApiBuilder,
+    OpenApiSpec, SessionManager, StatusMessageResponse, SuccessMessageResponse, UpdateUser,
+    UpdateUserRequest, core_paths,
     entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
+    hooks::AuthStore,
     middleware::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
         CsrfMiddleware, Middleware, RateLimitConfig, RateLimitMiddleware,
     },
     sea_orm::DatabaseConnection,
+    store::{AuthDatabase, SeaOrmStore},
 };
 
 #[derive(Debug, Deserialize)]
@@ -20,9 +22,6 @@ struct ChangeEmailRequest {
     #[serde(rename = "newEmail")]
     new_email: String,
 }
-
-/// The main BetterAuth instance, generic over the database adapter.
-pub type DefaultDatabase = HookedDatabaseAdapter<SeaOrmAdapter>;
 
 pub struct BetterAuth {
     config: Arc<AuthConfig>,
@@ -34,24 +33,10 @@ pub struct BetterAuth {
 }
 
 /// Initial builder for configuring BetterAuth.
-///
-/// Call `.database(connection)` to obtain a [`TypedAuthBuilder`] backed by
-/// the built-in SeaORM store.
 pub struct AuthBuilder {
     config: AuthConfig,
-    csrf_config: Option<CsrfConfig>,
-    rate_limit_config: Option<RateLimitConfig>,
-    cors_config: Option<CorsConfig>,
-    body_limit_config: Option<BodyLimitConfig>,
-    custom_middlewares: Vec<Box<dyn Middleware>>,
-}
-
-/// Typed builder returned by [`AuthBuilder::database`].
-///
-/// Accepts plugins, hooks, and middleware before calling `.build()`.
-pub struct TypedAuthBuilder {
-    config: AuthConfig,
-    database: DefaultDatabase,
+    database: Option<AuthStore>,
+    hooks: Vec<Arc<dyn DatabaseHooks>>,
     plugins: Vec<Box<dyn AuthPlugin>>,
     csrf_config: Option<CsrfConfig>,
     rate_limit_config: Option<RateLimitConfig>,
@@ -64,6 +49,9 @@ impl AuthBuilder {
     pub fn new(config: AuthConfig) -> Self {
         Self {
             config,
+            database: None,
+            hooks: Vec::new(),
+            plugins: Vec::new(),
             csrf_config: None,
             rate_limit_config: None,
             cors_config: None,
@@ -72,18 +60,20 @@ impl AuthBuilder {
         }
     }
 
-    /// Set the SeaORM connection, returning a [`TypedAuthBuilder`].
-    pub fn database(self, database: DatabaseConnection) -> TypedAuthBuilder {
-        TypedAuthBuilder {
-            config: self.config,
-            database: HookedDatabaseAdapter::new(Arc::new(SeaOrmAdapter::new(database))),
-            plugins: Vec::new(),
-            csrf_config: self.csrf_config,
-            rate_limit_config: self.rate_limit_config,
-            cors_config: self.cors_config,
-            body_limit_config: self.body_limit_config,
-            custom_middlewares: self.custom_middlewares,
+    /// Set the SeaORM connection for auth persistence.
+    pub fn database(mut self, database: DatabaseConnection) -> Self {
+        let mut store = AuthStore::new(Arc::new(SeaOrmStore::new(database)));
+        for hook in &self.hooks {
+            store.add_hook(hook.clone());
         }
+        self.database = Some(store);
+        self
+    }
+
+    /// Add a plugin to the authentication system.
+    pub fn plugin<P: AuthPlugin + 'static>(mut self, plugin: P) -> Self {
+        self.plugins.push(Box::new(plugin));
+        self
     }
 
     /// Configure CSRF protection.
@@ -115,48 +105,20 @@ impl AuthBuilder {
         self.config.email_provider = Some(Arc::new(provider));
         self
     }
-}
-
-impl TypedAuthBuilder {
-    /// Add a plugin to the authentication system.
-    pub fn plugin<P: AuthPlugin + 'static>(mut self, plugin: P) -> Self {
-        self.plugins.push(Box::new(plugin));
-        self
-    }
-
-    /// Configure CSRF protection.
-    pub fn csrf(mut self, config: CsrfConfig) -> Self {
-        self.csrf_config = Some(config);
-        self
-    }
-
-    /// Configure rate limiting.
-    pub fn rate_limit(mut self, config: RateLimitConfig) -> Self {
-        self.rate_limit_config = Some(config);
-        self
-    }
-
-    /// Configure CORS.
-    pub fn cors(mut self, config: CorsConfig) -> Self {
-        self.cors_config = Some(config);
-        self
-    }
-
-    /// Configure body size limit.
-    pub fn body_limit(mut self, config: BodyLimitConfig) -> Self {
-        self.body_limit_config = Some(config);
-        self
-    }
-
-    /// Set the email provider for sending emails.
-    pub fn email_provider<E: EmailProvider + 'static>(mut self, provider: E) -> Self {
-        self.config.email_provider = Some(Arc::new(provider));
-        self
-    }
 
     /// Add a custom middleware.
     pub fn middleware<M: Middleware + 'static>(mut self, mw: M) -> Self {
         self.custom_middlewares.push(Box::new(mw));
+        self
+    }
+
+    /// Add a database lifecycle hook for the built-in SeaORM store.
+    pub fn hook<H: DatabaseHooks + 'static>(mut self, hook: H) -> Self {
+        let hook: Arc<dyn DatabaseHooks> = Arc::new(hook);
+        if let Some(database) = &mut self.database {
+            database.add_hook(hook.clone());
+        }
+        self.hooks.push(hook);
         self
     }
 
@@ -166,7 +128,10 @@ impl TypedAuthBuilder {
         self.config.validate()?;
 
         let config = Arc::new(self.config);
-        let database: Arc<AuthDatabase> = Arc::new(self.database);
+        let database = self
+            .database
+            .ok_or_else(|| AuthError::config("Database connection not configured"))?;
+        let database: Arc<AuthDatabase> = Arc::new(database);
 
         // Create session manager
         let session_manager = SessionManager::new(config.clone(), database.clone());
@@ -204,14 +169,6 @@ impl TypedAuthBuilder {
             session_manager,
             context,
         })
-    }
-}
-
-impl TypedAuthBuilder {
-    /// Add a database lifecycle hook for the built-in SeaORM store.
-    pub fn hook<H: DatabaseHooks<SeaOrmAdapter> + 'static>(mut self, hook: H) -> Self {
-        self.database.add_hook(Arc::new(hook));
-        self
     }
 }
 
@@ -478,12 +435,11 @@ impl BetterAuth {
             return Err(AuthError::bad_request("Invalid email address"));
         }
 
-        if self
+        let existing_user: Option<better_auth_core::User> = self
             .database
             .get_user_by_email(&change_req.new_email)
-            .await?
-            .is_some()
-        {
+            .await?;
+        if existing_user.is_some() {
             return Err(AuthError::conflict("A user with this email already exists"));
         }
 
@@ -523,7 +479,7 @@ impl BetterAuth {
             .get("token")
             .ok_or_else(|| AuthError::bad_request("Deletion token is required"))?;
 
-        let verification = self
+        let verification: better_auth_core::Verification = self
             .database
             .get_verification_by_value(token)
             .await?
@@ -533,7 +489,8 @@ impl BetterAuth {
 
         self.database.delete_user_sessions(user_id).await?;
 
-        let accounts = self.database.get_user_accounts(user_id).await?;
+        let accounts: Vec<better_auth_core::Account> =
+            self.database.get_user_accounts(user_id).await?;
         for account in accounts {
             self.database.delete_account(account.id()).await?;
         }
@@ -558,11 +515,8 @@ impl BetterAuth {
     async fn extract_current_user(&self, req: &AuthRequest) -> AuthResult<better_auth_core::User> {
         // Fast path: virtual session injected by before_request hook
         if let Some(uid) = req.virtual_user_id() {
-            return self
-                .database
-                .get_user_by_id(uid)
-                .await?
-                .ok_or(AuthError::UserNotFound);
+            let user: Option<better_auth_core::User> = self.database.get_user_by_id(uid).await?;
+            return user.ok_or(AuthError::UserNotFound);
         }
 
         let token = self
@@ -576,13 +530,10 @@ impl BetterAuth {
             .await?
             .ok_or(AuthError::SessionNotFound)?;
 
-        let user = self
-            .database
-            .get_user_by_id(session.user_id())
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
+        let user: Option<better_auth_core::User> =
+            self.database.get_user_by_id(session.user_id()).await?;
 
-        Ok(user)
+        user.ok_or(AuthError::UserNotFound)
     }
 }
 

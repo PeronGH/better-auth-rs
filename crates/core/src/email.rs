@@ -93,12 +93,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_missing_provider_returns_error() {
-        use crate::adapters::MemoryDatabaseAdapter;
         use crate::config::AuthConfig;
         use crate::plugin::AuthContext;
+        use crate::sea_orm::Database;
+        use crate::store::{SeaOrmStore, run_migrations};
 
         let config = Arc::new(AuthConfig::new("test-secret-key-at-least-32-chars-long"));
-        let database = Arc::new(MemoryDatabaseAdapter::new());
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .expect("sqlite test database should connect");
+        run_migrations(&database)
+            .await
+            .expect("sqlite test migrations should run");
+        let database = Arc::new(SeaOrmStore::new(database));
         let ctx = AuthContext::new(config, database);
 
         let result = ctx.email_provider();
