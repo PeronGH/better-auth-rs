@@ -564,7 +564,7 @@ async fn test_axum_password_validation() {
 
     // Check password validation message
     let message = response_data["message"].as_str().unwrap();
-    assert!(message.contains("6 characters"));
+    assert!(message.contains("Password too short"));
 }
 
 /// Test session revocation flow
