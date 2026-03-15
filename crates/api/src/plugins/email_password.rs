@@ -7,8 +7,8 @@ use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
-    AuthRequest, AuthResponse, CreateAccount, CreateUser, CreateVerification, HttpMethod,
-    PASSWORD_HASH_KEY, RequestMeta,
+    AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, CreateVerification,
+    HttpMethod, PASSWORD_HASH_KEY, RequestMeta,
 };
 
 use super::email_verification::EmailVerificationPlugin;
@@ -319,40 +319,67 @@ pub(crate) async fn sign_up_core(
     }
     create_user.metadata = Some(metadata);
 
-    let user = ctx.database.create_user(create_user).await?;
+    let auto_sign_in = config.auto_sign_in;
+    let expires_in = ctx.config.session.expires_in;
+    let ip_address = meta.ip_address.clone();
+    let user_agent = meta.user_agent.clone();
+    let database = ctx.database.clone();
+    let transaction_database = database.clone();
 
-    let _ = ctx
-        .database
-        .create_account(CreateAccount {
-            user_id: user.id().to_string(),
-            account_id: user.id().to_string(),
-            provider_id: "credential".to_string(),
-            access_token: None,
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
-            password: user.password_hash().map(str::to_string),
+    database
+        .transaction(move |tx| {
+            let database = transaction_database.clone();
+            Box::pin(async move {
+                let user: better_auth_core::User =
+                    database.create_user_in_tx(tx, create_user).await?;
+
+                let _ = database
+                    .create_account_in_tx(
+                        tx,
+                        CreateAccount {
+                            user_id: user.id().to_string(),
+                            account_id: user.id().to_string(),
+                            provider_id: "credential".to_string(),
+                            access_token: None,
+                            refresh_token: None,
+                            id_token: None,
+                            access_token_expires_at: None,
+                            refresh_token_expires_at: None,
+                            scope: None,
+                            password: user.password_hash().map(str::to_string),
+                        },
+                    )
+                    .await?;
+
+                if auto_sign_in {
+                    let session: better_auth_core::Session = database
+                        .create_session_in_tx(
+                            tx,
+                            CreateSession {
+                                user_id: user.id().to_string(),
+                                expires_at: chrono::Utc::now() + expires_in,
+                                ip_address,
+                                user_agent,
+                                impersonated_by: None,
+                                active_organization_id: None,
+                            },
+                        )
+                        .await?;
+                    let token = session.token().to_string();
+
+                    Ok((
+                        SignUpResponse {
+                            token: Some(token.clone()),
+                            user,
+                        },
+                        Some(token),
+                    ))
+                } else {
+                    Ok((SignUpResponse { token: None, user }, None))
+                }
+            })
         })
-        .await?;
-
-    if config.auto_sign_in {
-        let session = ctx
-            .session_manager()
-            .create_session(&user, meta.ip_address.clone(), meta.user_agent.clone())
-            .await?;
-        let token = session.token().to_string();
-
-        let response = SignUpResponse {
-            token: Some(token.clone()),
-            user,
-        };
-        Ok((response, Some(token)))
-    } else {
-        let response = SignUpResponse { token: None, user };
-        Ok((response, None))
-    }
+        .await
 }
 
 /// Shared sign-in logic after user lookup: verify password, check 2FA, create session.
@@ -667,8 +694,6 @@ mod tests {
     use super::*;
     use better_auth_core::AuthContext;
     use better_auth_core::config::AuthConfig;
-    use better_auth_core::hooks::AuthStore;
-    use better_auth_core::store::UserOps;
     use std::collections::HashMap;
     use std::sync::Arc;
 

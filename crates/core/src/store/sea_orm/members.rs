@@ -6,17 +6,13 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::error::AuthResult;
-use crate::store::MemberOps;
 use crate::types_org::{CreateMember, Member};
 
 use super::entities::member::{ActiveModel, Column, Entity};
-use super::{SeaOrmStore, map_db_err};
+use super::{AuthStore, map_db_err};
 
-#[async_trait::async_trait]
-impl MemberOps for SeaOrmStore {
-    type Member = Member;
-
-    async fn create_member(&self, member: CreateMember) -> AuthResult<Self::Member> {
+impl AuthStore {
+    pub async fn create_member(&self, member: CreateMember) -> AuthResult<Member> {
         ActiveModel {
             id: Set(Uuid::new_v4().to_string()),
             organization_id: Set(member.organization_id),
@@ -30,11 +26,11 @@ impl MemberOps for SeaOrmStore {
         .map_err(map_db_err)
     }
 
-    async fn get_member(
+    pub async fn get_member(
         &self,
         organization_id: &str,
         user_id: &str,
-    ) -> AuthResult<Option<Self::Member>> {
+    ) -> AuthResult<Option<Member>> {
         Entity::find()
             .filter(Column::OrganizationId.eq(organization_id))
             .filter(Column::UserId.eq(user_id))
@@ -44,7 +40,7 @@ impl MemberOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Self::Member>> {
+    pub async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
         Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -52,7 +48,7 @@ impl MemberOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Self::Member> {
+    pub async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
         let Some(model) = Entity::find_by_id(member_id.to_owned())
             .one(self.connection())
             .await
@@ -70,7 +66,7 @@ impl MemberOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
+    pub async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
         Entity::delete_by_id(member_id.to_owned())
             .exec(self.connection())
             .await
@@ -78,10 +74,10 @@ impl MemberOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn list_organization_members(
+    pub async fn list_organization_members(
         &self,
         organization_id: &str,
-    ) -> AuthResult<Vec<Self::Member>> {
+    ) -> AuthResult<Vec<Member>> {
         Entity::find()
             .filter(Column::OrganizationId.eq(organization_id))
             .order_by_asc(Column::CreatedAt)
@@ -91,7 +87,7 @@ impl MemberOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
+    pub async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
         Entity::find()
             .filter(Column::OrganizationId.eq(organization_id))
             .count(self.connection())
@@ -100,7 +96,7 @@ impl MemberOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize> {
+    pub async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize> {
         Entity::find()
             .filter(Column::OrganizationId.eq(organization_id))
             .filter(Column::Role.eq("owner"))

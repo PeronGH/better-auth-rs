@@ -5,17 +5,13 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::error::{AuthError, AuthResult};
-use crate::store::PasskeyOps;
 use crate::types::{CreatePasskey, Passkey};
 
 use super::entities::passkey::{ActiveModel, Column, Entity};
-use super::{SeaOrmStore, map_db_err};
+use super::{AuthStore, map_db_err};
 
-#[async_trait::async_trait]
-impl PasskeyOps for SeaOrmStore {
-    type Passkey = Passkey;
-
-    async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Self::Passkey> {
+impl AuthStore {
+    pub async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
         let counter = i64::try_from(input.counter)
             .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
 
@@ -37,7 +33,7 @@ impl PasskeyOps for SeaOrmStore {
         .map_err(map_db_err)
     }
 
-    async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Self::Passkey>> {
+    pub async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
         Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -45,10 +41,10 @@ impl PasskeyOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn get_passkey_by_credential_id(
+    pub async fn get_passkey_by_credential_id(
         &self,
         credential_id: &str,
-    ) -> AuthResult<Option<Self::Passkey>> {
+    ) -> AuthResult<Option<Passkey>> {
         Entity::find()
             .filter(Column::CredentialId.eq(credential_id))
             .one(self.connection())
@@ -57,7 +53,7 @@ impl PasskeyOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Self::Passkey>> {
+    pub async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
         Entity::find()
             .filter(Column::UserId.eq(user_id))
             .order_by_desc(Column::CreatedAt)
@@ -67,7 +63,7 @@ impl PasskeyOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn update_passkey_counter(&self, id: &str, counter: u64) -> AuthResult<Self::Passkey> {
+    pub async fn update_passkey_counter(&self, id: &str, counter: u64) -> AuthResult<Passkey> {
         let Some(model) = Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -86,7 +82,7 @@ impl PasskeyOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Self::Passkey> {
+    pub async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
         let Some(model) = Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -104,7 +100,7 @@ impl PasskeyOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
+    pub async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
         Entity::delete_by_id(id.to_owned())
             .exec(self.connection())
             .await

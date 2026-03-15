@@ -3,18 +3,17 @@ use std::sync::Arc;
 use serde::Deserialize;
 
 use better_auth_core::{
-    AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    BeforeRequestAction, DatabaseHooks, EmailProvider, HttpMethod, OkResponse, OpenApiBuilder,
-    OpenApiSpec, SessionManager, StatusMessageResponse, SuccessMessageResponse, UpdateUser,
-    UpdateUserRequest, core_paths,
+    AuthConfig, AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse,
+    AuthResult, AuthStore, BeforeRequestAction, DatabaseHooks, EmailProvider, HttpMethod,
+    OkResponse, OpenApiBuilder, OpenApiSpec, SessionManager, StatusMessageResponse,
+    SuccessMessageResponse, UpdateUser, UpdateUserRequest, core_paths,
     entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
-    hooks::AuthStore,
+    hooks::{RequestHookContext, with_request_hook_context_value},
     middleware::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
         CsrfMiddleware, Middleware, RateLimitConfig, RateLimitMiddleware,
     },
     sea_orm::DatabaseConnection,
-    store::{AuthDatabase, SeaOrmStore},
 };
 
 #[derive(Debug, Deserialize)]
@@ -27,7 +26,7 @@ pub struct BetterAuth {
     config: Arc<AuthConfig>,
     plugins: Vec<Box<dyn AuthPlugin>>,
     middlewares: Vec<Box<dyn Middleware>>,
-    database: Arc<AuthDatabase>,
+    database: Arc<AuthStore>,
     session_manager: SessionManager,
     context: AuthContext,
 }
@@ -35,8 +34,8 @@ pub struct BetterAuth {
 /// Initial builder for configuring BetterAuth.
 pub struct AuthBuilder {
     config: AuthConfig,
-    database: Option<AuthStore>,
-    hooks: Vec<Arc<dyn DatabaseHooks>>,
+    database: Option<DatabaseConnection>,
+    database_hooks: Vec<Arc<dyn DatabaseHooks>>,
     plugins: Vec<Box<dyn AuthPlugin>>,
     csrf_config: Option<CsrfConfig>,
     rate_limit_config: Option<RateLimitConfig>,
@@ -50,7 +49,7 @@ impl AuthBuilder {
         Self {
             config,
             database: None,
-            hooks: Vec::new(),
+            database_hooks: Vec::new(),
             plugins: Vec::new(),
             csrf_config: None,
             rate_limit_config: None,
@@ -62,11 +61,7 @@ impl AuthBuilder {
 
     /// Set the SeaORM connection for auth persistence.
     pub fn database(mut self, database: DatabaseConnection) -> Self {
-        let mut store = AuthStore::new(Arc::new(SeaOrmStore::new(database)));
-        for hook in &self.hooks {
-            store.add_hook(hook.clone());
-        }
-        self.database = Some(store);
+        self.database = Some(database);
         self
     }
 
@@ -112,13 +107,23 @@ impl AuthBuilder {
         self
     }
 
-    /// Add a database lifecycle hook for the built-in SeaORM store.
-    pub fn hook<H: DatabaseHooks + 'static>(mut self, hook: H) -> Self {
-        let hook: Arc<dyn DatabaseHooks> = Arc::new(hook);
-        if let Some(database) = &mut self.database {
-            database.add_hook(hook.clone());
-        }
-        self.hooks.push(hook);
+    /// Add a database lifecycle hook for the built-in auth store.
+    pub fn database_hook<H: DatabaseHooks + 'static>(mut self, hook: H) -> Self {
+        self.database_hooks.push(Arc::new(hook));
+        self
+    }
+
+    /// Add multiple database lifecycle hooks for the built-in auth store.
+    pub fn database_hooks<I, H>(mut self, hooks: I) -> Self
+    where
+        I: IntoIterator<Item = H>,
+        H: DatabaseHooks + 'static,
+    {
+        self.database_hooks.extend(
+            hooks
+                .into_iter()
+                .map(|hook| Arc::new(hook) as Arc<dyn DatabaseHooks>),
+        );
         self
     }
 
@@ -131,18 +136,27 @@ impl AuthBuilder {
         let database = self
             .database
             .ok_or_else(|| AuthError::config("Database connection not configured"))?;
-        let database: Arc<AuthDatabase> = Arc::new(database);
+
+        let init_database = Arc::new(AuthStore::new(config.clone(), database.clone()));
+        let mut init_context = AuthInitContext::new(config.clone(), init_database);
+
+        // Initialize all plugins and collect plugin-provided database hooks.
+        for plugin in &self.plugins {
+            plugin.on_init(&mut init_context).await?;
+        }
+
+        let mut init_parts = init_context.into_parts();
+        init_parts.database_hooks.extend(self.database_hooks);
+        let database = Arc::new(
+            AuthStore::new(config.clone(), database).with_hooks(init_parts.database_hooks),
+        );
 
         // Create session manager
         let session_manager = SessionManager::new(config.clone(), database.clone());
 
         // Create context
-        let mut context = AuthContext::new(config.clone(), database.clone());
-
-        // Initialize all plugins
-        for plugin in &self.plugins {
-            plugin.on_init(&mut context).await?;
-        }
+        let context =
+            AuthContext::with_metadata(config.clone(), database.clone(), init_parts.metadata);
 
         // Build middleware chain (order matters: body limit → rate limit → CSRF → CORS → custom)
         let mut middlewares: Vec<Box<dyn Middleware>> = vec![
@@ -195,17 +209,21 @@ impl BetterAuth {
         let mut req =
             AuthRequest::from_parts(req.method, req.path, req.headers, req.body, req.query);
 
-        match self.handle_request_inner(&mut req).await {
-            Ok(response) => {
-                // Run after-request middleware chain
-                middleware::run_after(&self.middlewares, &req, response).await
+        let request_context = RequestHookContext::from_request(&req);
+        with_request_hook_context_value(request_context, async {
+            match self.handle_request_inner(&mut req).await {
+                Ok(response) => {
+                    // Run after-request middleware chain
+                    middleware::run_after(&self.middlewares, &req, response).await
+                }
+                Err(err) => {
+                    // Convert error to standardized response, then run after-middleware
+                    let response = err.to_auth_response();
+                    middleware::run_after(&self.middlewares, &req, response).await
+                }
             }
-            Err(err) => {
-                // Convert error to standardized response, then run after-middleware
-                let response = err.to_auth_response();
-                middleware::run_after(&self.middlewares, &req, response).await
-            }
-        }
+        })
+        .await
     }
 
     /// Inner request handler that may return errors.
@@ -285,8 +303,8 @@ impl BetterAuth {
         &self.config
     }
 
-    /// Get the database adapter.
-    pub fn database(&self) -> &Arc<AuthDatabase> {
+    /// Get the auth store.
+    pub fn database(&self) -> &Arc<AuthStore> {
         &self.database
     }
 

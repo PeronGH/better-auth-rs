@@ -5,17 +5,13 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::error::{AuthError, AuthResult};
-use crate::store::ApiKeyOps;
 use crate::types::{ApiKey, CreateApiKey, UpdateApiKey};
 
 use super::entities::api_key::{ActiveModel, Column, Entity};
-use super::{SeaOrmStore, map_db_err, parse_optional_rfc3339, to_i32, to_optional_i32};
+use super::{AuthStore, map_db_err, parse_optional_rfc3339, to_i32, to_optional_i32};
 
-#[async_trait::async_trait]
-impl ApiKeyOps for SeaOrmStore {
-    type ApiKey = ApiKey;
-
-    async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<Self::ApiKey> {
+impl AuthStore {
+    pub async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey> {
         let now = Utc::now();
         ActiveModel {
             id: Set(Uuid::new_v4().to_string()),
@@ -52,7 +48,7 @@ impl ApiKeyOps for SeaOrmStore {
         .map_err(map_db_err)
     }
 
-    async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<Self::ApiKey>> {
+    pub async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
         Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -60,7 +56,7 @@ impl ApiKeyOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<Self::ApiKey>> {
+    pub async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
         Entity::find()
             .filter(Column::KeyHash.eq(hash))
             .one(self.connection())
@@ -69,7 +65,7 @@ impl ApiKeyOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<Self::ApiKey>> {
+    pub async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<ApiKey>> {
         Entity::find()
             .filter(Column::UserId.eq(user_id))
             .order_by_desc(Column::CreatedAt)
@@ -79,7 +75,7 @@ impl ApiKeyOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<Self::ApiKey> {
+    pub async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<ApiKey> {
         let Some(model) = Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -149,7 +145,7 @@ impl ApiKeyOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
+    pub async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
         Entity::delete_by_id(id.to_owned())
             .exec(self.connection())
             .await
@@ -157,7 +153,7 @@ impl ApiKeyOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
+    pub async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
         let now = Utc::now();
         let expired_ids: Vec<String> = Entity::find()
             .filter(Column::ExpiresAt.is_not_null())

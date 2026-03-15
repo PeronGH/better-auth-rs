@@ -4,13 +4,13 @@ use std::sync::Arc;
 use crate::config::AuthConfig;
 use crate::entity::{AuthSession, AuthUser};
 use crate::error::AuthResult;
-use crate::store::AuthDatabase;
+use crate::store::AuthStore;
 use crate::types::{CreateSession, Session};
 
 /// Session manager handles session creation, validation, and cleanup
 pub struct SessionManager {
     config: Arc<AuthConfig>,
-    database: Arc<AuthDatabase>,
+    database: Arc<AuthStore>,
 }
 
 impl Clone for SessionManager {
@@ -23,7 +23,7 @@ impl Clone for SessionManager {
 }
 
 impl SessionManager {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthDatabase>) -> Self {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthStore>) -> Self {
         Self { config, database }
     }
 
@@ -212,7 +212,7 @@ mod tests {
     use super::*;
     use crate::entity::AuthSession;
     use crate::sea_orm::Database;
-    use crate::store::{AuthDatabase, SeaOrmStore, run_migrations};
+    use crate::store::{AuthStore, run_migrations};
     use crate::types::AuthRequest;
     use crate::types::HttpMethod;
     use chrono::Duration;
@@ -221,14 +221,14 @@ mod tests {
         Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"))
     }
 
-    async fn test_database() -> Arc<AuthDatabase> {
+    async fn test_database() -> Arc<AuthStore> {
         let database = Database::connect("sqlite::memory:")
             .await
             .expect("sqlite test database should connect");
         run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        Arc::new(SeaOrmStore::new(database))
+        Arc::new(AuthStore::new(test_config(), database))
     }
 
     fn test_manager() -> SessionManager {

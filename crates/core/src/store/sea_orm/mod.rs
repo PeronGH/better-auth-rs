@@ -1,40 +1,101 @@
 //! SeaORM-backed persistence implementation for built-in auth tables.
 
-mod account_ops;
-mod api_key_ops;
+mod accounts;
+mod api_keys;
 mod conversions;
 pub mod entities;
-mod invitation_ops;
-mod member_ops;
+mod invitations;
+mod members;
 pub mod migrator;
-mod organization_ops;
-mod passkey_ops;
-mod session_ops;
-mod two_factor_ops;
-mod user_ops;
-mod verification_ops;
+mod organizations;
+mod passkeys;
+mod sessions;
+mod two_factor;
+mod users;
+mod verifications;
+
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use sea_orm::{DatabaseConnection, DbErr, SqlErr};
+use sea_orm::{DatabaseConnection, DatabaseTransaction, DbErr, SqlErr, TransactionTrait};
 
+use crate::config::AuthConfig;
 use crate::error::{AuthError, DatabaseError};
+use crate::hooks::{DatabaseHookContext, DatabaseHooks, current_request_hook_context};
 
 #[derive(Clone)]
-pub struct SeaOrmStore {
+pub struct AuthStore {
+    config: Arc<AuthConfig>,
     db: DatabaseConnection,
+    hooks: Vec<Arc<dyn DatabaseHooks>>,
 }
 
-impl SeaOrmStore {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+impl AuthStore {
+    pub fn new(config: Arc<AuthConfig>, db: DatabaseConnection) -> Self {
+        Self {
+            config,
+            db,
+            hooks: Vec::new(),
+        }
+    }
+
+    pub fn with_hooks(mut self, hooks: Vec<Arc<dyn DatabaseHooks>>) -> Self {
+        self.hooks = hooks;
+        self
     }
 
     pub fn connection(&self) -> &DatabaseConnection {
         &self.db
     }
 
+    pub fn config(&self) -> &Arc<AuthConfig> {
+        &self.config
+    }
+
+    pub(crate) fn hooks(&self) -> &[Arc<dyn DatabaseHooks>] {
+        &self.hooks
+    }
+
+    pub(crate) fn hook_context<'a>(
+        &'a self,
+        tx: Option<&'a DatabaseTransaction>,
+    ) -> DatabaseHookContext<'a> {
+        DatabaseHookContext {
+            config: self.config.as_ref(),
+            db: &self.db,
+            tx,
+            request: current_request_hook_context(),
+        }
+    }
+
     pub async fn test_connection(&self) -> Result<(), DbErr> {
         self.db.ping().await
+    }
+
+    /// Execute work inside a database transaction bound to this store.
+    #[doc(hidden)]
+    pub async fn transaction<T, F>(&self, work: F) -> Result<T, AuthError>
+    where
+        F: for<'a> FnOnce(
+                &'a DatabaseTransaction,
+            )
+                -> Pin<Box<dyn Future<Output = Result<T, AuthError>> + Send + 'a>>
+            + Send,
+        T: Send,
+    {
+        let tx = self.db.begin().await.map_err(map_db_err)?;
+        match work(&tx).await {
+            Ok(value) => {
+                tx.commit().await.map_err(map_db_err)?;
+                Ok(value)
+            }
+            Err(err) => {
+                tx.rollback().await.map_err(map_db_err)?;
+                Err(err)
+            }
+        }
     }
 }
 
@@ -48,6 +109,10 @@ fn map_db_err(err: DbErr) -> AuthError {
         }
         Some(_) | None => AuthError::Database(DatabaseError::Query(err.to_string())),
     }
+}
+
+pub(crate) fn cancelled_by_hook(operation: &str) -> AuthError {
+    AuthError::forbidden(format!("{operation} cancelled by database hook"))
 }
 
 fn parse_rfc3339(value: &str, field: &str) -> Result<DateTime<Utc>, AuthError> {

@@ -49,7 +49,10 @@ pub use extractors::{
     AdminRole, AdminSession, AuthRequestExt, AxumAuthResponse, CurrentSession, OptionalSession,
     Pending2faToken, ValidatedJson,
 };
-pub use hooks::DatabaseHooks;
+pub use hooks::{
+    DatabaseHookContext, DatabaseHooks, HookControl, RequestHookContext, with_request_hook_context,
+    with_request_hook_context_value,
+};
 pub use middleware::{
     BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig, CsrfMiddleware,
     EndpointRateLimit, Middleware, RateLimitConfig, RateLimitMiddleware,
@@ -57,10 +60,12 @@ pub use middleware::{
 pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse, OpenApiSpec};
 #[cfg(feature = "axum")]
 pub use plugin::AxumPlugin;
-pub use plugin::{AuthContext, AuthPlugin, AuthRoute, AuthState, BeforeRequestAction};
+pub use plugin::{
+    AuthContext, AuthInitContext, AuthPlugin, AuthRoute, AuthState, BeforeRequestAction,
+};
 pub use sea_orm;
 pub use session::SessionManager;
-pub use store::{AuthMigrator, CacheAdapter, MemoryCacheAdapter, run_migrations};
+pub use store::{AuthMigrator, AuthStore, CacheAdapter, MemoryCacheAdapter, run_migrations};
 pub use types::{
     Account, ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
     CreateInvitation, CreateMember, CreateOrganization, CreatePasskey, CreateSession,

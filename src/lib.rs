@@ -40,19 +40,21 @@ pub mod handlers;
 
 // Re-export core abstractions
 pub use better_auth_core as types_mod;
+pub use better_auth_core::AuthStore;
 pub use better_auth_core::sea_orm;
 pub use better_auth_core::{
-    Account, Argon2Config, AuthConfig, AuthContext, AuthError, AuthMigrator, AuthPlugin,
-    AuthRequest, AuthResponse, AuthResult, AuthRoute, BodyLimitConfig, BodyLimitMiddleware,
-    CacheAdapter, ConsoleEmailProvider, CookieCacheConfig, CookieCacheStrategy, CorsConfig,
-    CorsMiddleware, CreateAccount, CreateInvitation, CreateMember, CreateOrganization,
-    CreatePasskey, CreateSession, CreateUser, CreateVerification, CsrfConfig, CsrfMiddleware,
-    DatabaseError, DatabaseHooks, EmailProvider, EndpointRateLimit, HttpMethod, Invitation,
-    InvitationStatus, JwtConfig, Member, MemoryCacheAdapter, Middleware, OpenApiBuilder,
-    OpenApiSpec, Organization, Passkey, PasswordConfig, RateLimitConfig, RateLimitMiddleware,
-    SameSite, Session, SessionConfig, SessionManager, TwoFactor, UpdateOrganization, UpdatePasskey,
-    UpdateUser, UpdateUserRequest, UpdateUserResponse, User, Verification, core_paths,
-    run_migrations,
+    Account, Argon2Config, AuthConfig, AuthContext, AuthError, AuthInitContext, AuthMigrator,
+    AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute, BodyLimitConfig,
+    BodyLimitMiddleware, CacheAdapter, ConsoleEmailProvider, CookieCacheConfig,
+    CookieCacheStrategy, CorsConfig, CorsMiddleware, CreateAccount, CreateInvitation, CreateMember,
+    CreateOrganization, CreatePasskey, CreateSession, CreateUser, CreateVerification, CsrfConfig,
+    CsrfMiddleware, DatabaseError, DatabaseHookContext, DatabaseHooks, EmailProvider,
+    EndpointRateLimit, HookControl, HttpMethod, Invitation, InvitationStatus, JwtConfig, Member,
+    MemoryCacheAdapter, Middleware, OpenApiBuilder, OpenApiSpec, Organization, Passkey,
+    PasswordConfig, RateLimitConfig, RateLimitMiddleware, RequestHookContext, SameSite, Session,
+    SessionConfig, SessionManager, TwoFactor, UpdateOrganization, UpdatePasskey, UpdateUser,
+    UpdateUserRequest, UpdateUserResponse, User, Verification, core_paths, run_migrations,
+    with_request_hook_context_value,
 };
 
 // Re-export entity traits

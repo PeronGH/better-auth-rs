@@ -216,7 +216,7 @@ pub struct GetInvitationResponse<I: Serialize> {
 /// Member with user details (for API responses).
 ///
 /// Uses [`MemberUserView`] from `better_auth_core::entity` for user info,
-/// making it work with any `DatabaseAdapter` implementation.
+/// keeping it compatible with the built-in auth store.
 #[derive(Debug, Clone, Serialize)]
 pub struct MemberResponse {
     pub id: String,

@@ -6,9 +6,19 @@ use crate::config::AuthConfig;
 use crate::email::EmailProvider;
 use crate::entity::AuthSession;
 use crate::error::{AuthError, AuthResult};
+use crate::hooks::DatabaseHooks;
 use crate::session::SessionManager;
-use crate::store::AuthDatabase;
+use crate::store::AuthStore;
 use crate::types::{AuthRequest, AuthResponse, HttpMethod, Session, User};
+
+type MetadataMap = HashMap<String, serde_json::Value>;
+type DatabaseHookList = Vec<Arc<dyn DatabaseHooks>>;
+
+pub struct AuthInitParts {
+    pub metadata: MetadataMap,
+    pub database_hooks: DatabaseHookList,
+    pub email_provider: Option<Arc<dyn EmailProvider>>,
+}
 
 /// Action returned by [`AuthPlugin::before_request`].
 #[derive(Debug)]
@@ -33,7 +43,7 @@ pub trait AuthPlugin: Send + Sync {
     fn routes(&self) -> Vec<AuthRoute>;
 
     /// Called when the plugin is initialized
-    async fn on_init(&self, ctx: &mut AuthContext) -> AuthResult<()> {
+    async fn on_init(&self, ctx: &mut AuthInitContext) -> AuthResult<()> {
         let _ = ctx;
         Ok(())
     }
@@ -156,12 +166,21 @@ pub struct AuthRoute {
     pub operation_id: String,
 }
 
+/// Initialization context passed to plugin setup.
+pub struct AuthInitContext {
+    pub config: Arc<AuthConfig>,
+    pub database: Arc<AuthStore>,
+    pub email_provider: Option<Arc<dyn EmailProvider>>,
+    pub metadata: MetadataMap,
+    database_hooks: DatabaseHookList,
+}
+
 /// Context passed to plugin methods.
 pub struct AuthContext {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<AuthDatabase>,
+    pub database: Arc<AuthStore>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
-    pub metadata: HashMap<String, serde_json::Value>,
+    pub metadata: MetadataMap,
 }
 
 impl AuthRoute {
@@ -194,14 +213,61 @@ impl AuthRoute {
     }
 }
 
-impl AuthContext {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthDatabase>) -> Self {
+impl AuthInitContext {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthStore>) -> Self {
         let email_provider = config.email_provider.clone();
         Self {
             config,
             database,
             email_provider,
-            metadata: HashMap::new(),
+            metadata: MetadataMap::new(),
+            database_hooks: Vec::new(),
+        }
+    }
+
+    pub fn set_metadata(&mut self, key: impl Into<String>, value: serde_json::Value) {
+        _ = self.metadata.insert(key.into(), value);
+    }
+
+    pub fn get_metadata(&self, key: &str) -> Option<&serde_json::Value> {
+        self.metadata.get(key)
+    }
+
+    pub fn register_database_hook<H: DatabaseHooks + 'static>(&mut self, hook: H) {
+        self.database_hooks.push(Arc::new(hook));
+    }
+
+    pub fn into_parts(self) -> AuthInitParts {
+        AuthInitParts {
+            metadata: self.metadata,
+            database_hooks: self.database_hooks,
+            email_provider: self.email_provider,
+        }
+    }
+}
+
+impl AuthContext {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthStore>) -> Self {
+        let email_provider = config.email_provider.clone();
+        Self {
+            config,
+            database,
+            email_provider,
+            metadata: MetadataMap::new(),
+        }
+    }
+
+    pub fn with_metadata(
+        config: Arc<AuthConfig>,
+        database: Arc<AuthStore>,
+        metadata: MetadataMap,
+    ) -> Self {
+        let email_provider = config.email_provider.clone();
+        Self {
+            config,
+            database,
+            email_provider,
+            metadata,
         }
     }
 
@@ -250,9 +316,10 @@ impl AuthContext {
 /// be used directly as axum `State`.
 pub struct AuthState {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<AuthDatabase>,
+    pub database: Arc<AuthStore>,
     pub session_manager: SessionManager,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
+    pub metadata: HashMap<String, serde_json::Value>,
 }
 
 impl Clone for AuthState {
@@ -262,6 +329,7 @@ impl Clone for AuthState {
             database: self.database.clone(),
             session_manager: self.session_manager.clone(),
             email_provider: self.email_provider.clone(),
+            metadata: self.metadata.clone(),
         }
     }
 }
@@ -274,12 +342,17 @@ impl AuthState {
             database: ctx.database.clone(),
             session_manager,
             email_provider: ctx.email_provider.clone(),
+            metadata: ctx.metadata.clone(),
         }
     }
 
     /// Create an `AuthContext` for use with existing plugin handler methods.
     pub fn to_context(&self) -> AuthContext {
-        let mut ctx = AuthContext::new(self.config.clone(), self.database.clone());
+        let mut ctx = AuthContext::with_metadata(
+            self.config.clone(),
+            self.database.clone(),
+            self.metadata.clone(),
+        );
         ctx.email_provider = self.email_provider.clone();
         ctx
     }
@@ -300,16 +373,19 @@ mod tests {
     use super::*;
     use crate::entity::AuthUser;
     use crate::sea_orm::Database;
-    use crate::store::{SeaOrmStore, run_migrations};
+    use crate::store::{AuthStore, run_migrations};
 
-    async fn test_database() -> Arc<AuthDatabase> {
+    async fn test_database() -> Arc<AuthStore> {
         let database = Database::connect("sqlite::memory:")
             .await
             .expect("sqlite test database should connect");
         run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        Arc::new(SeaOrmStore::new(database))
+        Arc::new(AuthStore::new(
+            Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567")),
+            database,
+        ))
     }
 
     #[test]

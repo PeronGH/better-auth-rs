@@ -3,17 +3,13 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, Query
 use uuid::Uuid;
 
 use crate::error::AuthResult;
-use crate::store::TwoFactorOps;
 use crate::types::{CreateTwoFactor, TwoFactor};
 
 use super::entities::two_factor::{ActiveModel, Column, Entity};
-use super::{SeaOrmStore, map_db_err};
+use super::{AuthStore, map_db_err};
 
-#[async_trait::async_trait]
-impl TwoFactorOps for SeaOrmStore {
-    type TwoFactor = TwoFactor;
-
-    async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<Self::TwoFactor> {
+impl AuthStore {
+    pub async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<TwoFactor> {
         let now = Utc::now();
         ActiveModel {
             id: Set(Uuid::new_v4().to_string()),
@@ -29,10 +25,7 @@ impl TwoFactorOps for SeaOrmStore {
         .map_err(map_db_err)
     }
 
-    async fn get_two_factor_by_user_id(
-        &self,
-        user_id: &str,
-    ) -> AuthResult<Option<Self::TwoFactor>> {
+    pub async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>> {
         Entity::find()
             .filter(Column::UserId.eq(user_id))
             .one(self.connection())
@@ -41,11 +34,11 @@ impl TwoFactorOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn update_two_factor_backup_codes(
+    pub async fn update_two_factor_backup_codes(
         &self,
         user_id: &str,
         backup_codes: &str,
-    ) -> AuthResult<Self::TwoFactor> {
+    ) -> AuthResult<TwoFactor> {
         let Some(model) = Entity::find()
             .filter(Column::UserId.eq(user_id))
             .one(self.connection())
@@ -67,7 +60,7 @@ impl TwoFactorOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
+    pub async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
         Entity::delete_many()
             .filter(Column::UserId.eq(user_id))
             .exec(self.connection())

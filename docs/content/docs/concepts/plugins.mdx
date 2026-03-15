@@ -108,7 +108,7 @@ Plugins receive an `AuthContext` providing access to shared state:
 ```rust
 pub struct AuthContext {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<dyn DatabaseAdapter>,
+    pub database: Arc<AuthStore>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
     pub metadata: HashMap<String, serde_json::Value>,
 }

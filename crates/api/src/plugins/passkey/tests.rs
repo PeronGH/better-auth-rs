@@ -3,7 +3,6 @@ use crate::plugins::test_helpers;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use better_auth_core::entity::AuthPasskey;
-use better_auth_core::store::{PasskeyOps, UserOps, VerificationOps};
 use better_auth_core::{CreatePasskey, CreateUser, CreateVerification, HttpMethod};
 use chrono::{Duration, Utc};
 

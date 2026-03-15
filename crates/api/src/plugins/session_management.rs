@@ -392,8 +392,6 @@ mod axum_impl {
 mod tests {
     use super::*;
     use crate::plugins::test_helpers;
-    use crate::plugins::test_helpers::TestDatabase;
-    use better_auth_core::store::{SessionOps, UserOps};
     use better_auth_core::{CreateSession, CreateUser, Session};
     use chrono::{Duration, Utc};
 

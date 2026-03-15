@@ -1,22 +1,36 @@
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait,
+    IntoActiveModel, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 use uuid::Uuid;
 
-use crate::error::AuthResult;
-use crate::store::UserOps;
+use crate::error::{AuthError, AuthResult};
 use crate::types::{CreateUser, ListUsersParams, UpdateUser, User};
 
 use super::entities::user::{ActiveModel, Column, Entity};
-use super::{SeaOrmStore, map_db_err};
+use super::{AuthStore, cancelled_by_hook, map_db_err};
 
-#[async_trait::async_trait]
-impl UserOps for SeaOrmStore {
-    type User = User;
-
-    async fn create_user(&self, create_user: CreateUser) -> AuthResult<Self::User> {
+impl AuthStore {
+    async fn create_user_with_connection<C>(
+        &self,
+        db: &C,
+        tx: Option<&DatabaseTransaction>,
+        mut create_user: CreateUser,
+    ) -> AuthResult<User>
+    where
+        C: ConnectionTrait,
+    {
+        let hook_context = self.hook_context(tx);
+        for hook in self.hooks() {
+            if hook
+                .before_create_user(&mut create_user, &hook_context)
+                .await?
+                .is_cancelled()
+            {
+                return Err(cancelled_by_hook("user creation"));
+            }
+        }
         let now = Utc::now();
         let model = ActiveModel {
             id: Set(create_user.id.unwrap_or_else(|| Uuid::new_v4().to_string())),
@@ -36,14 +50,30 @@ impl UserOps for SeaOrmStore {
             updated_at: Set(now),
         };
 
-        model
-            .insert(self.connection())
-            .await
-            .map(User::from)
-            .map_err(map_db_err)
+        let user = model.insert(db).await.map(User::from).map_err(map_db_err)?;
+        for hook in self.hooks() {
+            hook.after_create_user(&user, &hook_context).await?;
+        }
+        Ok(user)
     }
 
-    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<Self::User>> {
+    pub async fn create_user(&self, create_user: CreateUser) -> AuthResult<User> {
+        self.create_user_with_connection(self.connection(), None, create_user)
+            .await
+    }
+
+    /// Create a user inside an existing transaction.
+    #[doc(hidden)]
+    pub async fn create_user_in_tx(
+        &self,
+        tx: &DatabaseTransaction,
+        create_user: CreateUser,
+    ) -> AuthResult<User> {
+        self.create_user_with_connection(tx, Some(tx), create_user)
+            .await
+    }
+
+    pub async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<User>> {
         Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -51,7 +81,7 @@ impl UserOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<Self::User>> {
+    pub async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>> {
         Entity::find()
             .filter(Column::Email.eq(email))
             .one(self.connection())
@@ -60,7 +90,7 @@ impl UserOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<Self::User>> {
+    pub async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>> {
         Entity::find()
             .filter(Column::Username.eq(username))
             .one(self.connection())
@@ -69,13 +99,23 @@ impl UserOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<Self::User> {
+    pub async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<User> {
+        let hook_context = self.hook_context(None);
+        for hook in self.hooks() {
+            if hook
+                .before_update_user(id, &mut update, &hook_context)
+                .await?
+                .is_cancelled()
+            {
+                return Err(cancelled_by_hook("user update"));
+            }
+        }
         let Some(model) = Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
             .map_err(map_db_err)?
         else {
-            return Err(crate::error::AuthError::UserNotFound);
+            return Err(AuthError::UserNotFound);
         };
 
         let mut active = model.into_active_model();
@@ -123,22 +163,42 @@ impl UserOps for SeaOrmStore {
         }
         active.updated_at = Set(Utc::now());
 
-        active
+        let user = active
             .update(self.connection())
             .await
             .map(User::from)
-            .map_err(map_db_err)
+            .map_err(map_db_err)?;
+        for hook in self.hooks() {
+            hook.after_update_user(&user, &hook_context).await?;
+        }
+        Ok(user)
     }
 
-    async fn delete_user(&self, id: &str) -> AuthResult<()> {
-        Entity::delete_by_id(id.to_owned())
+    pub async fn delete_user(&self, id: &str) -> AuthResult<()> {
+        let Some(user) = self.get_user_by_id(id).await? else {
+            return Err(AuthError::UserNotFound);
+        };
+        let hook_context = self.hook_context(None);
+        for hook in self.hooks() {
+            if hook
+                .before_delete_user(&user, &hook_context)
+                .await?
+                .is_cancelled()
+            {
+                return Err(cancelled_by_hook("user deletion"));
+            }
+        }
+        let _ = Entity::delete_by_id(id.to_owned())
             .exec(self.connection())
             .await
-            .map(|_| ())
-            .map_err(map_db_err)
+            .map_err(map_db_err)?;
+        for hook in self.hooks() {
+            hook.after_delete_user(&user, &hook_context).await?;
+        }
+        Ok(())
     }
 
-    async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<Self::User>, usize)> {
+    pub async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<User>, usize)> {
         let limit = params.limit.unwrap_or(100);
         let offset = params.offset.unwrap_or(0);
         let mut count_query = Entity::find();

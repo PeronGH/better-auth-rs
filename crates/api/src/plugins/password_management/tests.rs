@@ -1,8 +1,6 @@
 use super::*;
 use crate::plugins::test_helpers;
 use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
-use better_auth_core::hooks::AuthStore;
-use better_auth_core::store::{AccountOps, SessionOps, VerificationOps};
 use better_auth_core::{
     CreateAccount, CreateUser, CreateVerification, PASSWORD_HASH_KEY, Session, User,
 };

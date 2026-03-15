@@ -1,8 +1,7 @@
 mod compat;
 
-use better_auth::BetterAuth;
+use better_auth::{AuthStore, BetterAuth};
 use better_auth::{run_migrations, sea_orm::Database};
-use better_auth_core::store::{SeaOrmStore, UserOps};
 use compat::helpers::*;
 use std::sync::Arc;
 
@@ -2222,7 +2221,12 @@ async fn test_get_user_by_username_adapter() {
 
     let database = Database::connect("sqlite::memory:").await.unwrap();
     run_migrations(&database).await.unwrap();
-    let db = SeaOrmStore::new(database);
+    let db = AuthStore::new(
+        Arc::new(better_auth::AuthConfig::new(
+            "test-secret-key-that-is-at-least-32-characters-long",
+        )),
+        database,
+    );
 
     // Create user with username
     let create = CreateUser::new()

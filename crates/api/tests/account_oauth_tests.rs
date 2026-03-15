@@ -7,9 +7,8 @@
 
 use std::sync::{Arc, Once};
 
+use better_auth_core::AuthStore;
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
-use better_auth_core::hooks::AuthStore;
-use better_auth_core::store::{AccountOps, SeaOrmStore, UserOps, VerificationOps};
 use better_auth_core::{
     AccountConfig, AccountLinkingConfig, AuthConfig, AuthContext, AuthPlugin, AuthRequest,
     CreateAccount, CreateUser, CreateVerification, HttpMethod, SessionManager, run_migrations,
@@ -127,7 +126,7 @@ async fn setup_user_with_account(
 async fn create_test_database() -> Arc<AuthStore> {
     let database = Database::connect("sqlite::memory:").await.unwrap();
     run_migrations(&database).await.unwrap();
-    Arc::new(AuthStore::new(Arc::new(SeaOrmStore::new(database))))
+    Arc::new(AuthStore::new(Arc::new(test_config()), database))
 }
 
 /// Start a mock HTTP server that responds to OAuth token + userinfo requests.

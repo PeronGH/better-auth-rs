@@ -1,6 +1,4 @@
 use super::*;
-use crate::plugins::test_helpers::TestDatabase;
-use better_auth_core::store::{ApiKeyOps, SessionOps, UserOps};
 use better_auth_core::{
     AuthContext, AuthPlugin, CreateSession, CreateUser, HttpMethod, Session, User,
 };

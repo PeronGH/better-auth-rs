@@ -5,18 +5,14 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::error::AuthResult;
-use crate::store::OrganizationOps;
 use crate::types_org::{CreateOrganization, Organization, UpdateOrganization};
 
 use super::entities;
 use super::entities::organization::{ActiveModel, Column, Entity};
-use super::{SeaOrmStore, map_db_err};
+use super::{AuthStore, map_db_err};
 
-#[async_trait::async_trait]
-impl OrganizationOps for SeaOrmStore {
-    type Organization = Organization;
-
-    async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Self::Organization> {
+impl AuthStore {
+    pub async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization> {
         let now = Utc::now();
         ActiveModel {
             id: Set(org.id.unwrap_or_else(|| Uuid::new_v4().to_string())),
@@ -33,7 +29,7 @@ impl OrganizationOps for SeaOrmStore {
         .map_err(map_db_err)
     }
 
-    async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Self::Organization>> {
+    pub async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
         Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -41,7 +37,7 @@ impl OrganizationOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Self::Organization>> {
+    pub async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
         Entity::find()
             .filter(Column::Slug.eq(slug))
             .one(self.connection())
@@ -50,11 +46,11 @@ impl OrganizationOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn update_organization(
+    pub async fn update_organization(
         &self,
         id: &str,
         update: UpdateOrganization,
-    ) -> AuthResult<Self::Organization> {
+    ) -> AuthResult<Organization> {
         let Some(model) = Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -85,7 +81,7 @@ impl OrganizationOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn delete_organization(&self, id: &str) -> AuthResult<()> {
+    pub async fn delete_organization(&self, id: &str) -> AuthResult<()> {
         Entity::delete_by_id(id.to_owned())
             .exec(self.connection())
             .await
@@ -93,7 +89,7 @@ impl OrganizationOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Self::Organization>> {
+    pub async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
         let member_models = entities::member::Entity::find()
             .filter(entities::member::Column::UserId.eq(user_id))
             .all(self.connection())

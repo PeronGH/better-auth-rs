@@ -5,20 +5,13 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::error::AuthResult;
-use crate::store::InvitationOps;
 use crate::types_org::{CreateInvitation, Invitation, InvitationStatus};
 
 use super::entities::invitation::{ActiveModel, Column, Entity};
-use super::{SeaOrmStore, map_db_err};
+use super::{AuthStore, map_db_err};
 
-#[async_trait::async_trait]
-impl InvitationOps for SeaOrmStore {
-    type Invitation = Invitation;
-
-    async fn create_invitation(
-        &self,
-        invitation: CreateInvitation,
-    ) -> AuthResult<Self::Invitation> {
+impl AuthStore {
+    pub async fn create_invitation(&self, invitation: CreateInvitation) -> AuthResult<Invitation> {
         ActiveModel {
             id: Set(Uuid::new_v4().to_string()),
             organization_id: Set(invitation.organization_id),
@@ -35,7 +28,7 @@ impl InvitationOps for SeaOrmStore {
         .map_err(map_db_err)
     }
 
-    async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Self::Invitation>> {
+    pub async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
         Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -43,11 +36,11 @@ impl InvitationOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn get_pending_invitation(
+    pub async fn get_pending_invitation(
         &self,
         organization_id: &str,
         email: &str,
-    ) -> AuthResult<Option<Self::Invitation>> {
+    ) -> AuthResult<Option<Invitation>> {
         Entity::find()
             .filter(Column::OrganizationId.eq(organization_id))
             .filter(Column::Email.eq(email.to_lowercase()))
@@ -58,11 +51,11 @@ impl InvitationOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn update_invitation_status(
+    pub async fn update_invitation_status(
         &self,
         id: &str,
         status: InvitationStatus,
-    ) -> AuthResult<Self::Invitation> {
+    ) -> AuthResult<Invitation> {
         let Some(model) = Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -80,10 +73,10 @@ impl InvitationOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn list_organization_invitations(
+    pub async fn list_organization_invitations(
         &self,
         organization_id: &str,
-    ) -> AuthResult<Vec<Self::Invitation>> {
+    ) -> AuthResult<Vec<Invitation>> {
         Entity::find()
             .filter(Column::OrganizationId.eq(organization_id))
             .order_by_desc(Column::CreatedAt)
@@ -93,7 +86,7 @@ impl InvitationOps for SeaOrmStore {
             .map_err(map_db_err)
     }
 
-    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Self::Invitation>> {
+    pub async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
         Entity::find()
             .filter(Column::Email.eq(email.to_lowercase()))
             .filter(Column::Status.eq(InvitationStatus::Pending.to_string()))

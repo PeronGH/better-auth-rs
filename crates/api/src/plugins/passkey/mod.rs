@@ -15,7 +15,7 @@ use types::*;
 /// Passkey / WebAuthn authentication plugin.
 ///
 /// Generates WebAuthn-compatible registration and authentication options,
-/// stores challenge state via `VerificationOps`, and manages passkey CRUD.
+/// stores challenge state via the auth store, and manages passkey CRUD.
 ///
 /// **WARNING: Simplified WebAuthn mode.**
 /// This implementation does NOT perform full FIDO2 signature verification
