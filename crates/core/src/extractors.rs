@@ -28,7 +28,7 @@ mod axum_impl {
     /// or the configured session cookie, validates it, and returns the user and
     /// session.  Returns `AuthError::Unauthenticated` if no valid session is
     /// found.
-    pub struct CurrentSession<DB: DatabaseAdapter> {
+    pub struct CurrentSession<DB: DatabaseAdapter = crate::DefaultDatabase> {
         pub user: DB::User,
         pub session: DB::Session,
     }
@@ -37,7 +37,9 @@ mod axum_impl {
     ///
     /// Like [`CurrentSession`] but returns `None` instead of a rejection when
     /// no valid session is found.
-    pub struct OptionalSession<DB: DatabaseAdapter>(pub Option<CurrentSession<DB>>);
+    pub struct OptionalSession<DB: DatabaseAdapter = crate::DefaultDatabase>(
+        pub Option<CurrentSession<DB>>,
+    );
 
     /// Extract a session token from request parts.
     ///

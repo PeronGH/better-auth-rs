@@ -1,11 +1,10 @@
 use axum::{Json, Router, extract::Query, response::IntoResponse, routing::get};
-use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::axum::AxumIntegration;
 use better_auth::plugins::{
     EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
     password_management::SendResetPassword,
 };
-use better_auth::{AuthBuilder, AuthConfig};
+use better_auth::{run_migrations, sea_orm::Database, AuthBuilder, AuthConfig};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -56,7 +55,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .base_url(format!("http://localhost:{port}"))
         .password_min_length(8);
 
-    let database = MemoryDatabaseAdapter::new();
+    let database = Database::connect("sqlite::memory:").await?;
+    run_migrations(&database).await?;
     let reset_outbox = Arc::new(Mutex::new(HashMap::new()));
 
     let auth = Arc::new(

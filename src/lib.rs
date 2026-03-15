@@ -5,16 +5,17 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use better_auth::{AuthBuilder, AuthConfig};
-//! use better_auth::adapters::MemoryDatabaseAdapter;
+//! use better_auth::{run_migrations, sea_orm::Database, AuthBuilder, AuthConfig};
 //! use better_auth::plugins::EmailPasswordPlugin;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = AuthConfig::new("your-secret-key-that-is-at-least-32-chars");
+//!     let database = Database::connect("sqlite::memory:").await?;
+//!     run_migrations(&database).await?;
 //!
 //!     let auth = AuthBuilder::new(config)
-//!         .database(MemoryDatabaseAdapter::new())
+//!         .database(database)
 //!         .plugin(EmailPasswordPlugin::new())
 //!         .build()
 //!         .await?;
@@ -39,20 +40,22 @@ pub mod handlers;
 
 // Re-export core abstractions
 pub use better_auth_core as types_mod;
+pub use better_auth_core::sea_orm;
 pub use better_auth_core::{
-    Account, AccountOps, Argon2Config, AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest,
-    AuthResponse, AuthResult, AuthRoute, BodyLimitConfig, BodyLimitMiddleware, CacheAdapter,
-    ConsoleEmailProvider, CookieCacheConfig, CookieCacheStrategy, CorsConfig, CorsMiddleware,
-    CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreatePasskey,
-    CreateSession, CreateUser, CreateVerification, CsrfConfig, CsrfMiddleware, DatabaseAdapter,
-    DatabaseError, DatabaseHooks, EmailProvider, EndpointRateLimit, HookedDatabaseAdapter,
-    HttpMethod, Invitation, InvitationOps, InvitationStatus, JwtConfig, MemberOps, MemoryAccount,
-    MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization,
-    MemorySession, MemoryUser, MemoryVerification, Middleware, OpenApiBuilder, OpenApiSpec,
-    OrganizationOps, Passkey, PasskeyOps, PasswordConfig, RateLimitConfig, RateLimitMiddleware,
-    SameSite, Session, SessionConfig, SessionManager, SessionOps, TwoFactor, UpdateOrganization,
-    UpdatePasskey, UpdateUser, UpdateUserRequest, UpdateUserResponse, User, UserOps, Verification,
-    VerificationOps, core_paths,
+    Account, AccountOps, Argon2Config, AuthConfig, AuthContext, AuthError, AuthMigrator,
+    AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute, BodyLimitConfig,
+    BodyLimitMiddleware, CacheAdapter, ConsoleEmailProvider, CookieCacheConfig,
+    CookieCacheStrategy, CorsConfig, CorsMiddleware, CreateAccount, CreateInvitation, CreateMember,
+    CreateOrganization, CreatePasskey, CreateSession, CreateUser, CreateVerification, CsrfConfig,
+    CsrfMiddleware, DatabaseAdapter, DatabaseError, DatabaseHooks, EmailProvider,
+    EndpointRateLimit, HookedDatabaseAdapter, HttpMethod, Invitation, InvitationOps,
+    InvitationStatus, JwtConfig, MemberOps, MemoryAccount, MemoryCacheAdapter,
+    MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession,
+    MemoryUser, MemoryVerification, Middleware, OpenApiBuilder, OpenApiSpec, OrganizationOps,
+    Passkey, PasskeyOps, PasswordConfig, RateLimitConfig, RateLimitMiddleware, SameSite,
+    SeaOrmAdapter, Session, SessionConfig, SessionManager, SessionOps, TwoFactor,
+    UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest, UpdateUserResponse, User,
+    UserOps, Verification, VerificationOps, core_paths, run_migrations,
 };
 
 // Re-export entity traits
@@ -77,7 +80,7 @@ pub mod adapters {
         AccountOps, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps, MemoryAccount,
         MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation, MemoryMember,
         MemoryOrganization, MemoryPasskey, MemorySession, MemoryUser, MemoryVerification,
-        OrganizationOps, PasskeyOps, SessionOps, UserOps, VerificationOps,
+        OrganizationOps, PasskeyOps, SeaOrmAdapter, SessionOps, UserOps, VerificationOps,
     };
 
     #[cfg(feature = "sqlx-postgres")]
@@ -93,7 +96,7 @@ pub mod plugins {
 }
 
 // Re-export the main BetterAuth struct
-pub use core::{AuthBuilder, BetterAuth, TypedAuthBuilder};
+pub use core::{AuthBuilder, BetterAuth, DefaultDatabase, TypedAuthBuilder};
 
 #[cfg(feature = "axum")]
 pub use handlers::axum::{AxumIntegration, CurrentSession, OptionalSession};
@@ -105,6 +108,10 @@ mod response_shape_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use better_auth_core::{
+        run_migrations,
+        sea_orm::{Database, DatabaseConnection},
+    };
     use serde_json::json;
 
     fn test_config() -> AuthConfig {
@@ -113,9 +120,19 @@ mod tests {
             .password_min_length(8)
     }
 
-    async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
+    async fn test_database() -> DatabaseConnection {
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .expect("sqlite test database should connect");
+        run_migrations(&database)
+            .await
+            .expect("sqlite test migrations should run");
+        database
+    }
+
+    async fn create_test_auth() -> BetterAuth {
         AuthBuilder::new(test_config())
-            .database(MemoryDatabaseAdapter::new())
+            .database(test_database().await)
             .plugin(plugins::EmailPasswordPlugin::new().enable_signup(true))
             .build()
             .await

@@ -34,11 +34,11 @@ pub use better_auth_derive::*;
 
 // Re-export commonly used items
 pub use adapters::{
-    AccountOps, ApiKeyOps, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps, MemoryAccount,
-    MemoryApiKey, MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation, MemoryMember,
-    MemoryOrganization, MemoryPasskey, MemorySession, MemoryTwoFactor, MemoryUser,
-    MemoryVerification, OrganizationOps, PasskeyOps, SessionOps, TwoFactorOps, UserOps,
-    VerificationOps,
+    AccountOps, ApiKeyOps, AuthMigrator, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps,
+    MemoryAccount, MemoryApiKey, MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation,
+    MemoryMember, MemoryOrganization, MemoryPasskey, MemorySession, MemoryTwoFactor, MemoryUser,
+    MemoryVerification, OrganizationOps, PasskeyOps, SeaOrmAdapter, SessionOps, TwoFactorOps,
+    UserOps, VerificationOps, run_migrations,
 };
 #[cfg(feature = "sqlx-postgres")]
 pub use adapters::{SqlxAdapter, SqlxEntity};
@@ -72,7 +72,9 @@ pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse
 #[cfg(feature = "axum")]
 pub use plugin::AxumPlugin;
 pub use plugin::{AuthContext, AuthPlugin, AuthRoute, AuthState, BeforeRequestAction};
+pub use sea_orm;
 pub use session::SessionManager;
+pub type DefaultDatabase = HookedDatabaseAdapter<SeaOrmAdapter>;
 pub use types::{
     Account, ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
     CreateInvitation, CreateMember, CreateOrganization, CreatePasskey, CreateSession,

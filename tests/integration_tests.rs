@@ -1267,7 +1267,7 @@ mod postgres_tests {
             .password_min_length(6);
 
         let auth = BetterAuth::<SqlxAdapter>::new(config)
-            .database(database)
+            .database_adapter(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .build()
             .await

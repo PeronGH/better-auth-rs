@@ -52,6 +52,8 @@ better-auth-derive = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 tracing.workspace = true
+sea-orm = { version = "2.0.0-rc.37", features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite", "macros", "with-chrono", "with-json", "with-uuid"] }
+sea-orm-migration = { version = "2.0.0-rc.37", features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite"] }
 
 [features]
 default = []

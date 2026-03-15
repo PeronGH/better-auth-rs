@@ -13,7 +13,7 @@ The most comprehensive authentication framework for Rust. Inspired by [Better Au
 - **Plugin Architecture** — compose only the auth features you need
 - **Type Safety** — leverages Rust's type system for compile-time guarantees
 - **Async First** — built on Tokio with full async/await support
-- **Database Agnostic** — in-memory for development, PostgreSQL for production
+- **SeaORM Native** — one persistence path backed by SeaORM 2
 - **Framework Integration** — first-class Axum support with session extractors
 - **OpenAPI** — auto-generated API specification
 - **Middleware** — CSRF, CORS, rate limiting, body size limits
@@ -27,17 +27,19 @@ better-auth = "0.8"
 ```
 
 ```rust
-use better_auth::{BetterAuth, AuthConfig};
+use better_auth::{run_migrations, sea_orm::Database, BetterAuth, AuthConfig};
 use better_auth::plugins::EmailPasswordPlugin;
-use better_auth::adapters::MemoryDatabaseAdapter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let database = Database::connect("sqlite::memory:").await?;
+    run_migrations(&database).await?;
+
     let auth = BetterAuth::new(
             AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
                 .base_url("http://localhost:3000"),
         )
-        .database(MemoryDatabaseAdapter::new())
+        .database(database)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .build()
         .await?;
@@ -76,8 +78,7 @@ Better Auth RS ships with a rich set of plugins. Enable only what you need:
 | Feature | Description |
 |---------|-------------|
 | `axum` | Axum web framework integration |
-| `derive` | Derive macros for custom entity types (`AuthUser`, `MemoryUser`, etc.) |
-| `sqlx-postgres` | PostgreSQL database support via SQLx |
+| `derive` | Derive macros for compatibility helpers |
 
 ## Crate Structure
 
@@ -103,20 +104,11 @@ Detailed guides and API reference are available in the [`docs/`](docs/) director
 ## Examples
 
 ```bash
-# Basic usage (in-memory)
-cargo run --example basic_usage
-
 # Axum web server
 cargo run --example axum_server --features axum
 
 # PostgreSQL
-cargo run --example postgres_usage --features sqlx-postgres
-
-# Custom entity types with derive macros
-cargo run --example custom_entities --features derive
-
-# Custom ORM adapter
-cargo run --example custom_orm_adapter
+cargo run --example postgres_usage
 
 # Full-stack (better-auth frontend + better-auth-rs backend)
 cargo run --manifest-path examples/fullstack/backend/Cargo.toml

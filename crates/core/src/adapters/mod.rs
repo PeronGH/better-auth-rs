@@ -2,6 +2,7 @@ pub mod cache;
 pub mod database;
 pub mod memory;
 pub mod memory_traits;
+pub mod sea_orm;
 pub mod traits;
 
 pub use cache::{CacheAdapter, MemoryCacheAdapter};
@@ -17,6 +18,10 @@ pub use memory::{
 
 #[cfg(feature = "sqlx-postgres")]
 pub use database::sqlx_adapter::{PoolConfig, PoolStats, SqlxAdapter, SqlxEntity};
+pub use sea_orm::{
+    SeaOrmAdapter,
+    migrator::{AuthMigrator, run_migrations},
+};
 
 #[cfg(feature = "redis-cache")]
 pub use cache::RedisAdapter;

@@ -39,7 +39,7 @@ async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
     }
 
     AuthBuilder::new(test_config())
-        .database(MemoryDatabaseAdapter::new())
+        .database_adapter(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(
@@ -832,7 +832,7 @@ async fn test_unlink_account_response_shape() {
 async fn test_enable_session_for_api_keys_injects_session() {
     // Build an auth instance with enableSessionForAPIKeys turned on
     let auth = AuthBuilder::new(test_config())
-        .database(MemoryDatabaseAdapter::new())
+        .database_adapter(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(
@@ -930,7 +930,7 @@ async fn test_enable_session_for_api_keys_injects_session() {
 #[tokio::test]
 async fn test_disabled_path_blocks_api_key_get_session_short_circuit() {
     let auth = AuthBuilder::new(test_config().disabled_path("/get-session"))
-        .database(MemoryDatabaseAdapter::new())
+        .database_adapter(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(
@@ -1090,7 +1090,7 @@ async fn test_revoke_session_response_shape() {
 /// Helper: create an auth instance with session-for-api-keys enabled.
 async fn create_auth_with_api_key_session() -> BetterAuth<MemoryDatabaseAdapter> {
     AuthBuilder::new(test_config())
-        .database(MemoryDatabaseAdapter::new())
+        .database_adapter(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(

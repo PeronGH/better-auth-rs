@@ -4,14 +4,14 @@ use std::sync::Arc;
 
 use crate::adapters::DatabaseAdapter;
 use crate::adapters::database::{
-    AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps,
-    UserOps, VerificationOps,
+    AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, PasskeyOps, SessionOps,
+    TwoFactorOps, UserOps, VerificationOps,
 };
 use crate::error::AuthResult;
 use crate::types::{
-    CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus, ListUsersParams,
-    UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
+    CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization, CreatePasskey,
+    CreateSession, CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus,
+    ListUsersParams, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
 };
 
 /// Database lifecycle hooks for intercepting operations.
@@ -606,6 +606,42 @@ impl<DB: DatabaseAdapter> ApiKeyOps for HookedDatabaseAdapter<DB> {
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
         self.inner.delete_expired_api_keys().await
+    }
+}
+
+#[async_trait]
+impl<DB: DatabaseAdapter> PasskeyOps for HookedDatabaseAdapter<DB> {
+    type Passkey = DB::Passkey;
+
+    async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Self::Passkey> {
+        self.inner.create_passkey(input).await
+    }
+
+    async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Self::Passkey>> {
+        self.inner.get_passkey_by_id(id).await
+    }
+
+    async fn get_passkey_by_credential_id(
+        &self,
+        credential_id: &str,
+    ) -> AuthResult<Option<Self::Passkey>> {
+        self.inner.get_passkey_by_credential_id(credential_id).await
+    }
+
+    async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Self::Passkey>> {
+        self.inner.list_passkeys_by_user(user_id).await
+    }
+
+    async fn update_passkey_counter(&self, id: &str, counter: u64) -> AuthResult<Self::Passkey> {
+        self.inner.update_passkey_counter(id, counter).await
+    }
+
+    async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Self::Passkey> {
+        self.inner.update_passkey_name(id, name).await
+    }
+
+    async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
+        self.inner.delete_passkey(id).await
     }
 }
 

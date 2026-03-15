@@ -38,7 +38,7 @@ async fn create_test_auth() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
 
     Arc::new(
         AuthBuilder::new(config)
-            .database(MemoryDatabaseAdapter::new())
+            .database_adapter(MemoryDatabaseAdapter::new())
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))

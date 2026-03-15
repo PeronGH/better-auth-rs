@@ -38,7 +38,7 @@ fn test_config() -> AuthConfig {
 #[tokio::test]
 async fn test_routes_include_plugin_routes() {
     let auth = AuthBuilder::new(test_config())
-        .database(MemoryDatabaseAdapter::new())
+        .database_adapter(MemoryDatabaseAdapter::new())
         .plugin(RouteTestPlugin)
         .build()
         .await
@@ -63,7 +63,7 @@ async fn test_routes_include_plugin_routes() {
 #[tokio::test]
 async fn test_signup_and_delete_lifecycle() {
     let auth = AuthBuilder::new(test_config())
-        .database(MemoryDatabaseAdapter::new())
+        .database_adapter(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .build()

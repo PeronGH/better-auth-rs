@@ -54,7 +54,7 @@ async fn create_full_auth() -> BetterAuth<MemoryDatabaseAdapter> {
         .password_min_length(8);
 
     AuthBuilder::new(config)
-        .database(MemoryDatabaseAdapter::new())
+        .database_adapter(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(better_auth::plugins::SessionManagementPlugin::new())
         .plugin(better_auth::plugins::PasswordManagementPlugin::new())

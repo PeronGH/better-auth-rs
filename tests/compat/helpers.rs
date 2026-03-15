@@ -110,7 +110,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
 
 pub async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
     AuthBuilder::new(test_config())
-        .database(MemoryDatabaseAdapter::new())
+        .database_adapter(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(
@@ -329,7 +329,7 @@ impl TestHarness {
             .base_url("http://localhost:3000")
             .password_min_length(6);
         let auth = AuthBuilder::new(config)
-            .database(MemoryDatabaseAdapter::new())
+            .database_adapter(MemoryDatabaseAdapter::new())
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))

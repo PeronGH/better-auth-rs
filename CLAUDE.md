@@ -38,11 +38,14 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
 ## Source of Truth (in priority order)
 
 1. **TypeScript better-auth runtime behavior** — the reference server in
-   `compat-tests/reference-server/` is the oracle. When in doubt, send
-   a request to both servers and observe what the TS server actually does.
-2. **TypeScript better-auth source code** — read it to understand intent,
-   edge cases, and error handling that the OpenAPI spec does not capture.
-   The pinned version is `better-auth@1.4.19`.
+   `compat-tests/reference-server/` is the oracle. Its behavior must stay
+   aligned with the local Better Auth checkout at `/home/peron/dev/better-auth`.
+   When in doubt, send a request to both servers and observe what the TS
+   server actually does.
+2. **TypeScript better-auth source code** — use the local checkout at
+   `/home/peron/dev/better-auth` to understand intent, edge cases, schema
+   generation, and hook semantics that the OpenAPI spec does not capture.
+   The pinned package version in that checkout is `better-auth@1.4.19`.
 3. **`better-auth.yaml` OpenAPI spec** — the structural contract for
    endpoints, request/response schemas, and field names.
 4. **better-auth documentation** (https://www.better-auth.com/docs) —
@@ -55,7 +58,7 @@ and leave a `// NOTE: matches TS bug — <link>` comment; do not
 
 Before writing any code, you MUST have:
 
-- The TS better-auth source (cloned locally or available to read).
+- The TS better-auth source available locally at `/home/peron/dev/better-auth`.
 - The reference server dependencies installed
   (`cd compat-tests/reference-server && bun install`).
 - The `better-auth.yaml` spec in the workspace root.

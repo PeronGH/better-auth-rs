@@ -1,9 +1,8 @@
-use better_auth::adapters::SqlxAdapter;
 use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
 use better_auth::types::{AuthRequest, HttpMethod};
-use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
+use better_auth::{AuthBuilder, AuthConfig, BetterAuth, run_migrations, sea_orm::Database};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -17,8 +16,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Connecting to database: {}", hide_password(&database_url));
 
-    // Create PostgreSQL adapter
-    let database = SqlxAdapter::new(&database_url).await?;
+    let database = Database::connect(&database_url).await?;
+    run_migrations(&database).await?;
     println!("Database connection established\n");
 
     // Create configuration
@@ -150,7 +149,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Helper: send a request through the auth handler
 async fn send(
-    auth: &BetterAuth<SqlxAdapter>,
+    auth: &BetterAuth,
     method: HttpMethod,
     path: &str,
     body: Option<&serde_json::Value>,

@@ -155,10 +155,6 @@ required-features = ["axum"]
 name = "postgres_usage"
 required-features = ["sqlx-postgres"]
 
-[[example]]
-name = "custom_entities"
-required-features = ["derive"]
-
 [[bin]]
 name = "sync_better_auth_openapi"
 path = "scripts/sync_better_auth_openapi.rs"

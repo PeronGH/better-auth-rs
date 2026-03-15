@@ -4,14 +4,15 @@ use serde::Deserialize;
 
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    BeforeRequestAction, DatabaseAdapter, DatabaseHooks, EmailProvider, HttpMethod, OkResponse,
-    OpenApiBuilder, OpenApiSpec, SessionManager, StatusMessageResponse, SuccessMessageResponse,
-    UpdateUser, UpdateUserRequest, core_paths,
+    BeforeRequestAction, DatabaseAdapter, DatabaseHooks, EmailProvider, HookedDatabaseAdapter,
+    HttpMethod, OkResponse, OpenApiBuilder, OpenApiSpec, SeaOrmAdapter, SessionManager,
+    StatusMessageResponse, SuccessMessageResponse, UpdateUser, UpdateUserRequest, core_paths,
     entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
     middleware::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
         CsrfMiddleware, Middleware, RateLimitConfig, RateLimitMiddleware,
     },
+    sea_orm::DatabaseConnection,
 };
 
 #[derive(Debug, Deserialize)]
@@ -21,7 +22,9 @@ struct ChangeEmailRequest {
 }
 
 /// The main BetterAuth instance, generic over the database adapter.
-pub struct BetterAuth<DB: DatabaseAdapter> {
+pub type DefaultDatabase = HookedDatabaseAdapter<SeaOrmAdapter>;
+
+pub struct BetterAuth<DB: DatabaseAdapter = DefaultDatabase> {
     config: Arc<AuthConfig>,
     plugins: Vec<Box<dyn AuthPlugin<DB>>>,
     middlewares: Vec<Box<dyn Middleware>>,
@@ -32,8 +35,8 @@ pub struct BetterAuth<DB: DatabaseAdapter> {
 
 /// Initial builder for configuring BetterAuth.
 ///
-/// Call `.database(adapter)` to obtain a [`TypedAuthBuilder`] that can
-/// accept plugins and hooks.
+/// Call `.database(connection)` to obtain a [`TypedAuthBuilder`] backed by
+/// the built-in SeaORM store.
 pub struct AuthBuilder {
     config: AuthConfig,
     csrf_config: Option<CsrfConfig>,
@@ -46,11 +49,10 @@ pub struct AuthBuilder {
 /// Typed builder returned by [`AuthBuilder::database`].
 ///
 /// Accepts plugins, hooks, and middleware before calling `.build()`.
-pub struct TypedAuthBuilder<DB: DatabaseAdapter> {
+pub struct TypedAuthBuilder<DB: DatabaseAdapter = DefaultDatabase> {
     config: AuthConfig,
-    database: Arc<DB>,
+    database: DB,
     plugins: Vec<Box<dyn AuthPlugin<DB>>>,
-    hooks: Vec<Arc<dyn DatabaseHooks<DB>>>,
     csrf_config: Option<CsrfConfig>,
     rate_limit_config: Option<RateLimitConfig>,
     cors_config: Option<CorsConfig>,
@@ -70,13 +72,27 @@ impl AuthBuilder {
         }
     }
 
-    /// Set the database adapter, returning a [`TypedAuthBuilder`].
-    pub fn database<DB: DatabaseAdapter>(self, database: DB) -> TypedAuthBuilder<DB> {
+    /// Set the SeaORM connection, returning a [`TypedAuthBuilder`].
+    pub fn database(self, database: DatabaseConnection) -> TypedAuthBuilder<DefaultDatabase> {
         TypedAuthBuilder {
             config: self.config,
-            database: Arc::new(database),
+            database: HookedDatabaseAdapter::new(Arc::new(SeaOrmAdapter::new(database))),
             plugins: Vec::new(),
-            hooks: Vec::new(),
+            csrf_config: self.csrf_config,
+            rate_limit_config: self.rate_limit_config,
+            cors_config: self.cors_config,
+            body_limit_config: self.body_limit_config,
+            custom_middlewares: self.custom_middlewares,
+        }
+    }
+
+    /// Set a custom database adapter, returning a [`TypedAuthBuilder`].
+    #[doc(hidden)]
+    pub fn database_adapter<DB: DatabaseAdapter>(self, database: DB) -> TypedAuthBuilder<DB> {
+        TypedAuthBuilder {
+            config: self.config,
+            database,
+            plugins: Vec::new(),
             csrf_config: self.csrf_config,
             rate_limit_config: self.rate_limit_config,
             cors_config: self.cors_config,
@@ -123,12 +139,6 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
         self
     }
 
-    /// Add a database lifecycle hook.
-    pub fn hook<H: DatabaseHooks<DB> + 'static>(mut self, hook: H) -> Self {
-        self.hooks.push(Arc::new(hook));
-        self
-    }
-
     /// Configure CSRF protection.
     pub fn csrf(mut self, config: CsrfConfig) -> Self {
         self.csrf_config = Some(config);
@@ -171,18 +181,7 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
         self.config.validate()?;
 
         let config = Arc::new(self.config);
-
-        // If hooks are registered, the user should wrap the adapter themselves:
-        //   let db = HookedDatabaseAdapter::new(Arc::new(my_db)).with_hook(hook);
-        //   BetterAuth::new(config).database(db).plugin(...).build().await
-        if !self.hooks.is_empty() {
-            return Err(AuthError::config(
-                "Use HookedDatabaseAdapter directly: \
-                 BetterAuth::new(config).database(HookedDatabaseAdapter::new(Arc::new(db)).with_hook(h))",
-            ));
-        }
-
-        let database = self.database;
+        let database = Arc::new(self.database);
 
         // Create session manager
         let session_manager = SessionManager::new(config.clone(), database.clone());
@@ -223,7 +222,15 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
     }
 }
 
-impl<DB: DatabaseAdapter> BetterAuth<DB> {
+impl TypedAuthBuilder<DefaultDatabase> {
+    /// Add a database lifecycle hook for the built-in SeaORM store.
+    pub fn hook<H: DatabaseHooks<SeaOrmAdapter> + 'static>(mut self, hook: H) -> Self {
+        self.database.add_hook(Arc::new(hook));
+        self
+    }
+}
+
+impl BetterAuth<DefaultDatabase> {
     /// Create a new BetterAuth builder.
     #[expect(
         clippy::new_ret_no_self,
@@ -232,7 +239,9 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     pub fn new(config: AuthConfig) -> AuthBuilder {
         AuthBuilder::new(config)
     }
+}
 
+impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Handle an authentication request.
     ///
     /// Errors from plugins and core handlers are automatically converted
@@ -595,15 +604,28 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use better_auth_core::MemoryDatabaseAdapter;
+    use better_auth_core::{
+        run_migrations,
+        sea_orm::{Database, DatabaseConnection},
+    };
 
     fn test_config() -> AuthConfig {
         AuthConfig::new("test-secret-min-32-chars-1234567").base_url("http://localhost:3000")
     }
 
-    async fn build_auth() -> BetterAuth<MemoryDatabaseAdapter> {
-        BetterAuth::<MemoryDatabaseAdapter>::new(test_config())
-            .database(MemoryDatabaseAdapter::new())
+    async fn test_database() -> DatabaseConnection {
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .expect("sqlite test database should connect");
+        run_migrations(&database)
+            .await
+            .expect("sqlite test migrations should run");
+        database
+    }
+
+    async fn build_auth() -> BetterAuth {
+        BetterAuth::new(test_config())
+            .database(test_database().await)
             .build()
             .await
             .expect("build should succeed")
@@ -614,8 +636,8 @@ mod tests {
     #[tokio::test]
     async fn builder_validates_config() {
         // Empty secret should fail validation
-        let result = BetterAuth::<MemoryDatabaseAdapter>::new(AuthConfig::default())
-            .database(MemoryDatabaseAdapter::new())
+        let result = BetterAuth::new(AuthConfig::default())
+            .database(test_database().await)
             .build()
             .await;
         assert!(result.is_err());
@@ -629,12 +651,12 @@ mod tests {
 
     #[tokio::test]
     async fn builder_middleware_chaining() {
-        let auth = BetterAuth::<MemoryDatabaseAdapter>::new(test_config())
+        let auth = BetterAuth::new(test_config())
             .csrf(CsrfConfig { enabled: false })
             .rate_limit(RateLimitConfig::default())
             .cors(CorsConfig::default())
             .body_limit(BodyLimitConfig::default())
-            .database(MemoryDatabaseAdapter::new())
+            .database(test_database().await)
             .build()
             .await
             .unwrap();
@@ -676,8 +698,8 @@ mod tests {
     #[tokio::test]
     async fn disabled_path_returns_404() {
         let config = test_config().disabled_path("/ok");
-        let auth = BetterAuth::<MemoryDatabaseAdapter>::new(config)
-            .database(MemoryDatabaseAdapter::new())
+        let auth = BetterAuth::new(config)
+            .database(test_database().await)
             .build()
             .await
             .unwrap();

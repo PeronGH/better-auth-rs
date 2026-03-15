@@ -19,12 +19,11 @@ tokio = { version = "1", features = ["full"] }
 Use `.axum_router()` to convert the auth instance into an Axum `Router`:
 
 ```rust
-use better_auth::{AuthConfig, BetterAuth};
+use better_auth::{run_migrations, sea_orm::Database, AuthConfig, BetterAuth};
 use better_auth::plugins::{
     EmailPasswordPlugin, SessionManagementPlugin,
     PasswordManagementPlugin, AccountManagementPlugin,
 };
-use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::AxumIntegration;
 use axum::Router;
 use std::sync::Arc;
@@ -33,10 +32,12 @@ use std::sync::Arc;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:8080");
+    let database = Database::connect("sqlite::memory:").await?;
+    run_migrations(&database).await?;
 
     let auth = Arc::new(
         BetterAuth::new(config)
-            .database(MemoryDatabaseAdapter::new())
+            .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new())
@@ -78,16 +79,15 @@ Better Auth provides Axum extractors that automatically validate the session tok
 
 ### `CurrentSession` — Require Authentication
 
-Use `CurrentSession<DB>` in your handler signature to require a valid session. Returns `401 Unauthorized` automatically if no valid session is found.
+Use `CurrentSession` in your handler signature to require a valid session. Returns `401 Unauthorized` automatically if no valid session is found.
 
 ```rust
 use better_auth::handlers::CurrentSession;
-use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::AuthUser; // trait for .id(), .email(), etc.
 use axum::{Json, response::IntoResponse};
 
 async fn get_profile(
-    session: CurrentSession<MemoryDatabaseAdapter>,
+    session: CurrentSession,
 ) -> impl IntoResponse {
     Json(serde_json::json!({
         "id": session.user.id(),
@@ -106,16 +106,15 @@ async fn get_profile(
 
 ### `OptionalSession` — Optional Authentication
 
-Use `OptionalSession<DB>` for routes that should work for both authenticated and anonymous users. Never returns an error — wraps the result in `Option`.
+Use `OptionalSession` for routes that should work for both authenticated and anonymous users. Never returns an error — wraps the result in `Option`.
 
 ```rust
 use better_auth::handlers::OptionalSession;
-use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::AuthUser;
 use axum::{Json, response::IntoResponse};
 
 async fn home(
-    session: OptionalSession<MemoryDatabaseAdapter>,
+    session: OptionalSession,
 ) -> impl IntoResponse {
     let user_info = session.0.map(|s| {
         serde_json::json!({

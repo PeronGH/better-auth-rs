@@ -274,7 +274,7 @@ fn convert_auth_response(auth_response: AuthResponse) -> Response {
 /// }
 /// ```
 #[cfg(feature = "axum")]
-pub struct CurrentSession<DB: DatabaseAdapter> {
+pub struct CurrentSession<DB: DatabaseAdapter = crate::DefaultDatabase> {
     pub user: DB::User,
     pub session: DB::Session,
 }
@@ -297,7 +297,9 @@ pub struct CurrentSession<DB: DatabaseAdapter> {
 /// }
 /// ```
 #[cfg(feature = "axum")]
-pub struct OptionalSession<DB: DatabaseAdapter>(pub Option<CurrentSession<DB>>);
+pub struct OptionalSession<DB: DatabaseAdapter = crate::DefaultDatabase>(
+    pub Option<CurrentSession<DB>>,
+);
 
 /// Extract a session token from the request parts.
 ///
