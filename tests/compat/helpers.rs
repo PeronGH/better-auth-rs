@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use better_auth::{
-    AuthBuilder, AuthConfig, BetterAuth, MemoryDatabaseAdapter,
+    AuthBuilder, AuthConfig, BetterAuth, run_migrations,
     plugins::{
         AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, EmailPasswordPlugin,
         EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
@@ -16,9 +16,12 @@ use better_auth::{
         oauth::{OAuthProvider, OAuthUserInfo},
         password_management::SendResetPassword,
     },
+    sea_orm::{Database, DatabaseConnection},
     types::{AuthRequest, HttpMethod},
 };
 use serde_json::Value;
+
+type TestAuth = BetterAuth;
 
 struct NoopResetSender;
 
@@ -108,9 +111,19 @@ fn mock_oauth_plugin() -> OAuthPlugin {
     )
 }
 
-pub async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
+async fn test_database() -> DatabaseConnection {
+    let database = Database::connect("sqlite::memory:")
+        .await
+        .unwrap_or_else(|e| panic!("sqlite test database should connect: {e}"));
+    run_migrations(&database)
+        .await
+        .unwrap_or_else(|e| panic!("sqlite test migrations should run: {e}"));
+    database
+}
+
+pub async fn create_test_auth() -> TestAuth {
     AuthBuilder::new(test_config())
-        .database_adapter(MemoryDatabaseAdapter::new())
+        .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(
@@ -226,7 +239,7 @@ pub fn post_with_auth(path: &str, token: &str) -> AuthRequest {
 // ---------------------------------------------------------------------------
 
 pub async fn send_request(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &TestAuth,
     req: AuthRequest,
 ) -> (u16, Value) {
     let resp = auth
@@ -240,7 +253,7 @@ pub async fn send_request(
 }
 
 pub async fn signup_user(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &TestAuth,
     email: &str,
     password: &str,
     name: &str,
@@ -268,7 +281,7 @@ pub async fn signup_user(
 }
 
 pub async fn signin_user(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &TestAuth,
     email: &str,
     password: &str,
 ) -> (String, Value) {
@@ -308,7 +321,7 @@ pub async fn signin_user(
 /// assert_eq!(status, 200);
 /// ```
 pub struct TestHarness {
-    auth: Arc<BetterAuth<MemoryDatabaseAdapter>>,
+    auth: Arc<TestAuth>,
 }
 
 impl TestHarness {
@@ -329,7 +342,7 @@ impl TestHarness {
             .base_url("http://localhost:3000")
             .password_min_length(6);
         let auth = AuthBuilder::new(config)
-            .database_adapter(MemoryDatabaseAdapter::new())
+            .database(test_database().await)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))
@@ -345,17 +358,17 @@ impl TestHarness {
     }
 
     /// Wrap an existing `Arc<BetterAuth>` in a harness.
-    pub fn from_arc(auth: Arc<BetterAuth<MemoryDatabaseAdapter>>) -> Self {
+    pub fn from_arc(auth: Arc<TestAuth>) -> Self {
         Self { auth }
     }
 
     /// Access the inner `BetterAuth` reference.
-    pub fn auth(&self) -> &BetterAuth<MemoryDatabaseAdapter> {
+    pub fn auth(&self) -> &TestAuth {
         &self.auth
     }
 
     /// Consume the harness and return the inner `Arc`.
-    pub fn into_arc(self) -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
+    pub fn into_arc(self) -> Arc<TestAuth> {
         self.auth
     }
 

@@ -663,15 +663,16 @@ mod axum_impl {
 mod tests {
     use super::*;
     use better_auth_core::AuthContext;
-    use better_auth_core::adapters::{MemoryDatabaseAdapter, UserOps};
+    use better_auth_core::DefaultDatabase;
+    use better_auth_core::adapters::UserOps;
     use better_auth_core::config::AuthConfig;
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    fn create_test_context() -> AuthContext<MemoryDatabaseAdapter> {
+    async fn create_test_context() -> AuthContext<DefaultDatabase> {
         let config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
         let config = Arc::new(config);
-        let database = Arc::new(MemoryDatabaseAdapter::new());
+        let database = crate::plugins::test_helpers::create_test_database().await;
         AuthContext::new(config, database)
     }
 
@@ -693,7 +694,7 @@ mod tests {
     #[tokio::test]
     async fn test_auto_sign_in_false_returns_no_session() {
         let plugin = EmailPasswordPlugin::new().auto_sign_in(false);
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         let req = create_signup_request("auto@example.com", "Password123!");
         let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
@@ -719,7 +720,7 @@ mod tests {
     #[tokio::test]
     async fn test_auto_sign_in_true_returns_session() {
         let plugin = EmailPasswordPlugin::new(); // default auto_sign_in=true
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         let req = create_signup_request("autotrue@example.com", "Password123!");
         let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
@@ -743,7 +744,7 @@ mod tests {
     #[tokio::test]
     async fn test_password_max_length_rejection() {
         let plugin = EmailPasswordPlugin::new().password_max_length(128);
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         // Password of exactly 129 chars should be rejected
         let long_password = format!("A1!{}", "a".repeat(126)); // 129 chars total
@@ -775,7 +776,7 @@ mod tests {
 
         let hasher: Arc<dyn PasswordHasher> = Arc::new(TestHasher);
         let plugin = EmailPasswordPlugin::new().password_hasher(hasher);
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         // Sign up with custom hasher
         let req = create_signup_request("hasher@example.com", "Password123!");

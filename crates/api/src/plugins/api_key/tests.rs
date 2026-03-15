@@ -1,15 +1,16 @@
 use super::*;
-use better_auth_core::adapters::{ApiKeyOps, MemoryDatabaseAdapter, SessionOps, UserOps};
-use better_auth_core::{AuthPlugin, CreateSession, CreateUser, HttpMethod, Session, User};
+use crate::plugins::test_helpers::TestDatabase;
+use better_auth_core::adapters::{ApiKeyOps, SessionOps, UserOps};
+use better_auth_core::{AuthPlugin, AuthContext, CreateSession, CreateUser, HttpMethod, Session, User};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>, User, Session) {
+async fn create_test_context_with_user() -> (AuthContext<TestDatabase>, User, Session) {
     let config = Arc::new(better_auth_core::AuthConfig::new(
         "test-secret-key-at-least-32-chars-long",
     ));
-    let database = Arc::new(MemoryDatabaseAdapter::new());
+    let database = crate::plugins::test_helpers::create_test_database().await;
     let ctx = AuthContext::new(config, database.clone());
 
     let user = database
@@ -37,7 +38,7 @@ async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>,
 }
 
 async fn create_user_with_session(
-    ctx: &AuthContext<MemoryDatabaseAdapter>,
+    ctx: &AuthContext<TestDatabase>,
     email: &str,
 ) -> (User, Session) {
     let user = ctx
@@ -93,7 +94,7 @@ fn json_body(response: &AuthResponse) -> serde_json::Value {
 
 async fn create_key_and_get_id(
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<MemoryDatabaseAdapter>,
+    ctx: &AuthContext<TestDatabase>,
     token: &str,
     name: &str,
 ) -> String {
@@ -112,7 +113,7 @@ async fn create_key_and_get_id(
 /// Helper: create a key and return (id, raw_key)
 async fn create_key_and_get_raw(
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<MemoryDatabaseAdapter>,
+    ctx: &AuthContext<TestDatabase>,
     token: &str,
     body: serde_json::Value,
 ) -> (String, String) {

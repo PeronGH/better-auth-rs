@@ -141,20 +141,21 @@ Both extractors look for the session token in this order:
 
 ```rust
 use axum::{Json, Router, response::IntoResponse, routing::get};
-use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
-use better_auth::{AuthBuilder, AuthConfig, AuthUser};
+use better_auth::{run_migrations, sea_orm::Database, AuthBuilder, AuthConfig, AuthUser};
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:8080");
+    let database = Database::connect("sqlite::memory:").await?;
+    run_migrations(&database).await?;
 
     let auth = Arc::new(
         AuthBuilder::new(config)
-            .database(MemoryDatabaseAdapter::new())
+            .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .build()
@@ -177,7 +178,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Protected route — requires authentication
 async fn get_profile(
-    session: CurrentSession<MemoryDatabaseAdapter>,
+    session: CurrentSession,
 ) -> impl IntoResponse {
     Json(serde_json::json!({
         "id": session.user.id(),
@@ -188,7 +189,7 @@ async fn get_profile(
 
 /// Public route — works for both authenticated and anonymous users
 async fn public_route(
-    session: OptionalSession<MemoryDatabaseAdapter>,
+    session: OptionalSession,
 ) -> impl IntoResponse {
     let user = session.0.map(|s| s.user.id().to_string());
     Json(serde_json::json!({

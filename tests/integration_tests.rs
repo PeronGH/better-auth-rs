@@ -1,20 +1,19 @@
 mod compat;
 
 use better_auth::BetterAuth;
-use better_auth::adapters::{
-    AccountOps, MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps,
-};
+use better_auth::adapters::{AccountOps, SessionOps, UserOps, VerificationOps};
+use better_auth::{run_migrations, sea_orm::Database};
 use compat::helpers::*;
 use std::sync::Arc;
 
 /// Helper to create test BetterAuth instance with memory database
-async fn create_test_auth_memory() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
+async fn create_test_auth_memory() -> Arc<BetterAuth> {
     TestHarness::minimal().await.into_arc()
 }
 
 /// Helper to create user and get session token
 async fn create_test_user_and_session(
-    auth: Arc<BetterAuth<MemoryDatabaseAdapter>>,
+    auth: Arc<BetterAuth>,
 ) -> (String, String) {
     let req = post_json(
         "/sign-up/email",
@@ -33,7 +32,7 @@ async fn create_test_user_and_session(
 }
 
 async fn user_id_from_email(
-    auth: &Arc<BetterAuth<MemoryDatabaseAdapter>>,
+    auth: &Arc<BetterAuth>,
     email: &str,
 ) -> String {
     auth.database()
@@ -1264,32 +1263,21 @@ async fn test_axum_duplicate_email() {
 #[cfg(feature = "sqlx-postgres")]
 mod postgres_tests {
     use super::*;
-    use better_auth::adapters::{PoolConfig, SqlxAdapter};
+    use better_auth::{run_migrations, sea_orm::Database};
     use std::env;
 
     /// Helper to create test BetterAuth instance with PostgreSQL
-    async fn create_test_auth_postgres() -> Option<Arc<BetterAuth<SqlxAdapter>>> {
+    async fn create_test_auth_postgres() -> Option<Arc<BetterAuth>> {
         let database_url = env::var("TEST_DATABASE_URL").ok()?;
-
-        let pool_config = PoolConfig {
-            max_connections: 5,
-            min_connections: 1,
-            acquire_timeout: std::time::Duration::from_secs(10),
-            idle_timeout: Some(std::time::Duration::from_secs(300)),
-            max_lifetime: Some(std::time::Duration::from_secs(1800)),
-        };
-
-        let database = SqlxAdapter::with_config(&database_url, pool_config).await.ok()?;
-
-        // Test connection
-        database.test_connection().await.ok()?;
+        let database = Database::connect(&database_url).await.ok()?;
+        run_migrations(&database).await.ok()?;
 
         let config = AuthConfig::new("postgres-test-secret-key-32-chars-long")
             .base_url("http://localhost:3000")
             .password_min_length(6);
 
-        let auth = BetterAuth::<SqlxAdapter>::new(config)
-            .database_adapter(database)
+        let auth = BetterAuth::new(config)
+            .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .build()
             .await
@@ -1690,7 +1678,7 @@ async fn test_sign_in_username_nonexistent() {
 // ---------------------------------------------------------------------------
 
 /// Helper: create auth with ApiKeyPlugin and return auth + session token
-async fn create_auth_with_apikey() -> (Arc<BetterAuth<MemoryDatabaseAdapter>>, String, String) {
+async fn create_auth_with_apikey() -> (Arc<BetterAuth>, String, String) {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
     (auth, user_id, session_token)
@@ -1698,7 +1686,7 @@ async fn create_auth_with_apikey() -> (Arc<BetterAuth<MemoryDatabaseAdapter>>, S
 
 /// Create an API key and return (raw_key, key_id)
 async fn create_api_key(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &BetterAuth,
     token: &str,
     body: serde_json::Value,
 ) -> (String, String) {
@@ -2224,10 +2212,11 @@ async fn test_api_key_get_nonexistent() {
 /// get_user_by_username works via database adapter
 #[tokio::test]
 async fn test_get_user_by_username_adapter() {
-    use better_auth::adapters::MemoryDatabaseAdapter;
     use better_auth::types::CreateUser;
 
-    let db = MemoryDatabaseAdapter::new();
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    run_migrations(&database).await.unwrap();
+    let db = better_auth::SeaOrmAdapter::new(database);
 
     // Create user with username
     let create = CreateUser::new()

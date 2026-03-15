@@ -388,7 +388,7 @@ async fn ref_seed_oauth_account(email: &str) -> Result<(), String> {
 }
 
 async fn seed_rust_oauth_account(
-    auth: &better_auth::BetterAuth<better_auth::MemoryDatabaseAdapter>,
+    auth: &better_auth::BetterAuth,
     user_id: &str,
 ) {
     let _ = auth
@@ -410,7 +410,7 @@ async fn seed_rust_oauth_account(
 }
 
 async fn signup_on_both(
-    auth: &better_auth::BetterAuth<better_auth::MemoryDatabaseAdapter>,
+    auth: &better_auth::BetterAuth,
     ref_client: &mut RefClient,
     prefix: &str,
 ) -> (String, String, String) {
@@ -450,7 +450,7 @@ async fn signup_on_both(
 
 /// Send a request to the Rust server and capture a FullResponse.
 async fn rust_send(
-    auth: &better_auth::BetterAuth<better_auth::MemoryDatabaseAdapter>,
+    auth: &better_auth::BetterAuth,
     req: better_auth::types::AuthRequest,
 ) -> FullResponse {
     let resp = auth

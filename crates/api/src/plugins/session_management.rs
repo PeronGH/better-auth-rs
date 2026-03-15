@@ -392,7 +392,8 @@ mod axum_impl {
 mod tests {
     use super::*;
     use crate::plugins::test_helpers;
-    use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps};
+    use crate::plugins::test_helpers::TestDatabase;
+    use better_auth_core::adapters::{SessionOps, UserOps};
     use better_auth_core::{CreateSession, CreateUser, Session};
     use chrono::{Duration, Utc};
 
@@ -640,7 +641,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_routes() {
         let plugin = SessionManagementPlugin::new();
-        let routes = AuthPlugin::<MemoryDatabaseAdapter>::routes(&plugin);
+        let routes = AuthPlugin::<TestDatabase>::routes(&plugin);
 
         assert_eq!(routes.len(), 7);
         assert!(

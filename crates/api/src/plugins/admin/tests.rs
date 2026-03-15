@@ -1,6 +1,7 @@
 use super::*;
 use crate::plugins::test_helpers;
-use better_auth_core::adapters::{AccountOps, MemoryDatabaseAdapter, SessionOps, UserOps};
+use better_auth_core::DefaultDatabase;
+use better_auth_core::adapters::{AccountOps, SessionOps, UserOps};
 use better_auth_core::entity::{AuthAccount, AuthSession};
 use better_auth_core::{AuthPlugin, HttpMethod};
 use better_auth_core::{CreateSession, CreateUser, Session, User};
@@ -9,13 +10,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 async fn create_admin_context() -> (
-    AuthContext<MemoryDatabaseAdapter>,
+    AuthContext<DefaultDatabase>,
     User,
     Session,
     User,
     Session,
 ) {
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
 
     // Create admin user
     let admin = test_helpers::create_user(
@@ -135,7 +136,7 @@ async fn test_custom_admin_role() {
     let config = Arc::new(better_auth_core::AuthConfig::new(
         "test-secret-key-at-least-32-chars-long",
     ));
-    let database = Arc::new(MemoryDatabaseAdapter::new());
+    let database = test_helpers::create_test_database().await;
     let ctx = AuthContext::new(config, database.clone());
 
     // Create superadmin user with custom role
@@ -1250,7 +1251,7 @@ async fn test_set_role_persists_in_database() {
 async fn test_plugin_name() {
     let plugin = AdminPlugin::new();
     assert_eq!(
-        <AdminPlugin as AuthPlugin<MemoryDatabaseAdapter>>::name(&plugin),
+        <AdminPlugin as AuthPlugin<DefaultDatabase>>::name(&plugin),
         "admin"
     );
 }
@@ -1258,6 +1259,6 @@ async fn test_plugin_name() {
 #[tokio::test]
 async fn test_plugin_routes_count() {
     let plugin = AdminPlugin::new();
-    let routes = <AdminPlugin as AuthPlugin<MemoryDatabaseAdapter>>::routes(&plugin);
+    let routes = <AdminPlugin as AuthPlugin<DefaultDatabase>>::routes(&plugin);
     assert_eq!(routes.len(), 13, "admin plugin should register 13 routes");
 }

@@ -1,14 +1,17 @@
 use async_trait::async_trait;
-use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
 use better_auth::types::{AuthRequest, AuthResponse, HttpMethod};
-use better_auth::{AuthBuilder, AuthConfig, AuthContext, AuthPlugin, AuthResult, AuthRoute};
+use better_auth::{
+    AuthBuilder, AuthConfig, AuthContext, AuthPlugin, AuthResult, AuthRoute, DefaultDatabase,
+    run_migrations,
+    sea_orm::{Database, DatabaseConnection},
+};
 use serde_json::json;
 
 struct RouteTestPlugin;
 
 #[async_trait]
-impl AuthPlugin<MemoryDatabaseAdapter> for RouteTestPlugin {
+impl AuthPlugin<DefaultDatabase> for RouteTestPlugin {
     fn name(&self) -> &'static str {
         "route-test"
     }
@@ -23,7 +26,7 @@ impl AuthPlugin<MemoryDatabaseAdapter> for RouteTestPlugin {
     async fn on_request(
         &self,
         _req: &AuthRequest,
-        _ctx: &AuthContext<MemoryDatabaseAdapter>,
+        _ctx: &AuthContext<DefaultDatabase>,
     ) -> AuthResult<Option<AuthResponse>> {
         Ok(None)
     }
@@ -35,10 +38,16 @@ fn test_config() -> AuthConfig {
         .password_min_length(6)
 }
 
+async fn test_database() -> DatabaseConnection {
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    run_migrations(&database).await.unwrap();
+    database
+}
+
 #[tokio::test]
 async fn test_routes_include_plugin_routes() {
     let auth = AuthBuilder::new(test_config())
-        .database_adapter(MemoryDatabaseAdapter::new())
+        .database(test_database().await)
         .plugin(RouteTestPlugin)
         .build()
         .await
@@ -63,7 +72,7 @@ async fn test_routes_include_plugin_routes() {
 #[tokio::test]
 async fn test_signup_and_delete_lifecycle() {
     let auth = AuthBuilder::new(test_config())
-        .database_adapter(MemoryDatabaseAdapter::new())
+        .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .build()

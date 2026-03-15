@@ -1,6 +1,7 @@
 use super::*;
 use crate::plugins::test_helpers;
-use better_auth_core::adapters::{AccountOps, MemoryDatabaseAdapter, SessionOps, VerificationOps};
+use better_auth_core::DefaultDatabase;
+use better_auth_core::adapters::{AccountOps, SessionOps, VerificationOps};
 use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
 use better_auth_core::{
     CreateAccount, CreateUser, CreateVerification, PASSWORD_HASH_KEY, Session, User,
@@ -25,7 +26,7 @@ fn plugin_with_reset_sender() -> PasswordManagementPlugin {
     PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender))
 }
 
-async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>, User, Session) {
+async fn create_test_context_with_user() -> (AuthContext<DefaultDatabase>, User, Session) {
     let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
     config.password = PasswordConfig {
         min_length: 8,
@@ -36,7 +37,7 @@ async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>,
         argon2_config: Argon2Config::default(),
     };
 
-    let ctx = test_helpers::create_test_context_with_config(config);
+    let ctx = test_helpers::create_test_context_with_config(config).await;
 
     // Create test user with hashed password
     let plugin = PasswordManagementPlugin::new();
@@ -83,7 +84,7 @@ async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>,
 
 /// Helper: create a reset-password verification token for the given user
 /// and store it in the database. Returns the token string.
-async fn create_reset_token(ctx: &AuthContext<MemoryDatabaseAdapter>, user_id: &str) -> String {
+async fn create_reset_token(ctx: &AuthContext<DefaultDatabase>, user_id: &str) -> String {
     let reset_token = uuid::Uuid::new_v4().simple().to_string();
     let create_verification = CreateVerification {
         identifier: format!("reset-password:{}", reset_token),
@@ -572,7 +573,8 @@ async fn test_password_validation() {
         require_special: true,
         argon2_config: Argon2Config::default(),
     };
-    let ctx = AuthContext::new(Arc::new(config), Arc::new(MemoryDatabaseAdapter::new()));
+    let database = test_helpers::create_test_database().await;
+    let ctx = AuthContext::new(Arc::new(config), database);
 
     // Test valid password
     assert!(plugin.validate_password("Password123!", &ctx).is_ok());
@@ -615,7 +617,7 @@ async fn test_password_hashing_and_verification() {
 #[tokio::test]
 async fn test_plugin_routes() {
     let plugin = PasswordManagementPlugin::new();
-    let routes = AuthPlugin::<MemoryDatabaseAdapter>::routes(&plugin);
+    let routes = AuthPlugin::<DefaultDatabase>::routes(&plugin);
 
     assert_eq!(routes.len(), 5);
     assert!(

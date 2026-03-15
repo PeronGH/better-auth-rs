@@ -1,7 +1,8 @@
 use super::*;
 use crate::plugins::test_helpers;
 use async_trait::async_trait;
-use better_auth_core::adapters::{MemoryDatabaseAdapter, UserOps, VerificationOps};
+use better_auth_core::DefaultDatabase;
+use better_auth_core::adapters::{UserOps, VerificationOps};
 use better_auth_core::{AuthResult, CreateUser, CreateVerification, UpdateUser};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
@@ -256,7 +257,7 @@ fn test_to_user_preserves_fields() {
 fn test_plugin_name() {
     let plugin = EmailVerificationPlugin::new();
     assert_eq!(
-        AuthPlugin::<MemoryDatabaseAdapter>::name(&plugin),
+        AuthPlugin::<DefaultDatabase>::name(&plugin),
         "email-verification"
     );
 }
@@ -264,7 +265,7 @@ fn test_plugin_name() {
 #[test]
 fn test_plugin_routes() {
     let plugin = EmailVerificationPlugin::new();
-    let routes = AuthPlugin::<MemoryDatabaseAdapter>::routes(&plugin);
+    let routes = AuthPlugin::<DefaultDatabase>::routes(&plugin);
     assert_eq!(routes.len(), 2);
     assert!(
         routes
@@ -281,7 +282,7 @@ fn test_plugin_routes() {
 #[tokio::test]
 async fn test_on_request_unknown_route_returns_none() {
     let plugin = EmailVerificationPlugin::new();
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let req =
         test_helpers::create_auth_request(HttpMethod::Get, "/unknown", None, None, HashMap::new());
     let result = plugin.on_request(&req, &ctx).await.unwrap();
@@ -295,7 +296,7 @@ async fn test_on_request_unknown_route_returns_none() {
 #[tokio::test]
 async fn test_send_verification_on_sign_in_disabled() {
     let plugin = EmailVerificationPlugin::new().send_on_sign_in(false);
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let user = ctx
         .database
         .create_user(
@@ -315,7 +316,7 @@ async fn test_send_verification_on_sign_in_disabled() {
 #[tokio::test]
 async fn test_send_verification_on_sign_in_verified_user() {
     let plugin = EmailVerificationPlugin::new().send_on_sign_in(true);
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let user = ctx
         .database
         .create_user(
@@ -358,7 +359,7 @@ async fn test_send_verification_on_sign_in_creates_token() {
         .send_email_notifications(false) // disable default path
         .custom_send_verification_email(Arc::new(CountingSender(counter)));
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let user = ctx
         .database
         .create_user(
@@ -399,7 +400,7 @@ async fn test_on_user_created_custom_sender_fires_without_notifications() {
         .send_email_notifications(false)
         .custom_send_verification_email(Arc::new(CountingSender(counter)));
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let user = ctx
         .database
         .create_user(
@@ -433,7 +434,7 @@ async fn test_on_user_created_verified_user_skips_email() {
     let plugin = EmailVerificationPlugin::new()
         .custom_send_verification_email(Arc::new(CountingSender(counter)));
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let user = ctx
         .database
         .create_user(
@@ -463,7 +464,7 @@ async fn test_on_user_created_verified_user_skips_email() {
 #[tokio::test]
 async fn test_verify_email_basic_flow() {
     let plugin = EmailVerificationPlugin::new();
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
 
     // Create an unverified user
     let _user = ctx
@@ -547,7 +548,7 @@ async fn test_verify_email_calls_before_and_after_hooks() {
         .before_email_verification(before_hook)
         .after_email_verification(after_hook);
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let _user = ctx
         .database
         .create_user(
@@ -586,7 +587,7 @@ async fn test_verify_email_before_hook_error_aborts() {
 
     let plugin = EmailVerificationPlugin::new().before_email_verification(before_hook);
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let _user = ctx
         .database
         .create_user(
@@ -632,7 +633,7 @@ async fn test_verify_email_before_hook_error_aborts() {
 async fn test_verify_email_auto_sign_in_creates_session() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(true);
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let _user = ctx
         .database
         .create_user(
@@ -675,7 +676,7 @@ async fn test_verify_email_auto_sign_in_creates_session() {
 async fn test_verify_email_no_auto_sign_in_no_session() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(false);
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let _user = ctx
         .database
         .create_user(
@@ -719,7 +720,7 @@ async fn test_verify_email_no_auto_sign_in_no_session() {
 async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(true);
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let _user = ctx
         .database
         .create_user(
@@ -761,7 +762,7 @@ async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
 async fn test_verify_email_redirect_without_auto_sign_in_no_cookie() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(false);
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
     let _user = ctx
         .database
         .create_user(
@@ -803,7 +804,7 @@ async fn test_verify_email_redirect_without_auto_sign_in_no_cookie() {
 #[tokio::test]
 async fn test_verify_email_invalid_token() {
     let plugin = EmailVerificationPlugin::new();
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), "bogus-token".to_string());
@@ -816,7 +817,7 @@ async fn test_verify_email_invalid_token() {
 #[tokio::test]
 async fn test_verify_email_missing_token() {
     let plugin = EmailVerificationPlugin::new();
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
 
     let req = test_helpers::create_auth_request(
         HttpMethod::Get,
@@ -836,7 +837,7 @@ async fn test_verify_email_missing_token() {
 #[tokio::test]
 async fn test_verify_email_already_verified_returns_ok() {
     let plugin = EmailVerificationPlugin::new();
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
 
     let user = ctx
         .database
@@ -886,7 +887,7 @@ async fn test_verify_email_already_verified_returns_ok() {
 #[tokio::test]
 async fn test_send_verification_email_already_verified_returns_error() {
     let plugin = EmailVerificationPlugin::new();
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
 
     let user = ctx
         .database
@@ -928,7 +929,7 @@ async fn test_send_verification_email_already_verified_returns_error() {
 #[tokio::test]
 async fn test_send_verification_email_user_not_found() {
     let plugin = EmailVerificationPlugin::new();
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context().await;
 
     let body = serde_json::json!({ "email": "nobody@test.com" });
     let mut headers = HashMap::new();
@@ -955,7 +956,7 @@ async fn test_send_verification_email_user_not_found() {
 fn test_create_session_cookie_format() {
     use better_auth_core::utils::cookie_utils::create_session_cookie;
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context_blocking();
     let cookie_str = create_session_cookie("my-token-123", &ctx.config);
     // Should contain the cookie name and value
     assert!(cookie_str.contains("better-auth.session_token=my-token-123"));
@@ -971,7 +972,7 @@ fn test_create_session_cookie_format() {
 fn test_create_session_cookie_special_characters_in_token() {
     use better_auth_core::utils::cookie_utils::create_session_cookie;
 
-    let ctx = test_helpers::create_test_context();
+    let ctx = test_helpers::create_test_context_blocking();
     let token = "token+with/special=chars&more";
     let cookie_str = create_session_cookie(token, &ctx.config);
     // The cookie crate should handle encoding properly

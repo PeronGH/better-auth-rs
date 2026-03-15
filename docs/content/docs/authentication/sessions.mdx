@@ -155,11 +155,10 @@ With the `axum` feature, use the `CurrentSession` extractor to access the authen
 
 ```rust
 use better_auth::handlers::CurrentSession;
-use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::AuthUser;
 use axum::{Json, response::IntoResponse};
 
-async fn profile(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+async fn profile(session: CurrentSession) -> impl IntoResponse {
     Json(serde_json::json!({
         "user_id": session.user.id(),
         "session_token": session.session.token(),

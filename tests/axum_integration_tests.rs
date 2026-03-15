@@ -4,20 +4,28 @@ use axum::{
     body::Body,
     http::{Method, Request, StatusCode},
 };
-use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::AxumIntegration;
 use better_auth::plugins::{
     EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
     password_management::SendResetPassword,
 };
-use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
+use better_auth::{
+    AuthBuilder, AuthConfig, BetterAuth, run_migrations,
+    sea_orm::{Database, DatabaseConnection},
+};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tower::ServiceExt; // for oneshot
 use tower_http::cors::CorsLayer;
 
 /// Helper to create test BetterAuth instance with all plugins
-async fn create_test_auth() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
+async fn test_database() -> DatabaseConnection {
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    run_migrations(&database).await.unwrap();
+    database
+}
+
+async fn create_test_auth() -> Arc<BetterAuth> {
     struct NoopResetSender;
 
     #[async_trait::async_trait]
@@ -38,7 +46,7 @@ async fn create_test_auth() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
 
     Arc::new(
         AuthBuilder::new(config)
-            .database_adapter(MemoryDatabaseAdapter::new())
+            .database(test_database().await)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))
@@ -49,7 +57,7 @@ async fn create_test_auth() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
 }
 
 /// Helper to create the complete Axum router (mimics the example server)
-fn create_test_router(auth: Arc<BetterAuth<MemoryDatabaseAdapter>>) -> axum::Router {
+fn create_test_router(auth: Arc<BetterAuth>) -> axum::Router {
     use axum::{Router, routing::get};
 
     // Create auth router using the BetterAuth AxumIntegration

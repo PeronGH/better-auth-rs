@@ -7,8 +7,9 @@
 use std::collections::{BTreeMap, HashSet};
 
 use better_auth::{
-    AuthBuilder, AuthConfig, BetterAuth, MemoryDatabaseAdapter,
+    AuthBuilder, AuthConfig, BetterAuth, run_migrations,
     plugins::EmailPasswordPlugin,
+    sea_orm::{Database, DatabaseConnection},
     types::{AuthRequest, HttpMethod},
 };
 use serde_json::Value;
@@ -48,13 +49,19 @@ fn load_reference_spec() -> BTreeMap<String, HashSet<String>> {
 }
 
 /// Create a test auth instance with all currently implemented plugins.
-async fn create_full_auth() -> BetterAuth<MemoryDatabaseAdapter> {
+async fn test_database() -> DatabaseConnection {
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    run_migrations(&database).await.unwrap();
+    database
+}
+
+async fn create_full_auth() -> BetterAuth {
     let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
         .base_url("http://localhost:3000")
         .password_min_length(8);
 
     AuthBuilder::new(config)
-        .database_adapter(MemoryDatabaseAdapter::new())
+        .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(better_auth::plugins::SessionManagementPlugin::new())
         .plugin(better_auth::plugins::PasswordManagementPlugin::new())
@@ -70,7 +77,7 @@ async fn create_full_auth() -> BetterAuth<MemoryDatabaseAdapter> {
 
 /// Collect all routes our implementation exposes (core + plugin).
 fn collect_implemented_routes(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &BetterAuth,
 ) -> BTreeMap<String, HashSet<String>> {
     let mut routes: BTreeMap<String, HashSet<String>> = BTreeMap::new();
 
@@ -299,7 +306,7 @@ async fn test_generated_openapi_metadata() {
 
 /// Helper to send a request and parse the JSON response body.
 async fn send_json_request(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &BetterAuth,
     method: HttpMethod,
     path: &str,
     body: Option<Value>,

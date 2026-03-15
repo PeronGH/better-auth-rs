@@ -5,12 +5,16 @@
 //! (`better-auth.yaml`). Tests are written against `handle_request()` directly
 //! (no HTTP server needed).
 
-use crate::adapters::{MemoryDatabaseAdapter, SessionOps, VerificationOps};
+use crate::adapters::{SessionOps, VerificationOps};
 use crate::plugins::{
     AccountManagementPlugin, ApiKeyPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
     PasswordManagementPlugin, SessionManagementPlugin, password_management::SendResetPassword,
 };
-use crate::{AuthBuilder, AuthConfig, AuthRequest, BetterAuth, CreateVerification, HttpMethod};
+use crate::{
+    AuthBuilder, AuthConfig, AuthRequest, BetterAuth, CreateVerification, HttpMethod,
+    run_migrations,
+    sea_orm::{Database, DatabaseConnection},
+};
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
@@ -23,7 +27,13 @@ fn test_config() -> AuthConfig {
         .password_min_length(8)
 }
 
-async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
+async fn test_database() -> DatabaseConnection {
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    run_migrations(&database).await.unwrap();
+    database
+}
+
+async fn create_test_auth() -> BetterAuth {
     struct NoopResetSender;
 
     #[async_trait::async_trait]
@@ -39,7 +49,7 @@ async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
     }
 
     AuthBuilder::new(test_config())
-        .database_adapter(MemoryDatabaseAdapter::new())
+        .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(
@@ -83,7 +93,7 @@ fn post_json_with_auth(path: &str, body: serde_json::Value, token: &str) -> Auth
 
 /// Sign up a user and return (token, response_json).
 async fn signup_user(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &BetterAuth,
     email: &str,
     password: &str,
     name: &str,
@@ -109,7 +119,7 @@ async fn signup_user(
 
 /// Sign in a user and return (token, response_json).
 async fn signin_user(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &BetterAuth,
     email: &str,
     password: &str,
 ) -> (String, serde_json::Value) {
@@ -832,7 +842,7 @@ async fn test_unlink_account_response_shape() {
 async fn test_enable_session_for_api_keys_injects_session() {
     // Build an auth instance with enableSessionForAPIKeys turned on
     let auth = AuthBuilder::new(test_config())
-        .database_adapter(MemoryDatabaseAdapter::new())
+        .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(
@@ -930,7 +940,7 @@ async fn test_enable_session_for_api_keys_injects_session() {
 #[tokio::test]
 async fn test_disabled_path_blocks_api_key_get_session_short_circuit() {
     let auth = AuthBuilder::new(test_config().disabled_path("/get-session"))
-        .database_adapter(MemoryDatabaseAdapter::new())
+        .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(
@@ -1088,9 +1098,9 @@ async fn test_revoke_session_response_shape() {
 // ---------------------------------------------------------------------------
 
 /// Helper: create an auth instance with session-for-api-keys enabled.
-async fn create_auth_with_api_key_session() -> BetterAuth<MemoryDatabaseAdapter> {
+async fn create_auth_with_api_key_session() -> BetterAuth {
     AuthBuilder::new(test_config())
-        .database_adapter(MemoryDatabaseAdapter::new())
+        .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(
@@ -1105,7 +1115,7 @@ async fn create_auth_with_api_key_session() -> BetterAuth<MemoryDatabaseAdapter>
 
 /// Helper: sign up + create an API key with custom body, return (token, raw_key, user_id).
 async fn setup_user_with_api_key(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &BetterAuth,
     email: &str,
     key_body: serde_json::Value,
 ) -> (String, String, String) {

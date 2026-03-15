@@ -7,12 +7,14 @@
 
 use std::sync::{Arc, Once};
 
-use better_auth_core::adapters::{AccountOps, UserOps, VerificationOps};
+use better_auth_core::DefaultDatabase;
+use better_auth_core::adapters::{AccountOps, SeaOrmAdapter, UserOps, VerificationOps};
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{
     AccountConfig, AccountLinkingConfig, AuthConfig, AuthContext, AuthPlugin, AuthRequest,
-    CreateAccount, CreateUser, CreateVerification, HttpMethod, MemoryDatabaseAdapter,
-    SessionManager,
+    CreateAccount, CreateUser, CreateVerification, HookedDatabaseAdapter, HttpMethod,
+    SessionManager, run_migrations,
+    sea_orm::Database,
 };
 
 use better_auth_api::AccountManagementPlugin;
@@ -78,7 +80,7 @@ fn test_config_allow_unlinking_all() -> AuthConfig {
 
 /// Helper: create a user + OAuth account + session, returning (user_id, session_token).
 async fn setup_user_with_account(
-    db: &Arc<MemoryDatabaseAdapter>,
+    db: &Arc<DefaultDatabase>,
     config: &Arc<AuthConfig>,
     email: &str,
     provider: &str,
@@ -121,6 +123,14 @@ async fn setup_user_with_account(
     let token = session.token().to_string();
 
     (user_id, token)
+}
+
+async fn create_test_database() -> Arc<DefaultDatabase> {
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    run_migrations(&database).await.unwrap();
+    Arc::new(HookedDatabaseAdapter::new(Arc::new(SeaOrmAdapter::new(
+        database,
+    ))))
 }
 
 /// Start a mock HTTP server that responds to OAuth token + userinfo requests.
@@ -218,7 +228,7 @@ fn make_test_provider(mock_url: &str) -> OAuthProvider {
 #[tokio::test]
 async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
     let config = Arc::new(test_config_with_encryption());
-    let db = Arc::new(MemoryDatabaseAdapter::new());
+    let db = create_test_database().await;
 
     let plaintext_access = "ya29.real-access-token-value";
     let plaintext_refresh = "1//real-refresh-token-value";
@@ -322,7 +332,7 @@ async fn test_encrypt_decrypt_roundtrip() {
 #[tokio::test]
 async fn test_encryption_disabled_stores_plaintext() {
     let config = Arc::new(test_config()); // encryption OFF by default
-    let db = Arc::new(MemoryDatabaseAdapter::new());
+    let db = create_test_database().await;
 
     let plaintext_access = "ya29.plaintext-access-token";
 
@@ -348,7 +358,7 @@ async fn test_encryption_disabled_stores_plaintext() {
 #[tokio::test]
 async fn test_unlink_last_account_blocked_by_default() {
     let config = Arc::new(test_config()); // allow_unlinking_all = false by default
-    let db = Arc::new(MemoryDatabaseAdapter::new());
+    let db = create_test_database().await;
 
     let (_, session_token) = setup_user_with_account(
         &db,
@@ -398,7 +408,7 @@ async fn test_unlink_last_account_blocked_by_default() {
 #[tokio::test]
 async fn test_unlink_last_account_allowed_when_configured() {
     let config = Arc::new(test_config_allow_unlinking_all());
-    let db = Arc::new(MemoryDatabaseAdapter::new());
+    let db = create_test_database().await;
 
     let (_, session_token) = setup_user_with_account(
         &db,
@@ -443,7 +453,7 @@ async fn test_unlink_last_account_allowed_when_configured() {
 async fn test_unlink_non_last_account_always_allowed() {
     // Even with allow_unlinking_all=false, unlinking one of multiple accounts should work
     let config = Arc::new(test_config());
-    let db = Arc::new(MemoryDatabaseAdapter::new());
+    let db = create_test_database().await;
 
     let user = db
         .create_user(
@@ -526,7 +536,7 @@ async fn test_account_linking_disabled_rejects_new_provider() {
     let mock_url = start_mock_oauth_server("existing@example.com").await;
 
     let config = Arc::new(test_config_linking_disabled());
-    let db = Arc::new(MemoryDatabaseAdapter::new());
+    let db = create_test_database().await;
 
     // Create an existing user with a different provider
     let user = db
@@ -622,7 +632,7 @@ async fn test_account_linking_disabled_rejects_new_provider() {
 #[tokio::test]
 async fn test_link_social_returns_redirect_url_with_state() {
     let config = Arc::new(test_config_with_encryption());
-    let db = Arc::new(MemoryDatabaseAdapter::new());
+    let db = create_test_database().await;
 
     let (_, session_token) = setup_user_with_account(
         &db,
@@ -688,7 +698,7 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
     let mock_url = start_mock_oauth_server("newuser@example.com").await;
 
     let config = Arc::new(test_config_with_encryption());
-    let db = Arc::new(MemoryDatabaseAdapter::new());
+    let db = create_test_database().await;
 
     let mut oauth_config = OAuthConfig::default();
     oauth_config

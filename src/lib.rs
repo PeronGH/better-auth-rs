@@ -49,11 +49,10 @@ pub use better_auth_core::{
     CreateOrganization, CreatePasskey, CreateSession, CreateUser, CreateVerification, CsrfConfig,
     CsrfMiddleware, DatabaseAdapter, DatabaseError, DatabaseHooks, EmailProvider,
     EndpointRateLimit, HookedDatabaseAdapter, HttpMethod, Invitation, InvitationOps,
-    InvitationStatus, JwtConfig, MemberOps, MemoryAccount, MemoryCacheAdapter,
-    MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession,
-    MemoryUser, MemoryVerification, Middleware, OpenApiBuilder, OpenApiSpec, OrganizationOps,
-    Passkey, PasskeyOps, PasswordConfig, RateLimitConfig, RateLimitMiddleware, SameSite,
-    SeaOrmAdapter, Session, SessionConfig, SessionManager, SessionOps, TwoFactor,
+    InvitationStatus, JwtConfig, MemberOps, MemoryCacheAdapter, Middleware, OpenApiBuilder,
+    OpenApiSpec, OrganizationOps, Passkey, PasskeyOps, PasswordConfig, RateLimitConfig,
+    RateLimitMiddleware, SameSite, SeaOrmAdapter, Session, SessionConfig, SessionManager,
+    SessionOps, TwoFactor,
     UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest, UpdateUserResponse, User,
     UserOps, Verification, VerificationOps, core_paths, run_migrations,
 };
@@ -77,15 +76,8 @@ pub mod types {
 // Re-export adapters
 pub mod adapters {
     pub use better_auth_core::{
-        AccountOps, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps, MemoryAccount,
-        MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation, MemoryMember,
-        MemoryOrganization, MemoryPasskey, MemorySession, MemoryUser, MemoryVerification,
+        AccountOps, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps, MemoryCacheAdapter,
         OrganizationOps, PasskeyOps, SeaOrmAdapter, SessionOps, UserOps, VerificationOps,
-    };
-
-    #[cfg(feature = "sqlx-postgres")]
-    pub use better_auth_core::adapters::database::sqlx_adapter::{
-        PoolConfig, PoolStats, SqlxAdapter, SqlxEntity,
     };
 }
 

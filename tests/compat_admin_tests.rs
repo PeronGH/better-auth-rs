@@ -18,7 +18,7 @@ use serde_json::json;
 // Helper: create an admin user and return the admin token
 // ---------------------------------------------------------------------------
 
-async fn setup_admin(auth: &better_auth::BetterAuth<better_auth::MemoryDatabaseAdapter>) -> String {
+async fn setup_admin(auth: &better_auth::BetterAuth) -> String {
     // Sign up a regular user first
     let (token, _) = signup_user(auth, "admin@test.com", "password123", "Admin User").await;
 

@@ -86,21 +86,6 @@ impl AuthBuilder {
         }
     }
 
-    /// Set a custom database adapter, returning a [`TypedAuthBuilder`].
-    #[doc(hidden)]
-    pub fn database_adapter<DB: DatabaseAdapter>(self, database: DB) -> TypedAuthBuilder<DB> {
-        TypedAuthBuilder {
-            config: self.config,
-            database,
-            plugins: Vec::new(),
-            csrf_config: self.csrf_config,
-            rate_limit_config: self.rate_limit_config,
-            cors_config: self.cors_config,
-            body_limit_config: self.body_limit_config,
-            custom_middlewares: self.custom_middlewares,
-        }
-    }
-
     /// Configure CSRF protection.
     pub fn csrf(mut self, config: CsrfConfig) -> Self {
         self.csrf_config = Some(config);
