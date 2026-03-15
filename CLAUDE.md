@@ -33,6 +33,11 @@ This is not a loose port or an "inspired by" project. The TypeScript
 implementation is the spec. Where the OpenAPI schema and the TS runtime
 behavior disagree, the TS runtime wins.
 
+The behavioral target is the same capability as the TS implementation.
+The Rust integration surface does not need to transliterate the TS
+integration API. Public Rust interfaces should be idiomatic Rust while
+preserving TS-compatible wire behavior for supported features.
+
 Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
 
 ## Source of Truth (in priority order)
@@ -50,6 +55,29 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
    endpoints, request/response schemas, and field names.
 4. **better-auth documentation** (https://www.better-auth.com/docs) —
    secondary reference for user-facing behavior.
+
+## Capability and Consumer Policy
+
+- **TS better-auth decides behavior** — runtime behavior and feature
+  capability are anchored to `/home/peron/dev/better-auth`.
+- **Rust should be Rust-native** — builders, traits, extractors, router
+  integration, hooks, and embedding APIs should follow Rust idioms
+  rather than mirroring TS ergonomics mechanically.
+- **Design for many consumers** — public Rust interfaces should be
+  broadly usable across many applications, not specialized to a single
+  product or demo.
+- **`platform` is a reference consumer** — `/home/peron/dev/platform` is
+  an important non-demo adopter and pressure test for real-world
+  usability. Its migration belongs in a dedicated adoption phase once
+  better-auth-rs has the capabilities it actually needs. It may be
+  rewritten substantially to fit the Rust-native interface, but it is
+  only one consumer among many.
+- **Do not optimize for the demo** — demos and compat harnesses are
+  validation tools, not the product target.
+- **PaaS surface coverage is required** — the interface list in
+  `/home/peron/downloads/better-auth-paas-api-surface.md` must be
+  fully covered across the roadmap. Remaining Better Auth capability can
+  be scheduled after that checklist is complete.
 
 If the TS source, the OpenAPI spec, and the docs contradict each other,
 trust the TS source. If a TS behavior looks like a bug, match it anyway
@@ -174,14 +202,21 @@ structural mismatches. Layer 3 catches client-visible integration bugs.
 
 ### Workflow
 
-1. Pick the next unaligned endpoint or behavior from the alignment
-   report.
-2. Read the TS source for that endpoint to understand the full behavior,
-   including edge cases and error paths.
-3. Implement or fix the Rust version.
-4. Run the dual-server test for that endpoint.
-5. Iterate until the diff is clean.
-6. Commit.
+1. Stay in the current phase until it has zero alignment diffs.
+2. Within capability phases, pick the next missing behavior or
+   interface that most improves better-auth-rs itself.
+3. Then pick the next uncovered capability from
+   `/home/peron/downloads/better-auth-paas-api-surface.md`.
+4. Once better-auth-rs has the capabilities `/home/peron/dev/platform`
+   actually needs, use its dedicated adoption phase to validate that a
+   real non-demo consumer can use the Rust-native interface without
+   product-specific contortions in better-auth-rs.
+5. Read the TS source for that capability to understand the full
+   behavior, including edge cases and error paths.
+6. Implement or fix the Rust version.
+7. Run the dual-server test for that capability.
+8. Iterate until the diff is clean.
+9. Commit.
 
 Do not batch multiple endpoint fixes into one commit. Each endpoint or
 behavior fix is its own commit.
@@ -197,17 +232,50 @@ behavior fix is its own commit.
 `/revoke-other-sessions`, `/refresh-token`, `/get-access-token`,
 `/request-password-reset`, `/reset-password`, `/change-password`
 
-**Phase 2 — User and account management:**
-`/update-user`, `/delete-user`, `/change-email`,
-`/verify-email`, `/send-verification-email`,
-`/link-social`, `/unlink-account`, `/list-accounts`
+**Phase 2 — Login and account lifecycle:**
+`/sign-in/social`, `/callback`, `/update-session`, `/verify-password`,
+`/set-password`, `/send-verification-email`, `/verify-email`,
+`/change-email`, `/update-user`, `/delete-user`,
+`/delete-user/callback`, `/list-accounts`, `/link-social`,
+`/unlink-account`, `/account-info`
 
-**Phase 3 — Plugins (admin, 2FA, passkey, API key, organization):**
-All `/admin/*`, `/two-factor/*`, `/passkey/*`, `/api-key/*`,
-`/organization/*` endpoints.
+Phase 2 exists to make GitHub login and the surrounding account
+lifecycle complete and Rust-native. Match TS behavior, but shape the
+Rust integration around an idiomatic mounted router, request extractors,
+and hooks/onboarding story rather than around demo-specific integration
+patterns.
 
-**Phase 4 — OAuth and social:**
-`/sign-in/social`, `/callback`, social provider flows.
+**Phase 3 — Machine and API auth:**
+Bearer token behavior, `/api-key/create`, `/api-key/list`,
+`/api-key/get`, `/api-key/update`, `/api-key/delete`, `/token`
+
+Phase 3 exists to make browser, API, CLI, and service-to-service auth
+complete and Rust-native, including `Authorization: Bearer` flows and
+`x-api-key` flows.
+
+**Phase 4 — Platform adoption:**
+Adapt `/home/peron/dev/platform` to the Rust-native interface once
+Phases 2 and 3 provide everything it actually needs. This phase is not
+the end of the roadmap; it is the point where platform-specific adoption
+work happens. The platform may be rewritten substantially. If adoption
+exposes missing generic capability that platform truly needs, add that
+capability in better-auth-rs rather than adding platform-specific
+shortcuts.
+
+**Phase 5 — PaaS organization surface:**
+All `/organization/*` endpoints from
+`/home/peron/downloads/better-auth-paas-api-surface.md`,
+including organization CRUD, members, invitations, teams, and dynamic
+RBAC role management.
+
+**Phase 6 — PaaS admin/support surface:**
+All `/admin/*` endpoints from
+`/home/peron/downloads/better-auth-paas-api-surface.md`.
+
+**Phase 7 — Remaining Better Auth capability:**
+`/two-factor/*`, `/passkey/*`, additional social/provider breadth, and
+any remaining TS Better Auth capability not already required by the
+PaaS surface checklist.
 
 Work the phases in order. Do not start Phase N+1 until Phase N has zero
 alignment diffs.
