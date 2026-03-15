@@ -11,6 +11,7 @@
 //! | `validation` | Response validation against schemas (`ShapeDiff`, `validate_response`) |
 //! | `shapes`     | JSON shape comparison, camelCase checks, type-signature extraction |
 //! | `helpers`    | Auth setup, HTTP request builders, signup/signin helpers |
+//! | `dual_server`| Shared dual-server oracle infrastructure and control hooks |
 //! | `validator`  | `SpecValidator` framework for batch endpoint validation + reporting |
 
 // Each integration test binary compiles this module independently, so items
@@ -21,6 +22,17 @@
 // Test utility code legitimately uses panic (via unwrap_or_else, assert_eq,
 // etc.) for setup failures and test assertions, plus indexing for known-valid
 // array access in schema comparison code.
+#[allow(
+    dead_code,
+    unreachable_pub,
+    clippy::allow_attributes,
+    clippy::panic,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    unused_results,
+    reason = "shared test utilities — lints vary per binary and test code legitimately panics on failures"
+)]
+pub mod dual_server;
 #[allow(
     dead_code,
     unreachable_pub,

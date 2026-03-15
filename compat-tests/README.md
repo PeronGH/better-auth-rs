@@ -29,17 +29,14 @@ implementation.
 
 ## Components
 
-### 1. Spec-Driven Validation (`tests/spec_driven_compat_tests.rs`)
+### 1. Spec-Driven Validation (`tests/compat_endpoint_tests.rs`)
 
 Automated tests that parse `better-auth.yaml` and validate Rust responses
 against the OpenAPI spec. Runs with `cargo test`:
 
 ```bash
 # Run all spec-driven compatibility tests
-cargo test --test spec_driven_compat_tests -- --nocapture
-
-# Run specific test
-cargo test --test spec_driven_compat_tests test_spec_driven_endpoint_validation -- --nocapture
+cargo test --test compat_endpoint_tests -- --nocapture
 ```
 
 Features:
@@ -69,7 +66,7 @@ for dual-server comparison testing.
 ```bash
 cd compat-tests/reference-server
 bun install
-npm start  # starts on port 3100
+node server.mjs  # starts on port 3100
 ```
 
 The alignment scripts expect `node_modules` to already exist and fail fast with
@@ -82,16 +79,20 @@ The reference server is used by the dual-server test runner to:
 2. Compare response shapes (not exact values)
 3. Report any structural differences
 
+The phase-scoped dual-server comparison is currently split across:
+
+- `tests/dual_server_phase0_tests.rs`
+- `tests/dual_server_phase1_tests.rs`
+
 ## Test Categories
 
 | Category | Command | Description |
 |----------|---------|-------------|
-| Spec validation | `cargo test --test spec_driven_compat_tests` | Auto-validates responses against OpenAPI spec |
-| Route coverage | `cargo test --test spec_driven_compat_tests test_route_coverage_analysis -- --nocapture` | Reports which spec endpoints are implemented |
-| camelCase check | `cargo test --test spec_driven_compat_tests test_all_responses_use_camel_case` | Ensures frontend-compatible field names |
-| Error shapes | `cargo test --test spec_driven_compat_tests test_error_response_shapes_match_spec` | Validates error response format |
-| Flow consistency | `cargo test --test spec_driven_compat_tests test_auth_flow_user_object_consistency` | Validates user object consistency across flows |
-| Type signatures | `cargo test --test spec_driven_compat_tests test_response_type_signatures -- --nocapture` | Generates response type documentation |
+| Spec validation | `cargo test --test compat_endpoint_tests -- --nocapture` | Auto-validates responses against OpenAPI spec |
+| Route coverage | `cargo test --test compat_coverage_tests -- --nocapture` | Reports which spec endpoints are implemented |
+| Dual-server Phase 0 | `cargo test --test dual_server_phase0_tests -- --nocapture` | Compares Phase 0 responses against TS |
+| Dual-server Phase 1 | `cargo test --test dual_server_phase1_tests -- --nocapture` | Compares Phase 1 responses against TS |
+| Axum integration | `cargo test --features axum --test axum_integration_tests` | Verifies mounted HTTP behavior and cookies |
 | Existing compat | `cargo test --test compatibility_tests` | Route coverage + contract tests |
 | Response shapes | `cargo test response_shape_tests` | Per-endpoint response shape tests |
 

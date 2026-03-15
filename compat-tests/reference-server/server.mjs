@@ -38,6 +38,12 @@ const PORT = getPort();
 // ---------------------------------------------------------------------------
 const db = new Database(":memory:");
 const resetPasswordOutbox = new Map();
+let resetPasswordMode = "capture";
+let oauthRefreshMode = "success";
+
+function hasOwn(obj, key) {
+  return !!obj && Object.prototype.hasOwnProperty.call(obj, key);
+}
 
 // ---------------------------------------------------------------------------
 // Auth configuration
@@ -53,6 +59,9 @@ const authOptions = {
     requireEmailVerification: false,
     minPasswordLength: 8,
     async sendResetPassword({ user, url, token }) {
+      if (resetPasswordMode === "throw") {
+        throw new Error("compat reset sender failure");
+      }
       if (user?.email) {
         resetPasswordOutbox.set(user.email, { url, token });
       }
@@ -156,6 +165,58 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (url.pathname === "/__test/reset-state" && req.method === "POST") {
+      resetPasswordOutbox.clear();
+      resetPasswordMode = "capture";
+      oauthRefreshMode = "success";
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ status: true }));
+      return;
+    }
+
+    if (url.pathname === "/__test/set-reset-password-mode" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      resetPasswordMode = body?.mode === "throw" ? "throw" : "capture";
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ status: true, mode: resetPasswordMode }));
+      return;
+    }
+
+    if (url.pathname === "/__test/seed-reset-password-token" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const email = body?.email;
+      const token = body?.token;
+      const expiresAt = body?.expiresAt;
+      const user = email
+        ? await authContext.internalAdapter.findUserByEmail(email, {
+            includeAccounts: true,
+          })
+        : null;
+      if (!user?.user || !token || !expiresAt) {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ message: "email, token, and expiresAt are required" }));
+        return;
+      }
+
+      await authContext.internalAdapter.createVerificationValue({
+        value: user.user.id,
+        identifier: `reset-password:${token}`,
+        expiresAt: new Date(expiresAt),
+      });
+
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ status: true }));
+      return;
+    }
+
+    if (url.pathname === "/__test/set-oauth-refresh-mode" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      oauthRefreshMode = body?.mode === "error" ? "error" : "success";
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ status: true, mode: oauthRefreshMode }));
+      return;
+    }
+
     if (url.pathname === "/__test/seed-oauth-account" && req.method === "POST") {
       const body = await readJsonBody(req);
       const email = body?.email;
@@ -177,16 +238,20 @@ const server = createServer(async (req, res) => {
           account.providerId === providerId && account.accountId === accountId,
       );
       const accountData = {
-        accessToken: body?.accessToken ?? "stale-access-token",
-        refreshToken: body?.refreshToken ?? "seed-refresh-token",
-        idToken: body?.idToken ?? "seed-id-token",
-        accessTokenExpiresAt: body?.accessTokenExpiresAt
-          ? new Date(body.accessTokenExpiresAt)
+        accessToken: hasOwn(body, "accessToken")
+          ? body.accessToken
+          : "stale-access-token",
+        refreshToken: hasOwn(body, "refreshToken")
+          ? body.refreshToken
+          : "seed-refresh-token",
+        idToken: hasOwn(body, "idToken") ? body.idToken : "seed-id-token",
+        accessTokenExpiresAt: hasOwn(body, "accessTokenExpiresAt")
+          ? (body.accessTokenExpiresAt ? new Date(body.accessTokenExpiresAt) : null)
           : new Date(Date.now() - 60_000),
-        refreshTokenExpiresAt: body?.refreshTokenExpiresAt
-          ? new Date(body.refreshTokenExpiresAt)
+        refreshTokenExpiresAt: hasOwn(body, "refreshTokenExpiresAt")
+          ? (body.refreshTokenExpiresAt ? new Date(body.refreshTokenExpiresAt) : null)
           : null,
-        scope: body?.scope ?? "openid,email,profile",
+        scope: hasOwn(body, "scope") ? body.scope : "openid,email,profile",
       };
 
       if (existing?.id) {
@@ -206,6 +271,17 @@ const server = createServer(async (req, res) => {
     }
 
     if (url.pathname === "/__test/oauth/token" && req.method === "POST") {
+      if (oauthRefreshMode === "error") {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: "invalid_grant",
+            error_description: "invalid refresh token",
+          }),
+        );
+        return;
+      }
+
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
         JSON.stringify({

@@ -51,6 +51,23 @@ wait_for_local_health() {
   return 1
 }
 
+kill_existing_on_port() {
+  local port="$1"
+  local label="$2"
+
+  if ! command -v lsof &>/dev/null; then
+    return 0
+  fi
+
+  local existing_pid
+  existing_pid=$(lsof -ti :"$port" 2>/dev/null || true)
+  if [[ -n "$existing_pid" ]]; then
+    echo "  Killing existing $label process on port $port (PID $existing_pid)"
+    kill "$existing_pid" 2>/dev/null || true
+    sleep 1
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # Cleanup
 # ---------------------------------------------------------------------------
@@ -111,6 +128,7 @@ echo ""
 # Start TS reference server
 # ---------------------------------------------------------------------------
 echo "[2/5] Starting TS reference server on port $TS_PORT..."
+kill_existing_on_port "$TS_PORT" "TS reference"
 cd "$REF_SERVER_DIR"
 PORT=$TS_PORT node server.mjs &
 TS_PID=$!
@@ -132,8 +150,9 @@ echo ""
 # Start Rust server
 # ---------------------------------------------------------------------------
 echo "[3/5] Starting Rust compat server on port $RUST_PORT..."
+kill_existing_on_port "$RUST_PORT" "Rust compat"
 cd "$PROJECT_ROOT"
-PORT=$RUST_PORT cargo run --manifest-path "$RUST_SERVER_DIR/Cargo.toml" &
+NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" PORT=$RUST_PORT cargo run --manifest-path "$RUST_SERVER_DIR/Cargo.toml" &
 RUST_PID=$!
 
 READY=false
@@ -157,7 +176,7 @@ echo ""
 echo "[4/5] Running client tests against TS server..."
 cd "$CLIENT_DIR"
 TS_EXIT=0
-NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$TS_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-ts.log || TS_EXIT=$?
+NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$TS_PORT" node --test --test-concurrency=1 tests/*.test.mjs 2>&1 | tee /tmp/client-test-ts.log || TS_EXIT=$?
 
 if [[ "$TS_EXIT" -eq 0 ]]; then
   echo "  TS tests: PASS ✓"
@@ -171,7 +190,7 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[5/5] Running client tests against Rust server..."
 RUST_EXIT=0
-NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$RUST_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-rust.log || RUST_EXIT=$?
+NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$RUST_PORT" node --test --test-concurrency=1 tests/*.test.mjs 2>&1 | tee /tmp/client-test-rust.log || RUST_EXIT=$?
 
 if [[ "$RUST_EXIT" -eq 0 ]]; then
   echo "  Rust tests: PASS ✓"

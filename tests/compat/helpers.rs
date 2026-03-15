@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, Once, OnceLock};
 
 use better_auth::{
     AuthBuilder, AuthConfig, BetterAuth,
@@ -24,7 +24,32 @@ use serde_json::Value;
 
 type TestAuth = BetterAuth;
 
-struct NoopResetSender;
+static LOCAL_PROXY_BYPASS: Once = Once::new();
+
+fn ensure_local_proxy_bypass() {
+    LOCAL_PROXY_BYPASS.call_once(|| unsafe {
+        // SAFETY: Test helpers set a single stable localhost proxy bypass
+        // before issuing any mock OAuth localhost requests.
+        std::env::set_var("NO_PROXY", "localhost,127.0.0.1");
+        std::env::set_var("no_proxy", "localhost,127.0.0.1");
+    });
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ResetSenderMode {
+    #[default]
+    Capture,
+    Fail,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TestAuthOptions {
+    pub reset_sender_mode: ResetSenderMode,
+}
+
+struct TestResetSender {
+    mode: ResetSenderMode,
+}
 
 static RESET_PASSWORD_OUTBOX: OnceLock<Mutex<std::collections::HashMap<String, String>>> =
     OnceLock::new();
@@ -34,13 +59,18 @@ fn reset_password_outbox() -> &'static Mutex<std::collections::HashMap<String, S
 }
 
 #[async_trait::async_trait]
-impl SendResetPassword for NoopResetSender {
+impl SendResetPassword for TestResetSender {
     async fn send(
         &self,
         user: &serde_json::Value,
         _url: &str,
         token: &str,
     ) -> better_auth::AuthResult<()> {
+        if self.mode == ResetSenderMode::Fail {
+            return Err(better_auth::AuthError::internal(
+                "test reset sender failure".to_string(),
+            ));
+        }
         if let Some(email) = user.get("email").and_then(|value| value.as_str()) {
             reset_password_outbox()
                 .lock()
@@ -113,6 +143,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
 }
 
 async fn test_database() -> DatabaseConnection {
+    ensure_local_proxy_bypass();
     let database = Database::connect("sqlite::memory:")
         .await
         .unwrap_or_else(|e| panic!("sqlite test database should connect: {e}"));
@@ -123,6 +154,10 @@ async fn test_database() -> DatabaseConnection {
 }
 
 pub async fn create_test_auth() -> TestAuth {
+    create_test_auth_with_options(TestAuthOptions::default()).await
+}
+
+pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth {
     AuthBuilder::new(test_config())
         .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
@@ -130,7 +165,9 @@ pub async fn create_test_auth() -> TestAuth {
         .plugin(
             PasswordManagementPlugin::new()
                 .require_current_password(true)
-                .send_reset_password(Arc::new(NoopResetSender)),
+                .send_reset_password(Arc::new(TestResetSender {
+                    mode: options.reset_sender_mode,
+                })),
         )
         .plugin(AccountManagementPlugin::new())
         .plugin(EmailVerificationPlugin::new())
@@ -328,6 +365,14 @@ impl TestHarness {
         }
     }
 
+    /// Create a harness with configurable test auth behavior.
+    pub async fn with_options(options: TestAuthOptions) -> Self {
+        let auth = create_test_auth_with_options(options).await;
+        Self {
+            auth: Arc::new(auth),
+        }
+    }
+
     /// Create a harness with a **minimal** plugin set matching
     /// `integration_tests.rs` conventions (EmailPassword, SessionManagement,
     /// PasswordManagement, AccountManagement, ApiKey).
@@ -339,7 +384,11 @@ impl TestHarness {
             .database(test_database().await)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
-            .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))
+            .plugin(
+                PasswordManagementPlugin::new().send_reset_password(Arc::new(TestResetSender {
+                    mode: ResetSenderMode::Capture,
+                })),
+            )
             .plugin(AccountManagementPlugin::new())
             .plugin(ApiKeyPlugin::builder().build())
             .plugin(mock_oauth_plugin())

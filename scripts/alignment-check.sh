@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # alignment-check.sh — Single-command alignment check for better-auth-rs.
 #
-# Builds the Rust workspace, starts the TS reference server, runs
-# dual-server comparison tests, client integration tests, and prints
-# a pass/fail summary.
+# Builds the Rust workspace, starts the TS reference server, runs the
+# phase-scoped dual-server comparison tests, Axum integration tests,
+# spec coverage tests, client integration tests, and prints a pass/fail
+# summary.
 #
 # Usage:
 #   ./scripts/alignment-check.sh          # full check
@@ -173,7 +174,7 @@ echo "[3/6] Running dual-server comparison tests..."
 cd "$PROJECT_ROOT"
 
 DUAL_EXIT=0
-cargo test --test dual_server_tests -- --nocapture 2>&1 | tee /tmp/alignment-dual.log || DUAL_EXIT=$?
+cargo test --test dual_server_phase0_tests --test dual_server_phase1_tests -- --nocapture 2>&1 | tee /tmp/alignment-dual.log || DUAL_EXIT=$?
 
 if [[ "$DUAL_EXIT" -ne 0 ]]; then
   echo "  Dual-server tests: FAIL (exit $DUAL_EXIT)"
@@ -183,9 +184,24 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# Step 4: Run spec coverage report
+# Step 4: Run Axum integration tests
 # ---------------------------------------------------------------------------
-echo "[4/6] Running spec-driven compatibility tests..."
+echo "[4/6] Running Axum integration tests..."
+
+AXUM_EXIT=0
+cargo test --features axum --test axum_integration_tests 2>&1 | tee /tmp/alignment-axum.log || AXUM_EXIT=$?
+
+if [[ "$AXUM_EXIT" -ne 0 ]]; then
+  echo "  Axum integration tests: FAIL (exit $AXUM_EXIT)"
+else
+  echo "  Axum integration tests: PASS ✓"
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
+# Step 5: Run spec coverage report
+# ---------------------------------------------------------------------------
+echo "[5/6] Running spec-driven compatibility tests..."
 
 COMPAT_EXIT=0
 cargo test --test compat_endpoint_tests -- --nocapture 2>&1 | tee /tmp/alignment-compat.log || COMPAT_EXIT=$?
@@ -207,9 +223,9 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# Step 5: Client integration tests (real better-auth client SDK)
+# Step 6: Client integration tests (real better-auth client SDK)
 # ---------------------------------------------------------------------------
-echo "[5/6] Running client integration tests..."
+echo "[6/6] Running client integration tests..."
 
 # Start Rust compat server
 echo "  Starting Rust compat server on port $RUST_PORT..."
@@ -221,7 +237,7 @@ if command -v lsof &>/dev/null; then
   fi
 fi
 
-PORT=$RUST_PORT cargo run --manifest-path "$RUST_SERVER_DIR/Cargo.toml" &
+NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" PORT=$RUST_PORT cargo run --manifest-path "$RUST_SERVER_DIR/Cargo.toml" &
 RUST_PID=$!
 
 READY=false
@@ -241,10 +257,10 @@ else
 
   cd "$CLIENT_DIR"
   CLIENT_TS_EXIT=0
-  NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$REF_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-ts.log || CLIENT_TS_EXIT=$?
+  NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$REF_PORT" node --test --test-concurrency=1 tests/*.test.mjs 2>&1 | tee /tmp/client-test-ts.log || CLIENT_TS_EXIT=$?
 
   CLIENT_RUST_EXIT=0
-  NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$RUST_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-rust.log || CLIENT_RUST_EXIT=$?
+  NO_PROXY="$LOCAL_NO_PROXY" no_proxy="$LOCAL_NO_PROXY" AUTH_BASE_URL="http://localhost:$RUST_PORT" node --test --test-concurrency=1 tests/*.test.mjs 2>&1 | tee /tmp/client-test-rust.log || CLIENT_RUST_EXIT=$?
 fi
 
 if [[ "$CLIENT_TS_EXIT" -eq 0 ]]; then
@@ -281,6 +297,7 @@ report_result() {
 }
 
 report_result "Dual-server comparison" "$DUAL_EXIT"
+report_result "Axum integration tests" "$AXUM_EXIT"
 report_result "Spec endpoint validation" "$COMPAT_EXIT"
 report_result "Route coverage" "$COVERAGE_EXIT"
 report_result "Client tests (TS)" "$CLIENT_TS_EXIT"
@@ -296,6 +313,7 @@ else
   echo ""
   echo "Logs:"
   echo "  /tmp/alignment-dual.log"
+  echo "  /tmp/alignment-axum.log"
   echo "  /tmp/alignment-compat.log"
   echo "  /tmp/alignment-coverage.log"
   echo "  /tmp/client-test-ts.log"
