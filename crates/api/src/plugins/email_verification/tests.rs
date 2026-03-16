@@ -28,24 +28,6 @@ fn test_default_config() {
     assert!(config.after_email_verification.is_none());
 }
 
-#[test]
-fn test_expiry_hours_helper() {
-    let config = EmailVerificationConfig {
-        verification_token_expiry: Duration::hours(3),
-        ..Default::default()
-    };
-    assert_eq!(config.expiry_hours(), 3);
-}
-
-#[test]
-fn test_expiry_hours_truncates() {
-    let config = EmailVerificationConfig {
-        verification_token_expiry: Duration::minutes(90), // 1.5 hours
-        ..Default::default()
-    };
-    assert_eq!(config.expiry_hours(), 1); // truncated
-}
-
 // ------------------------------------------------------------------
 // Builder methods
 // ------------------------------------------------------------------
@@ -57,12 +39,6 @@ fn test_builder_verification_token_expiry() {
         plugin.config.verification_token_expiry,
         Duration::minutes(30)
     );
-}
-
-#[test]
-fn test_builder_verification_token_expiry_hours() {
-    let plugin = EmailVerificationPlugin::new().verification_token_expiry_hours(12);
-    assert_eq!(plugin.config.verification_token_expiry, Duration::hours(12));
 }
 
 #[test]

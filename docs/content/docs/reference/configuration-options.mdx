@@ -136,7 +136,7 @@ description: Complete reference for all configuration fields and defaults.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `verification_token_expiry_hours` | `i64` | `24` | Token validity |
+| `verification_token_expiry` | `chrono::Duration` | `Duration::hours(24)` | Token validity |
 | `send_email_notifications` | `bool` | `true` | Send verification emails |
 | `require_verification_for_signin` | `bool` | `false` | Block unverified sign-in |
 | `auto_verify_new_users` | `bool` | `false` | Auto-send on sign-up |

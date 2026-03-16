@@ -92,22 +92,13 @@ pub fn maybe_encrypt(
 
 /// Conditionally decrypt a token value. Returns the original value when
 /// encryption is disabled, or the decrypted value when enabled.
-///
-/// When encryption is enabled and decryption fails (e.g. because the token
-/// was stored as plaintext before encryption was turned on), the original
-/// value is returned as-is. This graceful fallback allows enabling
-/// `encrypt_oauth_tokens` on an existing database without breaking reads
-/// for previously stored plaintext tokens.
 pub fn maybe_decrypt(
     value: Option<&str>,
     encrypt: bool,
     secret: &str,
 ) -> Result<Option<String>, AuthError> {
     match (value, encrypt) {
-        (Some(v), true) => match decrypt_token(v, secret) {
-            Ok(decrypted) => Ok(Some(decrypted)),
-            Err(_) => Ok(Some(v.to_string())),
-        },
+        (Some(v), true) => decrypt_token(v, secret).map(Some),
         (Some(v), false) => Ok(Some(v.to_string())),
         (None, _) => Ok(None),
     }
@@ -173,11 +164,9 @@ mod tests {
     }
 
     #[test]
-    fn test_maybe_decrypt_plaintext_fallback() {
-        // Simulate a token that was stored as plaintext before encryption was enabled.
-        // `maybe_decrypt` should gracefully fall back to returning the original value.
+    fn test_maybe_decrypt_rejects_plaintext_when_encryption_is_enabled() {
         let plaintext = "ya29.a0AfH6SMBx-some-access-token";
-        let result = maybe_decrypt(Some(plaintext), true, "some-secret").unwrap();
-        assert_eq!(result, Some(plaintext.to_string()));
+        let result = maybe_decrypt(Some(plaintext), true, "some-secret");
+        assert!(result.is_err());
     }
 }

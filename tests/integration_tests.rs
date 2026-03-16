@@ -359,9 +359,9 @@ async fn test_error_endpoint() {
     assert!(html.contains("CODE: UNKNOWN"));
 }
 
-/// Integration test for POST /get-session (in addition to GET)
+/// Integration test for POST /get-session remaining unavailable publicly
 #[tokio::test]
-async fn test_get_session_post_integration() {
+async fn test_get_session_post_route_absent() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
@@ -383,17 +383,10 @@ async fn test_get_session_post_integration() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-
-    assert!(response_data["session"]["token"].is_string());
-    assert!(response_data["user"]["id"].is_string());
-    assert_eq!(response_data["user"]["email"], "integration@test.com");
+    assert_eq!(response.status, 404);
 }
 
-/// Integration test for POST /delete-user (changed from DELETE)
+/// Integration test for POST /delete-user
 #[tokio::test]
 async fn test_delete_user_post_method() {
     let auth = create_test_auth_memory().await;
@@ -426,7 +419,7 @@ async fn test_delete_user_post_method() {
 
 /// Integration test for set-password public route absence
 #[tokio::test]
-async fn test_set_password_success() {
+async fn test_set_password_public_route_absent_for_social_user() {
     let auth = create_test_auth_memory().await;
 
     use better_auth::types::{AuthRequest, CreateSession, CreateUser};

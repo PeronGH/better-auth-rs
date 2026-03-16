@@ -50,7 +50,6 @@ impl AuthPlugin for SessionManagementPlugin {
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
             AuthRoute::get("/get-session", "get_session"),
-            AuthRoute::post("/get-session", "get_session_post"),
             AuthRoute::post("/sign-out", "sign_out"),
             AuthRoute::get("/list-sessions", "list_sessions"),
             AuthRoute::post("/revoke-session", "revoke_session"),
@@ -65,9 +64,7 @@ impl AuthPlugin for SessionManagementPlugin {
         ctx: &AuthContext,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Get | HttpMethod::Post, "/get-session") => {
-                Ok(Some(self.handle_get_session(req, ctx).await?))
-            }
+            (HttpMethod::Get, "/get-session") => Ok(Some(self.handle_get_session(req, ctx).await?)),
             (HttpMethod::Post, "/sign-out") => Ok(Some(self.handle_sign_out(req, ctx).await?)),
             (HttpMethod::Get, "/list-sessions") if self.config.enable_session_listing => {
                 Ok(Some(self.handle_list_sessions(req, ctx).await?))
@@ -374,10 +371,7 @@ mod axum_impl {
                 config: self.config.clone(),
             });
             axum::Router::new()
-                .route(
-                    "/get-session",
-                    get(handle_get_session).post(handle_get_session),
-                )
+                .route("/get-session", get(handle_get_session))
                 .route("/sign-out", post(handle_sign_out))
                 .route("/list-sessions", get(handle_list_sessions))
                 .route("/revoke-session", post(handle_revoke_session))
@@ -641,11 +635,16 @@ mod tests {
         let plugin = SessionManagementPlugin::new();
         let routes = AuthPlugin::routes(&plugin);
 
-        assert_eq!(routes.len(), 7);
+        assert_eq!(routes.len(), 6);
         assert!(
             routes
                 .iter()
                 .any(|r| r.path == "/get-session" && r.method == HttpMethod::Get)
+        );
+        assert!(
+            !routes
+                .iter()
+                .any(|r| r.path == "/get-session" && r.method == HttpMethod::Post)
         );
         assert!(
             routes
@@ -690,6 +689,15 @@ mod tests {
         let response = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(response.is_some());
         assert_eq!(response.unwrap().status, 200);
+
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Post,
+            "/get-session",
+            Some(&session.token),
+            Some(serde_json::json!({})),
+        );
+        let response = plugin.on_request(&req, &ctx).await.unwrap();
+        assert!(response.is_none());
 
         // Test invalid route
         let req = test_helpers::create_auth_request_no_query(

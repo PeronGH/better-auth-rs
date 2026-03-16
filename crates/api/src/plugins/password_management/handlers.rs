@@ -8,7 +8,7 @@ use better_auth_core::{
     CreateAccount, RequestMeta, UpdateAccount, extract_origin,
 };
 
-use crate::plugins::helpers::{get_credential_account, get_user_password_hash};
+use crate::plugins::helpers::{get_credential_account, get_credential_password_hash};
 
 use super::types::*;
 use super::{PasswordManagementConfig, StatusResponse};
@@ -222,7 +222,7 @@ pub(crate) async fn change_password_core(
     Option<String>,
 )> {
     if config.require_current_password {
-        let stored_hash = get_user_password_hash(ctx, user)
+        let stored_hash = get_credential_password_hash(ctx, user)
             .await?
             .ok_or_else(|| AuthError::bad_request("Credential account not found"))?;
 

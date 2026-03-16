@@ -56,6 +56,46 @@ fn load_reference_spec() -> BTreeMap<String, HashSet<String>> {
     result
 }
 
+fn completed_phase_reference_surface(
+    reference: &BTreeMap<String, HashSet<String>>,
+) -> BTreeMap<String, HashSet<String>> {
+    [
+        "/ok",
+        "/error",
+        "/sign-up/email",
+        "/sign-in/email",
+        "/get-session",
+        "/sign-out",
+        "/list-sessions",
+        "/revoke-session",
+        "/revoke-sessions",
+        "/revoke-other-sessions",
+        "/refresh-token",
+        "/get-access-token",
+        "/request-password-reset",
+        "/reset-password",
+        "/reset-password/{token}",
+        "/change-password",
+        "/update-user",
+        "/delete-user",
+        "/delete-user/callback",
+        "/change-email",
+        "/send-verification-email",
+        "/verify-email",
+    ]
+    .into_iter()
+    .map(|path| {
+        (
+            path.to_string(),
+            reference
+                .get(path)
+                .unwrap_or_else(|| panic!("reference spec missing completed-phase path {}", path))
+                .clone(),
+        )
+    })
+    .collect()
+}
+
 /// Create a test auth instance with all currently implemented plugins.
 async fn test_database() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:").await.unwrap();
@@ -217,6 +257,54 @@ async fn test_route_coverage_report() {
     eprintln!("=============================");
 }
 
+#[tokio::test]
+async fn test_completed_phase_surface_matches_reference_exactly() {
+    let reference = load_reference_spec();
+    let expected = completed_phase_reference_surface(&reference);
+    let auth = create_full_auth().await;
+    let implemented = collect_implemented_routes(&auth);
+
+    let mut missing = Vec::new();
+    let mut extra = Vec::new();
+
+    for (path, expected_methods) in &expected {
+        match implemented.get(path) {
+            Some(actual_methods) => {
+                for method in expected_methods {
+                    if !actual_methods.contains(method) {
+                        missing.push(format!("{} {}", method.to_uppercase(), path));
+                    }
+                }
+                for method in actual_methods {
+                    if !expected_methods.contains(method) {
+                        extra.push(format!("{} {}", method.to_uppercase(), path));
+                    }
+                }
+            }
+            None => {
+                for method in expected_methods {
+                    missing.push(format!("{} {}", method.to_uppercase(), path));
+                }
+            }
+        }
+    }
+
+    assert!(
+        missing.is_empty() && extra.is_empty(),
+        "completed phase route drift detected\nmissing:\n{}\nextra:\n{}",
+        if missing.is_empty() {
+            "<none>".to_string()
+        } else {
+            missing.join("\n")
+        },
+        if extra.is_empty() {
+            "<none>".to_string()
+        } else {
+            extra.join("\n")
+        }
+    );
+}
+
 /// Verify that the "default" (core auth) endpoints we claim to support
 /// actually exist in our implementation.
 #[tokio::test]
@@ -224,7 +312,7 @@ async fn test_core_endpoints_present() {
     let auth = create_full_auth().await;
     let implemented = collect_implemented_routes(&auth);
 
-    // Endpoints that MUST be present per Phase 0-1
+    // Endpoints currently asserted by this broad presence smoke test.
     let required = vec![
         ("get", "/ok"),
         ("get", "/error"),

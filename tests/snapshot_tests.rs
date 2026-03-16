@@ -8,27 +8,12 @@
 //! lets maintainers accept or reject it — replacing dozens of manual
 //! `assert!(json["field"].is_string())` lines.
 //!
-//! ## Comparison with TypeScript better-auth (v1.4.19)
+//! ## Role of These Snapshots
 //!
-//! Snapshots were validated against the TypeScript reference implementation.
-//! The Rust responses are a **superset** of the TS responses: every field
-//! returned by TS is present in Rust with the same camelCase name and
-//! compatible type.  The following *additional* fields appear because
-//! `create_test_auth()` registers plugins (admin, organization, two-factor):
-//!
-//! - **User object**: `banned`, `banReason`, `banExpires`, `role`,
-//!   `twoFactorEnabled`, `username`, `displayUsername` (all nullable/default)
-//! - **Session object**: `activeOrganizationId`, `impersonatedBy` (nullable)
-//! - **Signin response**: extra `url: ~` field (redirect URL, always null)
-//!
-//! ### Known implementation gaps vs TypeScript better-auth
-//!
-//! | Area | TypeScript | Rust | Tracking |
-//! |------|-----------|------|----------|
-//! | Error responses | `{code, message}` | `{message}` only | Missing `code` field |
-//! | `/list-accounts` | Returns account objects with `scopes` | Returns `[]` | Not yet implemented |
-//! | `/request-password-reset` | Empty 200 body | `{status: true}` | Acceptable deviation |
-//! | `/delete-user` | Disabled by default | `{message, success}` | TS requires opt-in |
+//! These fixtures are local regression snapshots for the current Rust runtime.
+//! They are not the source of truth for TS parity and they must not document
+//! approved drift. The dual-server client-compat and wire-compat suites remain
+//! the compatibility gate against the pinned TypeScript implementation.
 
 mod compat;
 

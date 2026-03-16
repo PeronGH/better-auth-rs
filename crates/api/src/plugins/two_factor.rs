@@ -10,7 +10,7 @@ use better_auth_core::{
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
-use crate::plugins::helpers::get_user_password_hash;
+use crate::plugins::helpers::get_credential_password_hash;
 
 use super::StatusResponse;
 
@@ -167,7 +167,7 @@ async fn verify_user_password(
     user: &better_auth_core::User,
     password: &str,
 ) -> AuthResult<()> {
-    let stored_hash = get_user_password_hash(ctx, user)
+    let stored_hash = get_credential_password_hash(ctx, user)
         .await?
         .ok_or(AuthError::InvalidCredentials)?;
 

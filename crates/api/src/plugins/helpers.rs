@@ -59,16 +59,14 @@ pub async fn get_credential_account(
         .find(|account| account.provider_id() == "credential"))
 }
 
-/// Resolve the user's stored password hash from the credential account first,
-/// falling back to legacy user metadata when needed.
-pub async fn get_user_password_hash(
+/// Resolve the user's stored password hash from the credential account.
+pub async fn get_credential_password_hash(
     ctx: &AuthContext,
     user: &better_auth_core::User,
 ) -> AuthResult<Option<String>> {
     Ok(get_credential_account(ctx, user.id())
         .await?
-        .and_then(|account| account.password().map(str::to_string))
-        .or_else(|| user.password_hash().map(str::to_string)))
+        .and_then(|account| account.password().map(str::to_string)))
 }
 
 /// Whether the user currently has a password set.
@@ -76,5 +74,5 @@ pub async fn user_has_password(
     ctx: &AuthContext,
     user: &better_auth_core::User,
 ) -> AuthResult<bool> {
-    Ok(get_user_password_hash(ctx, user).await?.is_some())
+    Ok(get_credential_password_hash(ctx, user).await?.is_some())
 }

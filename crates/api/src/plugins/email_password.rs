@@ -8,7 +8,7 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
     AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, CreateVerification,
-    HttpMethod, PASSWORD_HASH_KEY, RequestMeta,
+    HttpMethod, RequestMeta,
 };
 
 use super::email_verification::EmailVerificationPlugin;
@@ -299,15 +299,6 @@ pub(crate) async fn sign_up_core(
     let password_hash =
         password_utils::hash_password(config.password_hasher.as_ref(), &body.password).await?;
 
-    let metadata = {
-        let mut m = serde_json::Map::new();
-        let _ = m.insert(
-            PASSWORD_HASH_KEY.to_string(),
-            serde_json::Value::String(password_hash),
-        );
-        serde_json::Value::Object(m)
-    };
-
     let mut create_user = CreateUser::new()
         .with_email(&body.email)
         .with_name(&body.name);
@@ -317,8 +308,6 @@ pub(crate) async fn sign_up_core(
     if let Some(ref display_username) = body.display_username {
         create_user.display_username = Some(display_username.clone());
     }
-    create_user.metadata = Some(metadata);
-
     let auto_sign_in = config.auto_sign_in;
     let expires_in = ctx.config.session.expires_in;
     let ip_address = meta.ip_address.clone();
@@ -346,7 +335,7 @@ pub(crate) async fn sign_up_core(
                             access_token_expires_at: None,
                             refresh_token_expires_at: None,
                             scope: None,
-                            password: user.password_hash().map(str::to_string),
+                            password: Some(password_hash.clone()),
                         },
                     )
                     .await?;
@@ -400,7 +389,6 @@ async fn sign_in_with_user_core(
         .into_iter()
         .find(|account| account.provider_id() == "credential" && account.password().is_some())
         .and_then(|account| account.password().map(str::to_string))
-        .or_else(|| user.password_hash().map(str::to_string))
         .ok_or(AuthError::InvalidCredentials)?;
 
     password_utils::verify_password(config.password_hasher.as_ref(), password, &stored_hash)
@@ -818,12 +806,15 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let stored_hash = user
-            .metadata
-            .get(PASSWORD_HASH_KEY)
+        let stored_hash = ctx
+            .database
+            .get_user_accounts(user.id())
+            .await
             .unwrap()
-            .as_str()
-            .unwrap();
+            .into_iter()
+            .find(|account| account.provider_id() == "credential")
+            .and_then(|account| account.password().map(str::to_string))
+            .expect("credential account should store hashed password");
         assert_eq!(stored_hash, "hashed:Password123!");
 
         // Sign in should work with the custom hasher

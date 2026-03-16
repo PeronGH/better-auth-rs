@@ -348,6 +348,81 @@ async fn test_encryption_disabled_stores_plaintext() {
     assert_eq!(accounts[0].access_token(), Some(plaintext_access));
 }
 
+#[tokio::test]
+async fn test_get_access_token_rejects_plaintext_when_encryption_is_enabled() {
+    let config = Arc::new(test_config_with_encryption());
+    let db = create_test_database().await;
+
+    let (_, session_token) = setup_user_with_account(
+        &db,
+        &config,
+        "plaintext-access@example.com",
+        "google",
+        Some("plain-access-token".to_string()),
+        Some("plain-refresh-token".to_string()),
+    )
+    .await;
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+    let mut oauth_config = OAuthConfig::default();
+    oauth_config.providers.insert(
+        "google".to_string(),
+        make_test_provider("http://localhost:65535"),
+    );
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+
+    let mut req = AuthRequest::new(HttpMethod::Post, "/get-access-token");
+    req.body = Some(json!({"providerId": "google"}).to_string().into_bytes());
+    req.headers
+        .insert("content-type".to_string(), "application/json".to_string());
+    req.headers.insert(
+        "cookie".to_string(),
+        format!("better-auth.session_token={}", session_token),
+    );
+
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+    assert!(result.is_err(), "plaintext tokens must not be accepted");
+}
+
+#[tokio::test]
+async fn test_refresh_token_rejects_plaintext_when_encryption_is_enabled() {
+    let config = Arc::new(test_config_with_encryption());
+    let db = create_test_database().await;
+
+    let (_, session_token) = setup_user_with_account(
+        &db,
+        &config,
+        "plaintext-refresh@example.com",
+        "google",
+        Some("plain-access-token".to_string()),
+        Some("plain-refresh-token".to_string()),
+    )
+    .await;
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+    let mut oauth_config = OAuthConfig::default();
+    oauth_config.providers.insert(
+        "google".to_string(),
+        make_test_provider("http://localhost:65535"),
+    );
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+
+    let mut req = AuthRequest::new(HttpMethod::Post, "/refresh-token");
+    req.body = Some(json!({"providerId": "google"}).to_string().into_bytes());
+    req.headers
+        .insert("content-type".to_string(), "application/json".to_string());
+    req.headers.insert(
+        "cookie".to_string(),
+        format!("better-auth.session_token={}", session_token),
+    );
+
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+    assert!(
+        result.is_err(),
+        "plaintext refresh tokens must not be accepted"
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Test 2: allow_unlinking_all — unlink handler respects config
 // ─────────────────────────────────────────────────────────────────────────────

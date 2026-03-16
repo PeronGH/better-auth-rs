@@ -77,21 +77,7 @@ pub struct EmailVerificationConfig {
     pub after_email_verification: Option<EmailVerificationHook>,
 }
 
-impl EmailVerificationConfig {
-    /// Backward-compatible helper: return the expiry duration expressed as
-    /// whole hours (truncated).
-    pub fn expiry_hours(&self) -> i64 {
-        self.verification_token_expiry.num_hours()
-    }
-}
-
 impl EmailVerificationPlugin {
-    /// Backward-compatible builder: set token expiry in hours.
-    pub fn verification_token_expiry_hours(mut self, hours: i64) -> Self {
-        self.config.verification_token_expiry = Duration::hours(hours);
-        self
-    }
-
     pub fn custom_send_verification_email(
         mut self,
         sender: Arc<dyn SendVerificationEmail>,

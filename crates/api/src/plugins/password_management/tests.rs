@@ -1,9 +1,7 @@
 use super::*;
 use crate::plugins::test_helpers;
 use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
-use better_auth_core::{
-    CreateAccount, CreateUser, CreateVerification, PASSWORD_HASH_KEY, Session, User,
-};
+use better_auth_core::{CreateAccount, CreateUser, CreateVerification, Session, User};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -41,19 +39,9 @@ async fn create_test_context_with_user() -> (AuthContext, User, Session) {
     let plugin = PasswordManagementPlugin::new();
     let password_hash = plugin.hash_password("Password123!").await.unwrap();
 
-    let metadata = {
-        let mut m = serde_json::Map::new();
-        m.insert(
-            PASSWORD_HASH_KEY.to_string(),
-            serde_json::Value::String(password_hash),
-        );
-        serde_json::Value::Object(m)
-    };
-
     let create_user = CreateUser::new()
         .with_email("test@example.com")
-        .with_name("Test User")
-        .with_metadata(metadata);
+        .with_name("Test User");
     let user = test_helpers::create_user(&ctx, create_user).await;
     let _ = ctx
         .database
@@ -67,11 +55,7 @@ async fn create_test_context_with_user() -> (AuthContext, User, Session) {
             access_token_expires_at: None,
             refresh_token_expires_at: None,
             scope: None,
-            password: user
-                .metadata
-                .get(PASSWORD_HASH_KEY)
-                .and_then(|value| value.as_str())
-                .map(str::to_string),
+            password: Some(password_hash),
         })
         .await
         .unwrap();
