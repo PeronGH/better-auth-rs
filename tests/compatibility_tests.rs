@@ -74,6 +74,12 @@ async fn create_full_auth() -> BetterAuth {
         .plugin(better_auth::plugins::SessionManagementPlugin::new())
         .plugin(better_auth::plugins::PasswordManagementPlugin::new())
         .plugin(better_auth::plugins::EmailVerificationPlugin::new())
+        .plugin(
+            better_auth::plugins::UserManagementPlugin::new()
+                .change_email_enabled(true)
+                .delete_user_enabled(true)
+                .require_delete_verification(false),
+        )
         .plugin(better_auth::plugins::AccountManagementPlugin::new())
         .plugin(better_auth::plugins::OAuthPlugin::new())
         .plugin(better_auth::plugins::TwoFactorPlugin::new())
@@ -93,9 +99,6 @@ fn collect_implemented_routes(auth: &BetterAuth) -> BTreeMap<String, HashSet<Str
         ("/error", "get"),
         ("/reference/openapi.json", "get"),
         ("/update-user", "post"),
-        ("/delete-user", "post"),
-        ("/change-email", "post"),
-        ("/delete-user/callback", "get"),
     ];
     for (path, method) in core {
         let _ = routes
@@ -234,7 +237,6 @@ async fn test_core_endpoints_present() {
         ("post", "/request-password-reset"),
         ("post", "/reset-password"),
         ("post", "/change-password"),
-        ("post", "/set-password"),
         ("post", "/send-verification-email"),
         ("get", "/verify-email"),
         ("get", "/list-sessions"),

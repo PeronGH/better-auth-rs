@@ -108,7 +108,6 @@ impl AuthPlugin for PasswordManagementPlugin {
             AuthRoute::post("/reset-password", "reset_password"),
             AuthRoute::get("/reset-password/{token}", "reset_password_token"),
             AuthRoute::post("/change-password", "change_password"),
-            AuthRoute::post("/set-password", "set_password"),
         ]
     }
 
@@ -126,9 +125,6 @@ impl AuthPlugin for PasswordManagementPlugin {
             }
             (HttpMethod::Post, "/change-password") => {
                 Ok(Some(self.handle_change_password(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/set-password") => {
-                Ok(Some(self.handle_set_password(req, ctx).await?))
             }
             (HttpMethod::Get, path) if path.starts_with("/reset-password/") => {
                 let token = path.get(16..).unwrap_or(""); // Remove "/reset-password/" prefix
@@ -202,26 +198,6 @@ impl PasswordManagementPlugin {
         } else {
             Ok(auth_response)
         }
-    }
-
-    async fn handle_set_password(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext,
-    ) -> AuthResult<AuthResponse> {
-        let body: SetPasswordRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
-
-        // Authenticate user
-        let user = self
-            .get_current_user(req, ctx)
-            .await?
-            .ok_or(AuthError::Unauthenticated)?;
-
-        let response = set_password_core(&body, &user, &self.config, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
     }
 
     async fn handle_reset_password_token(
@@ -372,17 +348,6 @@ mod axum_impl {
         }
     }
 
-    async fn handle_set_password(
-        State(state): State<AuthState>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession,
-        ValidatedJson(body): ValidatedJson<SetPasswordRequest>,
-    ) -> Result<Json<StatusResponse>, AuthError> {
-        let ctx = state.to_context();
-        let response = set_password_core(&body, &user, &ps.config, &ctx).await?;
-        Ok(Json(response))
-    }
-
     impl better_auth_core::AxumPlugin for PasswordManagementPlugin {
         fn name(&self) -> &'static str {
             "password-management"
@@ -403,7 +368,6 @@ mod axum_impl {
                 .route("/reset-password", post(handle_reset_password))
                 .route("/reset-password/:token", get(handle_reset_password_token))
                 .route("/change-password", post(handle_change_password))
-                .route("/set-password", post(handle_set_password))
                 .layer(Extension(plugin_state))
         }
     }

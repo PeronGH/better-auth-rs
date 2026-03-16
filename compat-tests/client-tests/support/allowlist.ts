@@ -110,4 +110,59 @@ export const RAW_DIFF_ALLOWLIST: RawDiffAllowance[] = [
     path: /responseCookies\.better-auth\.(session_token|session_data|dont_remember)(\.maxAge)?/,
     reason: "logout cookie transport drift is currently client-inert",
   },
+  {
+    scenario: /send verification email then verify marks the user verified/i,
+    path: /responseCookies\.better-auth\.session_token\.maxAge/,
+    reason: "cookie max-age drift is currently client-inert",
+  },
+  {
+    scenario: /send verification email then verify marks the user verified/i,
+    path: /path/,
+    reason: "opaque verification tokens differ across servers but are client-inert",
+  },
+  {
+    scenario: /update user changes session-visible profile fields/i,
+    path: /responseCookies\.better-auth\.session_token\.maxAge/,
+    reason: "cookie max-age drift is currently client-inert",
+  },
+  {
+    scenario: /update user rejects direct email mutation/i,
+    path: /responseCookies\.better-auth\.session_token\.maxAge/,
+    reason: "cookie max-age drift is currently client-inert",
+  },
+  {
+    scenario: /change email for an unverified user completes after verify email/i,
+    path: /responseCookies\.better-auth\.session_token\.maxAge/,
+    reason: "cookie max-age drift is currently client-inert",
+  },
+  {
+    scenario: /change email for an unverified user completes after verify email/i,
+    path: /path/,
+    reason: "opaque verification tokens differ across servers but are client-inert",
+  },
+  {
+    scenario: /change email for a verified user requires old-email confirmation first/i,
+    path: /responseCookies\.better-auth\.session_token\.maxAge/,
+    reason: "cookie max-age drift is currently client-inert",
+  },
+  {
+    scenario: /change email for a verified user requires old-email confirmation first/i,
+    path: /path/,
+    reason: "opaque verification tokens differ across servers but are client-inert",
+  },
+  {
+    scenario: /delete user with a fresh session deletes the current account/i,
+    path: /responseCookies\.better-auth\.session_token\.maxAge/,
+    reason: "cookie max-age drift is currently client-inert",
+  },
+  {
+    scenario: /delete user callback deletes the current account with a seeded token/i,
+    path: /responseCookies\.better-auth\.session_token\.maxAge/,
+    reason: "cookie max-age drift is currently client-inert",
+  },
+  {
+    scenario: /set password is not exposed over the public HTTP surface/i,
+    path: /responseCookies\.better-auth\.session_token\.maxAge/,
+    reason: "cookie max-age drift is currently client-inert",
+  },
 ];

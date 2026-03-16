@@ -90,7 +90,7 @@ async fn test_change_email_verify_success() {
         CreateUser::new()
             .with_email("test@example.com")
             .with_name("Test User")
-            .with_email_verified(true),
+            .with_email_verified(false),
         Duration::hours(24),
     )
     .await;
@@ -149,7 +149,7 @@ async fn test_change_email_immediate_when_update_without_verification() {
         CreateUser::new()
             .with_email("test@example.com")
             .with_name("Test User")
-            .with_email_verified(true),
+            .with_email_verified(false),
         Duration::hours(24),
     )
     .await;
@@ -295,8 +295,8 @@ async fn test_delete_user_with_verification() {
     query.insert("token".to_string(), verification.value.clone());
     let req = test_helpers::create_auth_request(
         HttpMethod::Get,
-        "/delete-user/verify",
-        None,
+        "/delete-user/callback",
+        Some(&session.token),
         None,
         query,
     );
@@ -350,8 +350,8 @@ async fn test_delete_user_verify_invalid_token() {
     query.insert("token".to_string(), "invalid-token".to_string());
     let req = test_helpers::create_auth_request(
         HttpMethod::Get,
-        "/delete-user/verify",
-        None,
+        "/delete-user/callback",
+        Some(&_session.token),
         None,
         query,
     );
@@ -360,7 +360,7 @@ async fn test_delete_user_verify_invalid_token() {
         .handle_delete_user_verify(&req, &ctx)
         .await
         .unwrap_err();
-    assert_eq!(err.status_code(), 400);
+    assert_eq!(err.status_code(), 404);
 }
 
 #[tokio::test]
@@ -429,16 +429,15 @@ async fn test_plugin_routes_conditional() {
     // Only change-email enabled
     let plugin = UserManagementPlugin::new().change_email_enabled(true);
     let routes = <UserManagementPlugin as AuthPlugin>::routes(&plugin);
-    assert_eq!(routes.len(), 2);
+    assert_eq!(routes.len(), 1);
     assert!(routes.iter().any(|r| r.path == "/change-email"));
-    assert!(routes.iter().any(|r| r.path == "/change-email/verify"));
 
     // Only delete-user enabled
     let plugin = UserManagementPlugin::new().delete_user_enabled(true);
     let routes = <UserManagementPlugin as AuthPlugin>::routes(&plugin);
     assert_eq!(routes.len(), 2);
     assert!(routes.iter().any(|r| r.path == "/delete-user"));
-    assert!(routes.iter().any(|r| r.path == "/delete-user/verify"));
+    assert!(routes.iter().any(|r| r.path == "/delete-user/callback"));
 
     // Both enabled
     let plugin = UserManagementPlugin::new()
@@ -446,7 +445,7 @@ async fn test_plugin_routes_conditional() {
         .delete_user_enabled(true);
     assert_eq!(
         <UserManagementPlugin as AuthPlugin>::routes(&plugin).len(),
-        4
+        3
     );
 }
 

@@ -626,7 +626,20 @@ async fn test_verify_email_before_hook_error_aborts() {
 
 #[tokio::test]
 async fn test_verify_email_auto_sign_in_creates_session() {
-    let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(true);
+    let captured = Arc::new(std::sync::Mutex::new(String::new()));
+
+    struct CapturingSender(Arc<std::sync::Mutex<String>>);
+    #[async_trait]
+    impl SendVerificationEmail for CapturingSender {
+        async fn send(&self, _user: &User, _url: &str, token: &str) -> AuthResult<()> {
+            *self.0.lock().unwrap() = token.to_string();
+            Ok(())
+        }
+    }
+
+    let plugin = EmailVerificationPlugin::new()
+        .auto_sign_in_after_verification(true)
+        .custom_send_verification_email(Arc::new(CapturingSender(captured.clone())));
 
     let ctx = test_helpers::create_test_context().await;
     let _user = ctx
@@ -639,18 +652,24 @@ async fn test_verify_email_auto_sign_in_creates_session() {
         .await
         .unwrap();
 
-    let token_value = format!("verify_{}", Uuid::new_v4());
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: "autosign@test.com".to_string(),
-            value: token_value.clone(),
-            expires_at: Utc::now() + Duration::hours(1),
-        })
+    let body = serde_json::json!({ "email": "autosign@test.com" });
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    let send_req = AuthRequest::from_parts(
+        HttpMethod::Post,
+        "/send-verification-email".to_string(),
+        headers,
+        Some(body.to_string().into_bytes()),
+        HashMap::new(),
+    );
+    let send_response = plugin
+        .handle_send_verification_email(&send_req, &ctx)
         .await
         .unwrap();
+    assert_eq!(send_response.status, 200);
 
     let mut query = HashMap::new();
-    query.insert("token".to_string(), token_value);
+    query.insert("token".to_string(), captured.lock().unwrap().clone());
     let req =
         test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
@@ -658,8 +677,7 @@ async fn test_verify_email_auto_sign_in_creates_session() {
     assert_eq!(response.status, 200);
     let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
     assert_eq!(body["status"], true);
-    // Session should be present
-    assert!(body["session"]["token"].is_string());
+    assert!(body["user"].is_null());
 
     // Set-Cookie header should be present
     assert!(response.headers.contains_key("Set-Cookie"));
@@ -747,7 +765,7 @@ async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
 
     assert_eq!(response.status, 302);
-    assert!(response.headers["Location"].starts_with("https://myapp.com/verified?verified=true"));
+    assert_eq!(response.headers["Location"], "https://myapp.com/verified");
     // Session cookie should be present on the redirect
     assert!(response.headers.contains_key("Set-Cookie"));
     assert!(response.headers["Set-Cookie"].contains("better-auth.session"));
@@ -923,7 +941,16 @@ async fn test_send_verification_email_already_verified_returns_error() {
 
 #[tokio::test]
 async fn test_send_verification_email_user_not_found() {
-    let plugin = EmailVerificationPlugin::new();
+    struct NoopSender;
+    #[async_trait]
+    impl SendVerificationEmail for NoopSender {
+        async fn send(&self, _user: &User, _url: &str, _token: &str) -> AuthResult<()> {
+            Ok(())
+        }
+    }
+
+    let plugin =
+        EmailVerificationPlugin::new().custom_send_verification_email(Arc::new(NoopSender));
     let ctx = test_helpers::create_test_context().await;
 
     let body = serde_json::json!({ "email": "nobody@test.com" });
@@ -936,11 +963,11 @@ async fn test_send_verification_email_user_not_found() {
         Some(body.to_string().into_bytes()),
         HashMap::new(),
     );
-    let err = plugin
+    let response = plugin
         .handle_send_verification_email(&req, &ctx)
         .await
-        .unwrap_err();
-    assert_eq!(err.status_code(), 404);
+        .unwrap();
+    assert_eq!(response.status, 200);
 }
 
 // ------------------------------------------------------------------

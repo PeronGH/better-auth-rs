@@ -7,7 +7,8 @@
 
 use crate::plugins::{
     AccountManagementPlugin, ApiKeyPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
-    PasswordManagementPlugin, SessionManagementPlugin, password_management::SendResetPassword,
+    PasswordManagementPlugin, SessionManagementPlugin, UserManagementPlugin,
+    password_management::SendResetPassword,
 };
 use crate::{
     AuthBuilder, AuthConfig, AuthRequest, BetterAuth, CreateVerification, HttpMethod,
@@ -58,6 +59,12 @@ async fn create_test_auth() -> BetterAuth {
         )
         .plugin(AccountManagementPlugin::new())
         .plugin(EmailVerificationPlugin::new())
+        .plugin(
+            UserManagementPlugin::new()
+                .change_email_enabled(true)
+                .delete_user_enabled(true)
+                .require_delete_verification(false),
+        )
         .plugin(ApiKeyPlugin::builder().build())
         .build()
         .await
@@ -469,7 +476,7 @@ async fn test_delete_user_response_shape() {
     );
 }
 
-/// Spec: POST /change-email => { status: bool, message: string }
+/// Runtime: POST /change-email => { status: bool }
 #[tokio::test]
 async fn test_change_email_response_shape_actual() {
     let auth = create_test_auth().await;
@@ -495,11 +502,7 @@ async fn test_change_email_response_shape_actual() {
         json
     );
     assert_eq!(json["status"], true);
-    assert!(
-        json["message"].is_string(),
-        "message must be a string, got: {:?}",
-        json
-    );
+    assert_eq!(json.as_object().map(|object| object.len()), Some(1));
 }
 
 /// Spec: POST /send-verification-email => { status: bool }

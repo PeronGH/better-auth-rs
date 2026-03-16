@@ -44,6 +44,7 @@ pub fn create_clear_session_cookie(config: &AuthConfig) -> String {
     let mut cookie = Cookie::build((&*session_config.cookie_name, ""))
         .path("/")
         .expires(cookie::time::OffsetDateTime::UNIX_EPOCH)
+        .max_age(cookie::time::Duration::seconds(0))
         .secure(session_config.cookie_secure)
         .http_only(session_config.cookie_http_only)
         .same_site(same_site);
@@ -67,6 +68,7 @@ pub fn create_clear_cookie(name: &str, config: &AuthConfig) -> String {
     let mut cookie = Cookie::build((name, ""))
         .path("/")
         .expires(cookie::time::OffsetDateTime::UNIX_EPOCH)
+        .max_age(cookie::time::Duration::seconds(0))
         .http_only(session_config.cookie_http_only)
         .same_site(same_site);
 

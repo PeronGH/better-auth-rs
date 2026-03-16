@@ -1,13 +1,11 @@
 use std::sync::Arc;
 
-use serde::Deserialize;
-
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse,
     AuthResult, AuthStore, BeforeRequestAction, DatabaseHooks, EmailProvider, HttpMethod,
-    OkResponse, OpenApiBuilder, OpenApiSpec, SessionManager, StatusMessageResponse,
-    SuccessMessageResponse, UpdateUser, UpdateUserRequest, core_paths,
-    entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
+    OkResponse, OpenApiBuilder, OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest,
+    core_paths,
+    entity::{AuthSession, AuthUser},
     hooks::{RequestHookContext, with_request_hook_context_value},
     middleware::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
@@ -15,12 +13,6 @@ use better_auth_core::{
     },
     sea_orm::DatabaseConnection,
 };
-
-#[derive(Debug, Deserialize)]
-struct ChangeEmailRequest {
-    #[serde(rename = "newEmail")]
-    new_email: String,
-}
 
 pub struct BetterAuth {
     config: Arc<AuthConfig>,
@@ -377,15 +369,6 @@ impl BetterAuth {
             (HttpMethod::Post, core_paths::UPDATE_USER) => {
                 Ok(Some(self.handle_update_user(req).await?))
             }
-            (HttpMethod::Post | HttpMethod::Delete, core_paths::DELETE_USER) => {
-                Ok(Some(self.handle_delete_user(req).await?))
-            }
-            (HttpMethod::Post, core_paths::CHANGE_EMAIL) => {
-                Ok(Some(self.handle_change_email(req).await?))
-            }
-            (HttpMethod::Get, core_paths::DELETE_USER_CALLBACK) => {
-                Ok(Some(self.handle_delete_user_callback(req).await?))
-            }
             _ => Ok(None),
         }
     }
@@ -393,13 +376,33 @@ impl BetterAuth {
     /// Handle user profile update.
     async fn handle_update_user(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
         let current_user = self.extract_current_user(req).await?;
-
-        let update_req: UpdateUserRequest = req
+        let body: serde_json::Value = req
             .body_as_json()
             .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
+        let body = body
+            .as_object()
+            .ok_or_else(|| AuthError::bad_request("Body must be an object"))?;
+
+        if body.contains_key("email") {
+            return Err(AuthError::bad_request("Email can not be updated"));
+        }
+
+        let update_req: UpdateUserRequest =
+            serde_json::from_value(serde_json::Value::Object(body.clone()))
+                .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
+
+        let has_changes = update_req.name.is_some()
+            || update_req.image.is_some()
+            || update_req.username.is_some()
+            || update_req.display_username.is_some()
+            || update_req.role.is_some()
+            || update_req.metadata.is_some();
+        if !has_changes {
+            return Err(AuthError::bad_request("No fields to update"));
+        }
 
         let update_user = UpdateUser {
-            email: update_req.email,
+            email: None,
             name: update_req.name,
             image: update_req.image,
             email_verified: None,
@@ -418,110 +421,16 @@ impl BetterAuth {
             .update_user(current_user.id(), update_user)
             .await?;
 
-        Ok(AuthResponse::json(
-            200,
-            &better_auth_core::StatusResponse { status: true },
-        )?)
-    }
+        let mut response =
+            AuthResponse::json(200, &better_auth_core::StatusResponse { status: true })?;
 
-    /// Handle user deletion.
-    async fn handle_delete_user(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
-        let current_user = self.extract_current_user(req).await?;
-
-        self.database
-            .delete_user_sessions(current_user.id())
-            .await?;
-        self.database.delete_user(current_user.id()).await?;
-
-        let response = SuccessMessageResponse {
-            success: true,
-            message: "User account successfully deleted".to_string(),
-        };
-
-        Ok(AuthResponse::json(200, &response)?)
-    }
-
-    /// Handle email change.
-    async fn handle_change_email(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
-        let current_user = self.extract_current_user(req).await?;
-
-        let change_req: ChangeEmailRequest = req
-            .body_as_json()
-            .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
-
-        if !change_req.new_email.contains('@') || change_req.new_email.is_empty() {
-            return Err(AuthError::bad_request("Invalid email address"));
+        if let Some(token) = self.session_manager.extract_session_token(req) {
+            let cookie_header =
+                better_auth_core::utils::cookie_utils::create_session_cookie(&token, &self.config);
+            response = response.with_header("Set-Cookie", cookie_header);
         }
 
-        let existing_user: Option<better_auth_core::User> = self
-            .database
-            .get_user_by_email(&change_req.new_email)
-            .await?;
-        if existing_user.is_some() {
-            return Err(AuthError::conflict("A user with this email already exists"));
-        }
-
-        let update_user = UpdateUser {
-            email: Some(change_req.new_email),
-            name: None,
-            image: None,
-            email_verified: Some(false),
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
-            metadata: None,
-        };
-
-        _ = self
-            .database
-            .update_user(current_user.id(), update_user)
-            .await?;
-
-        Ok(AuthResponse::json(
-            200,
-            &StatusMessageResponse {
-                status: true,
-                message: "Email updated".to_string(),
-            },
-        )?)
-    }
-
-    /// Handle delete-user callback (token-based deletion confirmation).
-    async fn handle_delete_user_callback(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
-        let token = req
-            .query
-            .get("token")
-            .ok_or_else(|| AuthError::bad_request("Deletion token is required"))?;
-
-        let verification: better_auth_core::Verification = self
-            .database
-            .get_verification_by_value(token)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Invalid or expired deletion token"))?;
-
-        let user_id = verification.identifier();
-
-        self.database.delete_user_sessions(user_id).await?;
-
-        let accounts: Vec<better_auth_core::Account> =
-            self.database.get_user_accounts(user_id).await?;
-        for account in accounts {
-            self.database.delete_account(account.id()).await?;
-        }
-
-        self.database.delete_user(user_id).await?;
-        self.database.delete_verification(verification.id()).await?;
-
-        let response = SuccessMessageResponse {
-            success: true,
-            message: "User account successfully deleted".to_string(),
-        };
-
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(response)
     }
 
     /// Extract current user from request (validates session).

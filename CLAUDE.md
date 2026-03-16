@@ -107,14 +107,17 @@ cargo test --test wire_compat_smoke_tests -- --nocapture                    # th
 cargo test --features axum --test axum_integration_tests                    # feature-gated Axum HTTP integration
 cargo test --test client_compat_tests phase0_client_compat -- --ignored --nocapture
 cargo test --test client_compat_tests phase1_client_compat -- --ignored --nocapture
+cargo test --test client_compat_tests phase2_client_compat -- --ignored --nocapture
 cargo test --test client_compat_tests full_client_compat -- --ignored --nocapture
 ./scripts/alignment-check.sh                   # full alignment pipeline (all 3 layers)
 ./scripts/alignment-check.sh --skip-build      # skip cargo build step
 cargo tarpaulin --workspace --lib              # measure function coverage
 cd compat-tests/client-tests && bun test tests/phase0
 cd compat-tests/client-tests && bun test tests/phase1
+cd compat-tests/client-tests && bun test tests/phase2
 bash compat-tests/client-tests/run-against-both.sh phase0
 bash compat-tests/client-tests/run-against-both.sh phase1
+bash compat-tests/client-tests/run-against-both.sh phase2
 ```
 
 ### JavaScript tooling

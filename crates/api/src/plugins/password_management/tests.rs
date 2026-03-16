@@ -617,7 +617,7 @@ async fn test_plugin_routes() {
     let plugin = PasswordManagementPlugin::new();
     let routes = AuthPlugin::routes(&plugin);
 
-    assert_eq!(routes.len(), 5);
+    assert_eq!(routes.len(), 4);
     assert!(
         routes
             .iter()

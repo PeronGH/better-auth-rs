@@ -8,7 +8,7 @@ use better_auth_core::{
     CreateAccount, RequestMeta, UpdateAccount, extract_origin,
 };
 
-use crate::plugins::helpers::{get_credential_account, get_user_password_hash, user_has_password};
+use crate::plugins::helpers::{get_credential_account, get_user_password_hash};
 
 use super::types::*;
 use super::{PasswordManagementConfig, StatusResponse};
@@ -280,58 +280,6 @@ pub(crate) async fn change_password_core(
     };
 
     Ok((response, new_token))
-}
-
-pub(crate) async fn set_password_core(
-    body: &SetPasswordRequest,
-    user: &better_auth_core::User,
-    config: &PasswordManagementConfig,
-    ctx: &AuthContext,
-) -> AuthResult<StatusResponse> {
-    if user_has_password(ctx, user).await? {
-        return Err(AuthError::bad_request("user already has a password"));
-    }
-
-    password_utils::validate_password(
-        &body.new_password,
-        ctx.config.password.min_length,
-        usize::MAX,
-        ctx,
-    )?;
-
-    let password_hash =
-        password_utils::hash_password(config.password_hasher.as_ref(), &body.new_password).await?;
-
-    if let Some(account) = get_credential_account(ctx, user.id()).await? {
-        let _ = ctx
-            .database
-            .update_account(
-                account.id(),
-                UpdateAccount {
-                    password: Some(password_hash),
-                    ..Default::default()
-                },
-            )
-            .await?;
-    } else {
-        let _ = ctx
-            .database
-            .create_account(CreateAccount {
-                user_id: user.id().to_string(),
-                account_id: user.id().to_string(),
-                provider_id: "credential".to_string(),
-                access_token: None,
-                refresh_token: None,
-                id_token: None,
-                access_token_expires_at: None,
-                refresh_token_expires_at: None,
-                scope: None,
-                password: Some(password_hash),
-            })
-            .await?;
-    }
-
-    Ok(StatusResponse { status: true })
 }
 
 fn validate_redirect_target(

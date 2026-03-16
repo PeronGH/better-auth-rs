@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     http::request::Parts,
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 #[cfg(feature = "axum")]
 use std::sync::Arc;
@@ -61,20 +61,6 @@ impl AxumIntegration for Arc<BetterAuth> {
         if !disabled_paths.contains(&core_paths::UPDATE_USER.to_string()) {
             router = router.route(core_paths::UPDATE_USER, post(create_plugin_handler()));
         }
-        if !disabled_paths.contains(&core_paths::DELETE_USER.to_string()) {
-            router = router.route(core_paths::DELETE_USER, post(create_plugin_handler()));
-            router = router.route(core_paths::DELETE_USER, delete(create_plugin_handler()));
-        }
-        if !disabled_paths.contains(&core_paths::CHANGE_EMAIL.to_string()) {
-            router = router.route(core_paths::CHANGE_EMAIL, post(create_plugin_handler()));
-        }
-        if !disabled_paths.contains(&core_paths::DELETE_USER_CALLBACK.to_string()) {
-            router = router.route(
-                core_paths::DELETE_USER_CALLBACK,
-                get(create_plugin_handler()),
-            );
-        }
-
         // Register plugin routes
         for plugin in self.plugins() {
             for route in plugin.routes() {

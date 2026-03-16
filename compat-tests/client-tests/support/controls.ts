@@ -19,6 +19,30 @@ async function postControl(baseURL: string, path: string, body: unknown) {
   return response.json().catch(() => null);
 }
 
+async function getControl(baseURL: string, path: string, params: Record<string, string>) {
+  const url = new URL(path, baseURL);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      connection: "close",
+    },
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`${path} failed for ${baseURL}: ${response.status} ${text}`);
+  }
+
+  return response.json().catch(() => null);
+}
+
 export async function resetServerState(baseURL: string) {
   return postControl(baseURL, "/__test/reset-state", {});
 }
@@ -43,6 +67,48 @@ export async function seedResetPasswordToken(
     email,
     token,
     expiresAt,
+  });
+}
+
+export async function readVerificationEmail(
+  baseURL: string,
+  { email }: { email: string },
+) {
+  return getControl(baseURL, "/__test/verification-email", { email });
+}
+
+export async function readChangeEmailConfirmation(
+  baseURL: string,
+  { email }: { email: string },
+) {
+  return getControl(baseURL, "/__test/change-email-confirmation", { email });
+}
+
+export async function seedDeleteUserToken(
+  baseURL: string,
+  {
+    email,
+    token,
+    expiresAt,
+  }: {
+    email: string;
+    token: string;
+    expiresAt: string;
+  },
+) {
+  return postControl(baseURL, "/__test/seed-delete-user-token", {
+    email,
+    token,
+    expiresAt,
+  });
+}
+
+export async function removeCredentialAccount(
+  baseURL: string,
+  { email }: { email: string },
+) {
+  return postControl(baseURL, "/__test/remove-credential-account", {
+    email,
   });
 }
 

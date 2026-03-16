@@ -12,6 +12,18 @@ export type TraceEntry = {
   responseBodyShape: unknown;
 };
 
+function normalizeTracePath(url: URL) {
+  const normalized = new URL(url.toString());
+  for (const key of ["token"]) {
+    if (normalized.searchParams.has(key)) {
+      normalized.searchParams.set(key, `<${key}>`);
+    }
+  }
+
+  const query = normalized.searchParams.toString();
+  return `${normalized.pathname}${query ? `?${query}` : ""}`;
+}
+
 type CookieJar = Map<string, string>;
 
 function normalizeRequestBody(body: BodyInit | null | undefined) {
@@ -140,7 +152,7 @@ export function createTracingFetch(
     traces.push({
       actor,
       method,
-      path: `${url.pathname}${url.search}`,
+      path: normalizeTracePath(url),
       requestBodyShape: normalizeRequestBody(init?.body),
       responseStatus: response.status,
       responseHeaders: pickHeaders(response.headers),

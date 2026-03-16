@@ -6,8 +6,8 @@ use axum::{
 };
 use better_auth::handlers::AxumIntegration;
 use better_auth::plugins::{
-    EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
-    password_management::SendResetPassword,
+    EmailPasswordPlugin, EmailVerificationPlugin, PasswordManagementPlugin,
+    SessionManagementPlugin, UserManagementPlugin, password_management::SendResetPassword,
 };
 use better_auth::{
     AuthBuilder, AuthConfig, BetterAuth, run_migrations,
@@ -50,6 +50,13 @@ async fn create_test_auth() -> Arc<BetterAuth> {
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))
+            .plugin(EmailVerificationPlugin::new())
+            .plugin(
+                UserManagementPlugin::new()
+                    .change_email_enabled(true)
+                    .delete_user_enabled(true)
+                    .require_delete_verification(false),
+            )
             .build()
             .await
             .expect("Failed to create test auth instance"),
@@ -846,7 +853,6 @@ async fn test_axum_update_user() {
 
     let update_data = json!({
         "name": "Updated Test User",
-        "email": "updated@example.com",
         "username": "updateduser",
         "displayUsername": "Updated User"
     });
@@ -920,10 +926,11 @@ async fn test_axum_delete_user() {
     let (_user_data, token) = create_test_user(router.clone()).await;
 
     let request = Request::builder()
-        .method(Method::DELETE)
+        .method(Method::POST)
         .uri("/auth/delete-user")
         .header("authorization", format!("Bearer {}", token))
-        .body(Body::empty())
+        .header("content-type", "application/json")
+        .body(Body::from("{}"))
         .unwrap();
 
     let response = router.oneshot(request).await.unwrap();
@@ -935,10 +942,7 @@ async fn test_axum_delete_user() {
     let response_data: Value = serde_json::from_slice(&body_bytes).unwrap();
 
     assert_eq!(response_data["success"], true);
-    assert_eq!(
-        response_data["message"],
-        "User account successfully deleted"
-    );
+    assert_eq!(response_data["message"], "User deleted");
 }
 
 /// Test unauthorized user deletion
@@ -948,9 +952,10 @@ async fn test_axum_delete_user_unauthorized() {
     let router = create_test_router(auth);
 
     let request = Request::builder()
-        .method(Method::DELETE)
+        .method(Method::POST)
         .uri("/auth/delete-user")
-        .body(Body::empty())
+        .header("content-type", "application/json")
+        .body(Body::from("{}"))
         .unwrap();
 
     let response = router.oneshot(request).await.unwrap();
@@ -967,10 +972,11 @@ async fn test_axum_delete_user_invalidates_sessions() {
 
     // Delete the user
     let delete_request = Request::builder()
-        .method(Method::DELETE)
+        .method(Method::POST)
         .uri("/auth/delete-user")
         .header("authorization", format!("Bearer {}", token))
-        .body(Body::empty())
+        .header("content-type", "application/json")
+        .body(Body::from("{}"))
         .unwrap();
 
     let delete_response = router.clone().oneshot(delete_request).await.unwrap();
@@ -1060,10 +1066,11 @@ async fn test_axum_user_profile_workflow() {
 
     // 5. Finally delete the user
     let delete_request = Request::builder()
-        .method(Method::DELETE)
+        .method(Method::POST)
         .uri("/auth/delete-user")
         .header("authorization", format!("Bearer {}", token))
-        .body(Body::empty())
+        .header("content-type", "application/json")
+        .body(Body::from("{}"))
         .unwrap();
 
     let delete_response = router.oneshot(delete_request).await.unwrap();

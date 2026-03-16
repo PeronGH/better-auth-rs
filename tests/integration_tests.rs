@@ -1,3 +1,8 @@
+#![expect(
+    unused_results,
+    reason = "integration tests intentionally ignore helper return values like HashMap::insert"
+)]
+
 mod compat;
 
 use better_auth::{AuthStore, BetterAuth};
@@ -419,7 +424,7 @@ async fn test_delete_user_post_method() {
     assert_eq!(response_data["success"], true);
 }
 
-/// Integration test for set-password success (social-only user, no password)
+/// Integration test for set-password public route absence
 #[tokio::test]
 async fn test_set_password_success() {
     let auth = create_test_auth_memory().await;
@@ -468,14 +473,10 @@ async fn test_set_password_success() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(response_data["status"], true);
+    assert_eq!(response.status, 404);
 }
 
-/// Integration test for set-password when user already has a password → 400
+/// Integration test for set-password public route remains unavailable with an existing password
 #[tokio::test]
 async fn test_set_password_already_has_password() {
     let auth = create_test_auth_memory().await;
@@ -504,10 +505,10 @@ async fn test_set_password_already_has_password() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 400);
+    assert_eq!(response.status, 404);
 }
 
-/// Integration test for set-password unauthenticated → 401
+/// Integration test for set-password public route remains unavailable when unauthenticated
 #[tokio::test]
 async fn test_set_password_unauthenticated() {
     let auth = create_test_auth_memory().await;
@@ -531,7 +532,7 @@ async fn test_set_password_unauthenticated() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 401);
+    assert_eq!(response.status, 404);
 }
 
 /// Integration test for revoke-other-sessions endpoint
@@ -710,7 +711,7 @@ async fn test_change_email_success() {
     let body_str = String::from_utf8(response.body).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert_eq!(data["status"], true);
-    assert_eq!(data["message"], "Email updated");
+    assert!(data.get("message").is_none());
 }
 
 /// Integration test for change-email duplicate → 409
@@ -748,7 +749,7 @@ async fn test_change_email_duplicate() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 409);
+    assert_eq!(response.status, 422);
 }
 
 /// Integration test for change-email unauthenticated → 401
@@ -780,7 +781,7 @@ async fn test_change_email_unauthenticated() {
 #[tokio::test]
 async fn test_delete_user_callback_success() {
     let auth = create_test_auth_memory().await;
-    let (user_id, _session_token) = create_test_user_and_session(auth.clone()).await;
+    let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
     use better_auth::types::{AuthRequest, CreateVerification};
     use chrono::{Duration, Utc};
@@ -789,8 +790,8 @@ async fn test_delete_user_callback_success() {
     // Create a deletion verification token
     let token = format!("delete_{}", uuid::Uuid::new_v4());
     let create_verification = CreateVerification {
-        identifier: user_id.clone(),
-        value: token.clone(),
+        identifier: format!("delete-account-{}", token),
+        value: user_id.clone(),
         expires_at: Utc::now() + Duration::hours(24),
     };
     auth.database()
@@ -804,7 +805,14 @@ async fn test_delete_user_callback_success() {
     let request = AuthRequest::from_parts(
         better_auth::types::HttpMethod::Get,
         "/delete-user/callback".to_string(),
-        HashMap::new(),
+        {
+            let mut headers = HashMap::new();
+            headers.insert(
+                "authorization".to_string(),
+                format!("Bearer {}", session_token),
+            );
+            headers
+        },
         None,
         query,
     );
@@ -821,10 +829,11 @@ async fn test_delete_user_callback_success() {
     assert!(user.is_none());
 }
 
-/// Integration test for delete-user/callback invalid token → 400
+/// Integration test for delete-user/callback invalid token → 404
 #[tokio::test]
 async fn test_delete_user_callback_invalid_token() {
     let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
     use better_auth::types::AuthRequest;
     use std::collections::HashMap;
@@ -835,13 +844,20 @@ async fn test_delete_user_callback_invalid_token() {
     let request = AuthRequest::from_parts(
         better_auth::types::HttpMethod::Get,
         "/delete-user/callback".to_string(),
-        HashMap::new(),
+        {
+            let mut headers = HashMap::new();
+            headers.insert(
+                "authorization".to_string(),
+                format!("Bearer {}", session_token),
+            );
+            headers
+        },
         None,
         query,
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 400);
+    assert_eq!(response.status, 404);
 }
 
 /// Integration test for list-accounts (empty)

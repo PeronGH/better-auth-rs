@@ -29,14 +29,6 @@ pub(crate) struct ResetPasswordQuery {
     pub(crate) token: Option<String>,
 }
 
-/// Request body for `POST /set-password`.
-#[derive(Debug, Deserialize, Validate)]
-pub(crate) struct SetPasswordRequest {
-    #[serde(rename = "newPassword")]
-    #[validate(length(min = 1, message = "New password is required"))]
-    pub(crate) new_password: String,
-}
-
 /// Request body for `POST /change-password`.
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct ChangePasswordRequest {

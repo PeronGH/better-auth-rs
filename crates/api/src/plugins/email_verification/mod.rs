@@ -1,12 +1,11 @@
 use async_trait::async_trait;
-use chrono::{Duration, Utc};
+use chrono::Duration;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use uuid::Uuid;
 
 use better_auth_core::{AuthContext, AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, CreateVerification};
+use better_auth_core::{AuthRequest, AuthResponse};
 use better_auth_core::{AuthUser, User};
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
@@ -14,6 +13,7 @@ use better_auth_core::utils::cookie_utils::create_session_cookie;
 use super::StatusResponse;
 
 pub(super) mod handlers;
+pub(crate) mod token;
 pub(super) mod types;
 
 #[cfg(test)]
@@ -144,7 +144,9 @@ impl EmailVerificationPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = send_verification_email_core(&body, &self.config, ctx).await?;
+        let current_user = ctx.require_session(req).await.ok().map(|(user, _)| user);
+        let response =
+            send_verification_email_core(&body, current_user.as_ref(), &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -165,9 +167,18 @@ impl EmailVerificationPlugin {
 
         let ip_address = req.headers.get("x-forwarded-for").cloned();
         let user_agent = req.headers.get("user-agent").cloned();
+        let current_session = ctx.require_session(req).await.ok();
 
-        match verify_email_core(&query, &self.config, ip_address, user_agent, ctx).await? {
-            VerifyEmailResult::AlreadyVerified(data) => Ok(AuthResponse::json(200, &data)?),
+        match verify_email_core(
+            &query,
+            current_session,
+            &self.config,
+            ip_address,
+            user_agent,
+            ctx,
+        )
+        .await?
+        {
             VerifyEmailResult::Redirect { url, session_token } => {
                 let mut headers = better_auth_core::Headers::new();
                 _ = headers.insert("Location".to_string(), url);
@@ -181,13 +192,16 @@ impl EmailVerificationPlugin {
                     body: Vec::new(),
                 })
             }
-            VerifyEmailResult::Json(data) => Ok(AuthResponse::json(200, &data)?),
-            VerifyEmailResult::JsonWithSession {
-                response,
+            VerifyEmailResult::Json {
+                body,
                 session_token,
             } => {
-                let cookie = create_session_cookie(&session_token, &ctx.config);
-                Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie))
+                let mut response = AuthResponse::json(200, &body)?;
+                if let Some(token) = session_token {
+                    let cookie = create_session_cookie(&token, &ctx.config);
+                    response = response.with_header("Set-Cookie", cookie);
+                }
+                Ok(response)
             }
         }
     }
@@ -204,30 +218,20 @@ impl EmailVerificationPlugin {
         callback_url: Option<&str>,
         ctx: &AuthContext,
     ) -> AuthResult<()> {
-        // Generate verification token
-        let verification_token = format!("verify_{}", Uuid::new_v4());
-        let expires_at = Utc::now() + self.config.verification_token_expiry;
-
-        // Create verification token
-        let create_verification = CreateVerification {
-            identifier: email.to_string(),
-            value: verification_token.clone(),
-            expires_at,
-        };
-
-        let _ = ctx
-            .database
-            .create_verification(create_verification)
-            .await?;
-
-        let verification_url = if let Some(callback_url) = callback_url {
-            format!("{}?token={}", callback_url, verification_token)
-        } else {
-            format!(
-                "{}/verify-email?token={}",
-                ctx.config.base_url, verification_token
-            )
-        };
+        let verification_token = token::create_email_verification_token(
+            &ctx.config.secret,
+            email,
+            None,
+            self.config.verification_token_expiry,
+            None,
+        )?;
+        let callback_url = callback_url.unwrap_or("/");
+        let verification_url = format!(
+            "{}/verify-email?token={}&callbackURL={}",
+            ctx.config.base_url,
+            verification_token,
+            urlencoding::encode(callback_url),
+        );
 
         // Use custom sender if configured, otherwise fall back to EmailProvider
         if let Some(ref custom_sender) = self.config.send_verification_email {
@@ -315,7 +319,7 @@ mod axum_impl {
     use axum::extract::{Extension, Query, State};
     use axum::response::IntoResponse;
     use axum::{Json, http::header};
-    use better_auth_core::{AuthError, AuthState, ValidatedJson};
+    use better_auth_core::{AuthError, AuthState, OptionalSession, ValidatedJson};
 
     /// Plugin state stored as an axum extension.
     ///
@@ -342,23 +346,25 @@ mod axum_impl {
     async fn handle_send_verification_email(
         State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
+        OptionalSession(session): OptionalSession,
         ValidatedJson(body): ValidatedJson<SendVerificationEmailRequest>,
     ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        let response = send_verification_email_core(&body, &ps.config, &ctx).await?;
+        let current_user = session.as_ref().map(|session| session.user.clone());
+        let response =
+            send_verification_email_core(&body, current_user.as_ref(), &ps.config, &ctx).await?;
         Ok(Json(response))
     }
 
     async fn handle_verify_email(
         State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
+        OptionalSession(session): OptionalSession,
         Query(query): Query<VerifyEmailQuery>,
     ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        // Note: axum Query extractor doesn't give us headers; pass None for
-        // ip/user-agent (these are only used for session creation metadata).
-        match verify_email_core(&query, &ps.config, None, None, &ctx).await? {
-            VerifyEmailResult::AlreadyVerified(data) => Ok(Json(data).into_response()),
+        let current_session = session.map(|session| (session.user, session.session));
+        match verify_email_core(&query, current_session, &ps.config, None, None, &ctx).await? {
             VerifyEmailResult::Redirect { url, session_token } => {
                 if let Some(token) = session_token {
                     let cookie = state.session_cookie(&token);
@@ -371,13 +377,16 @@ mod axum_impl {
                     Ok(axum::response::Redirect::to(&url).into_response())
                 }
             }
-            VerifyEmailResult::Json(data) => Ok(Json(data).into_response()),
-            VerifyEmailResult::JsonWithSession {
-                response,
+            VerifyEmailResult::Json {
+                body,
                 session_token,
             } => {
-                let cookie = state.session_cookie(&session_token);
-                Ok(([(header::SET_COOKIE, cookie)], Json(response)).into_response())
+                if let Some(token) = session_token {
+                    let cookie = state.session_cookie(&token);
+                    Ok(([(header::SET_COOKIE, cookie)], Json(body)).into_response())
+                } else {
+                    Ok(Json(body).into_response())
+                }
             }
         }
     }

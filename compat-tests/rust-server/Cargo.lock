@@ -489,6 +489,7 @@ dependencies = [
  "governor",
  "hkdf",
  "hmac",
+ "jsonwebtoken",
  "nonzero_ext",
  "rand 0.8.5",
  "reqwest",

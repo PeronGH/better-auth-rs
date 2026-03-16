@@ -35,6 +35,8 @@ function hasOwn(obj: unknown, key: string) {
 const PORT = getPort();
 const database = new Database(":memory:");
 const resetPasswordOutbox = new Map<string, { url: string; token: string }>();
+const verificationEmailOutbox = new Map<string, { url: string; token: string }>();
+const changeEmailOutbox = new Map<string, { newEmail: string; url: string; token: string }>();
 let resetPasswordMode: "capture" | "throw" = "capture";
 let oauthRefreshMode: "success" | "error" = "success";
 const oauthServer = Bun.serve({
@@ -95,6 +97,44 @@ const authOptions = {
       }
     },
   },
+  emailVerification: {
+    async sendVerificationEmail({
+      user,
+      url,
+      token,
+    }: {
+      user: { email?: string } | null;
+      url: string;
+      token: string;
+    }) {
+      if (user?.email) {
+        verificationEmailOutbox.set(user.email, { url, token });
+      }
+    },
+  },
+  user: {
+    changeEmail: {
+      enabled: true,
+      async sendChangeEmailVerification({
+        user,
+        newEmail,
+        url,
+        token,
+      }: {
+        user: { email?: string } | null;
+        newEmail: string;
+        url: string;
+        token: string;
+      }) {
+        if (user?.email) {
+          changeEmailOutbox.set(user.email, { newEmail, url, token });
+        }
+      },
+    },
+    deleteUser: {
+      enabled: true,
+    },
+  },
   rateLimit: {
     enabled: false,
   },
@@ -143,9 +183,27 @@ const server = Bun.serve({
 
       if (url.pathname === "/__test/reset-state" && request.method === "POST") {
         resetPasswordOutbox.clear();
+        verificationEmailOutbox.clear();
+        changeEmailOutbox.clear();
         resetPasswordMode = "capture";
         oauthRefreshMode = "success";
         return jsonResponse({ status: true });
+      }
+
+      if (url.pathname === "/__test/verification-email" && request.method === "GET") {
+        const email = url.searchParams.get("email");
+        const record = email ? verificationEmailOutbox.get(email) ?? null : null;
+        return record
+          ? jsonResponse(record)
+          : jsonResponse({ message: "Not found" }, { status: 404 });
+      }
+
+      if (url.pathname === "/__test/change-email-confirmation" && request.method === "GET") {
+        const email = url.searchParams.get("email");
+        const record = email ? changeEmailOutbox.get(email) ?? null : null;
+        return record
+          ? jsonResponse(record)
+          : jsonResponse({ message: "Not found" }, { status: 404 });
       }
 
       if (url.pathname === "/__test/reset-password-token" && request.method === "GET") {
@@ -189,6 +247,59 @@ const server = Bun.serve({
           identifier: `reset-password:${token}`,
           expiresAt: new Date(expiresAt),
         });
+
+        return jsonResponse({ status: true });
+      }
+
+      if (url.pathname === "/__test/seed-delete-user-token" && request.method === "POST") {
+        const body = (await readJson(request)) as {
+          email?: string;
+          token?: string;
+          expiresAt?: string;
+        } | null;
+        const email = body?.email;
+        const token = body?.token;
+        const expiresAt = body?.expiresAt;
+        const user = email
+          ? await authContext.internalAdapter.findUserByEmail(email, {
+              includeAccounts: true,
+            })
+          : null;
+
+        if (!user?.user || !token || !expiresAt) {
+          return jsonResponse(
+            { message: "email, token, and expiresAt are required" },
+            { status: 400 },
+          );
+        }
+
+        await authContext.internalAdapter.createVerificationValue({
+          value: user.user.id,
+          identifier: `delete-account-${token}`,
+          expiresAt: new Date(expiresAt),
+        });
+
+        return jsonResponse({ status: true });
+      }
+
+      if (url.pathname === "/__test/remove-credential-account" && request.method === "POST") {
+        const body = (await readJson(request)) as { email?: string } | null;
+        const email = body?.email;
+        const user = email
+          ? await authContext.internalAdapter.findUserByEmail(email, {
+              includeAccounts: true,
+            })
+          : null;
+
+        if (!user?.user) {
+          return jsonResponse({ message: "User not found" }, { status: 404 });
+        }
+
+        for (const account of user.accounts ?? []) {
+          if (account.providerId === "credential") {
+            await authContext.internalAdapter.deleteAccount(account.id);
+          }
+        }
 
         return jsonResponse({ status: true });
       }

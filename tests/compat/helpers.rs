@@ -12,7 +12,7 @@ use better_auth::{
     plugins::{
         AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, EmailPasswordPlugin,
         EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
-        PasswordManagementPlugin, SessionManagementPlugin, TwoFactorPlugin,
+        PasswordManagementPlugin, SessionManagementPlugin, TwoFactorPlugin, UserManagementPlugin,
         oauth::{OAuthProvider, OAuthUserInfo},
         password_management::SendResetPassword,
     },
@@ -171,6 +171,12 @@ pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth
         )
         .plugin(AccountManagementPlugin::new())
         .plugin(EmailVerificationPlugin::new())
+        .plugin(
+            UserManagementPlugin::new()
+                .change_email_enabled(true)
+                .delete_user_enabled(true)
+                .require_delete_verification(false),
+        )
         .plugin(ApiKeyPlugin::builder().build())
         .plugin(mock_oauth_plugin())
         .plugin(TwoFactorPlugin::new())
@@ -390,6 +396,13 @@ impl TestHarness {
                 })),
             )
             .plugin(AccountManagementPlugin::new())
+            .plugin(EmailVerificationPlugin::new())
+            .plugin(
+                UserManagementPlugin::new()
+                    .change_email_enabled(true)
+                    .delete_user_enabled(true)
+                    .require_delete_verification(false),
+            )
             .plugin(ApiKeyPlugin::builder().build())
             .plugin(mock_oauth_plugin())
             .build()

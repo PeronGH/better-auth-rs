@@ -111,14 +111,6 @@ impl OpenApiBuilder {
         self.route(&HttpMethod::Get, "/ok", "ok", "core")
             .route(&HttpMethod::Get, "/error", "error", "core")
             .route(&HttpMethod::Post, "/update-user", "update_user", "core")
-            .route(&HttpMethod::Post, "/delete-user", "delete_user", "core")
-            .route(&HttpMethod::Post, "/change-email", "change_email", "core")
-            .route(
-                &HttpMethod::Get,
-                "/delete-user/callback",
-                "delete_user_callback",
-                "core",
-            )
     }
 
     /// Build the final OpenAPI spec.
@@ -163,7 +155,6 @@ mod tests {
         assert!(spec.paths.contains_key("/ok"));
         assert!(spec.paths.contains_key("/error"));
         assert!(spec.paths.contains_key("/update-user"));
-        assert!(spec.paths.contains_key("/delete-user"));
 
         // /ok should have a GET operation
         let ok_path = &spec.paths["/ok"];

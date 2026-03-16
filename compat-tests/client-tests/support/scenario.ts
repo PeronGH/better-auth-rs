@@ -4,7 +4,11 @@ import { createAuthClient } from "better-auth/client";
 import { RAW_DIFF_ALLOWLIST } from "./allowlist";
 import { RUST_BASE_URL, TS_BASE_URL, requireHealthy } from "./config";
 import {
+  readChangeEmailConfirmation,
+  readVerificationEmail,
+  removeCredentialAccount,
   resetServerState,
+  seedDeleteUserToken,
   seedOAuthAccount,
   seedResetPasswordToken,
   setOAuthRefreshMode,
@@ -16,10 +20,23 @@ import { createTracingFetch, type TraceEntry } from "./trace";
 type ScenarioServerContext = {
   actor(name?: string): {
     client: ReturnType<typeof createAuthClient>;
+    fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
   };
   uniqueEmail(prefix: string): string;
   uniqueToken(prefix: string): string;
   snapshot<T>(value: T): unknown;
+  rawRequest(args: {
+    actor?: string;
+    path: string;
+    method?: string;
+    body?: BodyInit;
+    headers?: HeadersInit;
+    json?: unknown;
+  }): Promise<{
+    status: number;
+    location: string | null;
+    body: unknown;
+  }>;
   resetServerState(): Promise<unknown>;
   setResetPasswordMode(mode: "capture" | "throw"): Promise<unknown>;
   seedResetPasswordToken(args: {
@@ -39,6 +56,20 @@ type ScenarioServerContext = {
     refreshTokenExpiresAt?: string | null;
     scope?: string | null;
   }): Promise<string>;
+  readVerificationEmail(args: {
+    email: string;
+  }): Promise<unknown>;
+  readChangeEmailConfirmation(args: {
+    email: string;
+  }): Promise<unknown>;
+  seedDeleteUserToken(args: {
+    email: string;
+    token: string;
+    expiresAt: string;
+  }): Promise<unknown>;
+  removeCredentialAccount(args: {
+    email: string;
+  }): Promise<unknown>;
 };
 
 type ScenarioRun = {
@@ -73,7 +104,13 @@ async function runScenario(
   await resetServerState(baseURL);
 
   const traces: TraceEntry[] = [];
-  const actors = new Map<string, { client: ReturnType<typeof createAuthClient> }>();
+  const actors = new Map<
+    string,
+    {
+      client: ReturnType<typeof createAuthClient>;
+      fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
+    }
+  >();
   const shortSeed = seed.replace(/-/g, "").slice(0, 12);
 
   const context: ScenarioServerContext = {
@@ -91,6 +128,9 @@ async function runScenario(
             customFetchImpl: fetchImpl,
           },
         }),
+        fetch(input: string | URL | Request, init?: RequestInit) {
+          return fetchImpl(input, init);
+        },
       };
       actors.set(name, actor);
       return actor;
@@ -103,6 +143,34 @@ async function runScenario(
     },
     snapshot(value) {
       return normalizeClientValue(value);
+    },
+    async rawRequest({ actor = "primary", path, method = "GET", body, headers, json }) {
+      const requestHeaders = new Headers(headers);
+      let requestBody = body;
+      if (json !== undefined) {
+        requestHeaders.set("content-type", "application/json");
+        requestBody = JSON.stringify(json);
+      }
+
+      const response = await context.actor(actor).fetch(path, {
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+      });
+      const text = await response.text();
+      let parsed: unknown = null;
+      if (text) {
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = text;
+        }
+      }
+      return {
+        status: response.status,
+        location: response.headers.get("location"),
+        body: parsed,
+      };
     },
     resetServerState() {
       return resetServerState(baseURL);
@@ -118,6 +186,18 @@ async function runScenario(
     },
     seedOAuthAccount(args) {
       return seedOAuthAccount(baseURL, args);
+    },
+    readVerificationEmail(args) {
+      return readVerificationEmail(baseURL, args);
+    },
+    readChangeEmailConfirmation(args) {
+      return readChangeEmailConfirmation(baseURL, args);
+    },
+    seedDeleteUserToken(args) {
+      return seedDeleteUserToken(baseURL, args);
+    },
+    removeCredentialAccount(args) {
+      return removeCredentialAccount(baseURL, args);
     },
   };
 
