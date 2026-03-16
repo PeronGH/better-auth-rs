@@ -91,6 +91,8 @@ Better Auth RS ships with a rich set of plugins. Enable only what you need:
 
 Detailed guides and API reference are available in the [`docs/`](docs/) directory:
 
+- [Contributing](CONTRIBUTING.md)
+- [Alignment Roadmap](ROADMAP.md)
 - [Installation](docs/content/docs/installation.mdx)
 - [Quick Start](docs/content/docs/quick-start.mdx)
 - **Authentication** — [Email/Password](docs/content/docs/authentication/email-password.mdx) · [Sessions](docs/content/docs/authentication/sessions.mdx) · [Email Verification](docs/content/docs/authentication/email-verification.mdx)
@@ -98,6 +100,7 @@ Detailed guides and API reference are available in the [`docs/`](docs/) director
 - **Plugins** — [OAuth](docs/content/docs/plugins/oauth.mdx) · [Organization](docs/content/docs/plugins/organization.mdx) · [Two-Factor](docs/content/docs/plugins/two-factor.mdx) · [Passkey](docs/content/docs/plugins/passkey.mdx) · [API Key](docs/content/docs/plugins/api-key.mdx) · [Admin](docs/content/docs/plugins/admin.mdx)
 - **Reference** — [API Routes](docs/content/docs/reference/api-routes.mdx) · [Configuration Options](docs/content/docs/reference/configuration-options.mdx) · [Errors](docs/content/docs/reference/errors.mdx) · [Security](docs/content/docs/reference/security.mdx) · [OpenAPI](docs/content/docs/reference/openapi.mdx)
 - **Integrations** — [Axum](docs/content/docs/integrations/axum.mdx)
+- **Compatibility** — [Compatibility Harness](compat-tests/README.md)
 
 ## Examples
 
