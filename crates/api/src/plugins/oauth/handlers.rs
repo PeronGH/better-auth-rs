@@ -372,6 +372,35 @@ fn decode_account_cookie(
     decode_account_cookie_value(secret, &value).map(Some)
 }
 
+async fn persist_refreshed_cookie_account(
+    cookie_account: Option<&AccountCookiePayload>,
+    provider_id: &str,
+    req: &AuthRequest,
+    ctx: &AuthContext,
+    update: UpdateAccount,
+) -> AuthResult<Option<AccountCookiePayload>> {
+    let Some(account) = cookie_account else {
+        return Ok(None);
+    };
+
+    let Some(account_id) = account.id.as_deref() else {
+        return Ok(None);
+    };
+
+    let updated_account = ctx.database.update_account(account_id, update).await?;
+    let payload = AccountCookiePayload::from_account(&updated_account);
+
+    if ctx.config.account.store_account_cookie
+        && let Some(request_account_cookie) =
+            decode_account_cookie(req, &ctx.config, &ctx.config.secret)?
+        && request_account_cookie.provider_id == provider_id
+    {
+        Ok(Some(payload))
+    } else {
+        Ok(None)
+    }
+}
+
 fn attach_state_cookie(
     response: AuthResponse,
     config: &better_auth_core::AuthConfig,
@@ -461,6 +490,16 @@ struct ProcessOAuthUserResult {
     session: better_auth_core::Session,
     user: better_auth_core::User,
     is_register: bool,
+    account_cookie: Option<AccountCookiePayload>,
+}
+
+pub(crate) struct AccessTokenCoreResult {
+    response: AccessTokenResponse,
+    account_cookie: Option<AccountCookiePayload>,
+}
+
+pub(crate) struct RefreshTokenCoreResult {
+    response: RefreshTokenResponse,
     account_cookie: Option<AccountCookiePayload>,
 }
 
@@ -1153,7 +1192,7 @@ pub(crate) async fn get_access_token_core(
     req: &AuthRequest,
     session: &better_auth_core::Session,
     ctx: &AuthContext,
-) -> AuthResult<AccessTokenResponse> {
+) -> AuthResult<AccessTokenCoreResult> {
     let _ = body.user_id.as_deref();
     let provider = config.providers.get(&body.provider_id).ok_or_else(|| {
         AuthError::bad_request(format!("Provider {} is not supported.", body.provider_id))
@@ -1269,6 +1308,8 @@ pub(crate) async fn get_access_token_core(
             refreshed.refresh_token.clone(),
             refreshed.id_token.clone(),
         )?;
+        let scope = (!refreshed.scopes.is_empty()).then(|| refreshed.scopes.join(","));
+        let mut refreshed_cookie_account = None;
         if let Some(account) = db_account {
             let _ = ctx
                 .database
@@ -1280,11 +1321,29 @@ pub(crate) async fn get_access_token_core(
                         id_token: tokens.id_token,
                         access_token_expires_at: refreshed.access_token_expires_at,
                         refresh_token_expires_at: refreshed.refresh_token_expires_at,
-                        scope: (!refreshed.scopes.is_empty()).then(|| refreshed.scopes.join(",")),
+                        scope: scope.clone(),
                         ..Default::default()
                     },
                 )
                 .await?;
+        } else if let Some(updated_cookie_account) = persist_refreshed_cookie_account(
+            cookie_account,
+            &body.provider_id,
+            req,
+            ctx,
+            UpdateAccount {
+                access_token: tokens.access_token.clone(),
+                refresh_token: tokens.refresh_token.clone(),
+                id_token: tokens.id_token.clone(),
+                access_token_expires_at: refreshed.access_token_expires_at,
+                refresh_token_expires_at: refreshed.refresh_token_expires_at,
+                scope: scope.clone(),
+                ..Default::default()
+            },
+        )
+        .await?
+        {
+            refreshed_cookie_account = Some(updated_cookie_account);
         }
 
         access_token = refreshed.access_token;
@@ -1297,13 +1356,26 @@ pub(crate) async fn get_access_token_core(
         if refreshed.id_token.is_some() {
             id_token = refreshed.id_token;
         }
+
+        return Ok(AccessTokenCoreResult {
+            response: AccessTokenResponse {
+                access_token,
+                access_token_expires_at,
+                scopes,
+                id_token,
+            },
+            account_cookie: refreshed_cookie_account,
+        });
     }
 
-    Ok(AccessTokenResponse {
-        access_token,
-        access_token_expires_at,
-        scopes,
-        id_token,
+    Ok(AccessTokenCoreResult {
+        response: AccessTokenResponse {
+            access_token,
+            access_token_expires_at,
+            scopes,
+            id_token,
+        },
+        account_cookie: None,
     })
 }
 
@@ -1313,7 +1385,7 @@ pub(crate) async fn refresh_token_core(
     session: &better_auth_core::Session,
     config: &OAuthConfig,
     ctx: &AuthContext,
-) -> AuthResult<RefreshTokenResponse> {
+) -> AuthResult<RefreshTokenCoreResult> {
     let _ = body.user_id.as_deref();
     let provider_name = &body.provider_id;
 
@@ -1372,6 +1444,8 @@ pub(crate) async fn refresh_token_core(
         refreshed.refresh_token.clone(),
         refreshed.id_token.clone(),
     )?;
+    let scope = (!refreshed.scopes.is_empty()).then(|| refreshed.scopes.join(","));
+    let mut refreshed_cookie_account = None;
     if let Some(account) = db_account {
         let _ = ctx
             .database
@@ -1383,11 +1457,29 @@ pub(crate) async fn refresh_token_core(
                     id_token: tokens.id_token,
                     access_token_expires_at: refreshed.access_token_expires_at,
                     refresh_token_expires_at: refreshed.refresh_token_expires_at,
-                    scope: (!refreshed.scopes.is_empty()).then(|| refreshed.scopes.join(",")),
+                    scope: scope.clone(),
                     ..Default::default()
                 },
             )
             .await?;
+    } else if let Some(updated_cookie_account) = persist_refreshed_cookie_account(
+        cookie_account,
+        provider_name,
+        req,
+        ctx,
+        UpdateAccount {
+            access_token: tokens.access_token.clone(),
+            refresh_token: tokens.refresh_token.clone(),
+            id_token: tokens.id_token.clone(),
+            access_token_expires_at: refreshed.access_token_expires_at,
+            refresh_token_expires_at: refreshed.refresh_token_expires_at,
+            scope: scope.clone(),
+            ..Default::default()
+        },
+    )
+    .await?
+    {
+        refreshed_cookie_account = Some(updated_cookie_account);
     }
     let existing_id_token = if let Some(account_cookie) = cookie_account {
         maybe_decrypt(account_cookie.id_token.as_deref(), encrypt, secret)?
@@ -1399,24 +1491,26 @@ pub(crate) async fn refresh_token_core(
         )?
     };
 
-    Ok(RefreshTokenResponse {
-        access_token: refreshed.access_token,
-        access_token_expires_at: refreshed.access_token_expires_at.map(|dt| dt.to_rfc3339()),
-        refresh_token: refreshed.refresh_token,
-        refresh_token_expires_at: refreshed.refresh_token_expires_at.map(|dt| dt.to_rfc3339()),
-        scope: (!refreshed.scopes.is_empty())
-            .then(|| refreshed.scopes.join(","))
-            .or_else(|| db_account.and_then(|account| account.scope().map(String::from)))
-            .or_else(|| cookie_account.and_then(|account| account.scope.clone())),
-        id_token: refreshed.id_token.or(existing_id_token),
-        provider_id: db_account
-            .map(|account| account.provider_id().to_string())
-            .or_else(|| cookie_account.map(|account| account.provider_id.clone()))
-            .unwrap_or_else(|| provider_name.to_string()),
-        account_id: db_account
-            .map(|account| account.account_id().to_string())
-            .or_else(|| cookie_account.map(|account| account.account_id.clone()))
-            .ok_or_else(|| AuthError::bad_request("Account not found"))?,
+    Ok(RefreshTokenCoreResult {
+        response: RefreshTokenResponse {
+            access_token: refreshed.access_token,
+            access_token_expires_at: refreshed.access_token_expires_at.map(|dt| dt.to_rfc3339()),
+            refresh_token: refreshed.refresh_token,
+            refresh_token_expires_at: refreshed.refresh_token_expires_at.map(|dt| dt.to_rfc3339()),
+            scope: scope
+                .or_else(|| db_account.and_then(|account| account.scope().map(String::from)))
+                .or_else(|| cookie_account.and_then(|account| account.scope.clone())),
+            id_token: refreshed.id_token.or(existing_id_token),
+            provider_id: db_account
+                .map(|account| account.provider_id().to_string())
+                .or_else(|| cookie_account.map(|account| account.provider_id.clone()))
+                .unwrap_or_else(|| provider_name.to_string()),
+            account_id: db_account
+                .map(|account| account.account_id().to_string())
+                .or_else(|| cookie_account.map(|account| account.account_id.clone()))
+                .ok_or_else(|| AuthError::bad_request("Account not found"))?,
+        },
+        account_cookie: refreshed_cookie_account,
     })
 }
 
@@ -1865,8 +1959,15 @@ pub(crate) async fn handle_get_access_token(
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    let response = get_access_token_core(&body, config, req, &session, ctx).await?;
-    AuthResponse::json(200, &response).map_err(AuthError::from)
+    let result = get_access_token_core(&body, config, req, &session, ctx).await?;
+    let mut response = AuthResponse::json(200, &result.response).map_err(AuthError::from)?;
+    if let Some(account_cookie) = result.account_cookie.as_ref() {
+        response = response.with_appended_header(
+            "Set-Cookie",
+            create_account_cookie_header(&ctx.config, &ctx.config.secret, account_cookie)?,
+        );
+    }
+    Ok(response)
 }
 
 pub(crate) async fn handle_refresh_token(
@@ -1879,6 +1980,13 @@ pub(crate) async fn handle_refresh_token(
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    let response = refresh_token_core(&body, req, &session, config, ctx).await?;
-    AuthResponse::json(200, &response).map_err(AuthError::from)
+    let result = refresh_token_core(&body, req, &session, config, ctx).await?;
+    let mut response = AuthResponse::json(200, &result.response).map_err(AuthError::from)?;
+    if let Some(account_cookie) = result.account_cookie.as_ref() {
+        response = response.with_appended_header(
+            "Set-Cookie",
+            create_account_cookie_header(&ctx.config, &ctx.config.secret, account_cookie)?,
+        );
+    }
+    Ok(response)
 }

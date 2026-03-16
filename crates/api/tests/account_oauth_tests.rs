@@ -7,6 +7,7 @@
 
 use std::sync::{Arc, Once};
 
+use async_trait::async_trait;
 use better_auth_core::AuthStore;
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{
@@ -18,7 +19,12 @@ use better_auth_core::{
 use better_auth_api::AccountManagementPlugin;
 use better_auth_api::OAuthPlugin;
 use better_auth_api::plugins::oauth::encryption::{decrypt_token, encrypt_token, maybe_encrypt};
-use better_auth_api::plugins::oauth::{OAuthConfig, OAuthProvider, OAuthUserInfo};
+use better_auth_api::plugins::oauth::{
+    OAuthConfig, OAuthProvider, OAuthRefreshTokenHandler, OAuthTokenSet, OAuthUserInfo,
+};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{EncodingKey, Header, encode};
+use serde::Serialize;
 
 use serde_json::json;
 
@@ -89,6 +95,16 @@ fn test_config_allow_unlinking_all() -> AuthConfig {
         })
 }
 
+fn test_config_with_account_cookie() -> AuthConfig {
+    AuthConfig::new(TEST_SECRET)
+        .base_url("http://localhost:3000")
+        .password_min_length(6)
+        .account(AccountConfig {
+            store_account_cookie: true,
+            ..Default::default()
+        })
+}
+
 /// Helper: create a user + OAuth account + session, returning (user_id, session_token).
 async fn setup_user_with_account(
     db: &Arc<AuthStore>,
@@ -140,6 +156,96 @@ async fn create_test_database() -> Arc<AuthStore> {
     let database = Database::connect("sqlite::memory:").await.unwrap();
     run_migrations(&database).await.unwrap();
     Arc::new(AuthStore::new(Arc::new(test_config()), database))
+}
+
+#[derive(Debug, Clone)]
+struct RotatingRefreshHandler {
+    sequence: Arc<std::sync::Mutex<Vec<(String, OAuthTokenSet)>>>,
+}
+
+#[async_trait]
+impl OAuthRefreshTokenHandler for RotatingRefreshHandler {
+    async fn refresh_access_token(&self, refresh_token: &str) -> Result<OAuthTokenSet, String> {
+        let mut sequence = self.sequence.lock().unwrap();
+        let (expected, response) = sequence.remove(0);
+        if refresh_token != expected {
+            return Err(format!(
+                "unexpected refresh token: expected {expected}, got {refresh_token}"
+            ));
+        }
+        Ok(response)
+    }
+}
+
+#[derive(Serialize)]
+struct TestAccountCookieClaims<'a> {
+    #[serde(rename = "id", skip_serializing_if = "Option::is_none")]
+    id: Option<&'a str>,
+    #[serde(rename = "providerId")]
+    provider_id: &'a str,
+    #[serde(rename = "accountId")]
+    account_id: &'a str,
+    #[serde(rename = "accessToken", skip_serializing_if = "Option::is_none")]
+    access_token: Option<&'a str>,
+    #[serde(rename = "refreshToken", skip_serializing_if = "Option::is_none")]
+    refresh_token: Option<&'a str>,
+    #[serde(rename = "idToken", skip_serializing_if = "Option::is_none")]
+    id_token: Option<&'a str>,
+    #[serde(
+        rename = "accessTokenExpiresAt",
+        skip_serializing_if = "Option::is_none"
+    )]
+    access_token_expires_at: Option<chrono::DateTime<Utc>>,
+    #[serde(
+        rename = "refreshTokenExpiresAt",
+        skip_serializing_if = "Option::is_none"
+    )]
+    refresh_token_expires_at: Option<chrono::DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scope: Option<&'a str>,
+    exp: usize,
+    iat: usize,
+}
+
+fn encode_account_cookie(
+    account: &impl AuthAccount,
+    access_token: Option<&str>,
+    refresh_token: Option<&str>,
+    access_token_expires_at: Option<chrono::DateTime<Utc>>,
+) -> String {
+    let now = Utc::now();
+    encode(
+        &Header::default(),
+        &TestAccountCookieClaims {
+            id: Some(account.id()),
+            provider_id: account.provider_id(),
+            account_id: account.account_id(),
+            access_token,
+            refresh_token,
+            id_token: account.id_token(),
+            access_token_expires_at,
+            refresh_token_expires_at: account.refresh_token_expires_at(),
+            scope: account.scope(),
+            exp: (now + Duration::minutes(5)).timestamp() as usize,
+            iat: now.timestamp() as usize,
+        },
+        &EncodingKey::from_secret(TEST_SECRET.as_bytes()),
+    )
+    .unwrap()
+}
+
+fn set_session_and_account_cookies(
+    req: &mut AuthRequest,
+    session_token: &str,
+    account_cookie: &str,
+) {
+    req.headers.insert(
+        "cookie".to_string(),
+        format!(
+            "better-auth.session_token={}; better-auth.account_data={}",
+            session_token, account_cookie
+        ),
+    );
 }
 
 /// Start a mock HTTP server that responds to OAuth token + userinfo requests.
@@ -452,6 +558,166 @@ async fn test_refresh_token_rejects_plaintext_when_encryption_is_enabled() {
     assert!(
         result.is_err(),
         "plaintext refresh tokens must not be accepted"
+    );
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/account.ts :: getAccessToken/refreshToken cookie-backed token refresh behavior; adapted to the Rust account and OAuth route behavior.
+#[tokio::test]
+async fn test_refresh_token_persists_rotated_tokens_for_cookie_matched_account() {
+    let config = Arc::new(test_config_with_account_cookie());
+    let db = create_test_database().await;
+
+    let (user_id, session_token) = setup_user_with_account(
+        &db,
+        &config,
+        "rotate-refresh@example.com",
+        "google",
+        Some("old-access-token".to_string()),
+        Some("old-refresh-token".to_string()),
+    )
+    .await;
+    let account = db.get_user_accounts(&user_id).await.unwrap().remove(0);
+    let account_cookie = encode_account_cookie(
+        &account,
+        Some("old-access-token"),
+        Some("old-refresh-token"),
+        Some(Utc::now() + Duration::minutes(30)),
+    );
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+    let mut oauth_config = OAuthConfig::default();
+    let mut provider = make_test_provider("http://localhost:65535");
+    provider.refresh_access_token = Some(Arc::new(RotatingRefreshHandler {
+        sequence: Arc::new(std::sync::Mutex::new(vec![(
+            "old-refresh-token".to_string(),
+            OAuthTokenSet {
+                access_token: Some("rotated-access-token".to_string()),
+                refresh_token: Some("rotated-refresh-token".to_string()),
+                access_token_expires_at: Some(Utc::now() + Duration::minutes(30)),
+                refresh_token_expires_at: Some(Utc::now() + Duration::hours(24)),
+                scopes: vec!["email".to_string()],
+                ..Default::default()
+            },
+        )])),
+    }));
+    oauth_config
+        .providers
+        .insert("google".to_string(), provider);
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+
+    let mut req = AuthRequest::new(HttpMethod::Post, "/refresh-token");
+    req.body = Some(json!({"providerId": "google"}).to_string().into_bytes());
+    req.headers
+        .insert("content-type".to_string(), "application/json".to_string());
+    set_session_and_account_cookies(&mut req, &session_token, &account_cookie);
+
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+    let resp = match result {
+        Ok(Some(resp)) => resp,
+        other => panic!("refresh-token should succeed, got {other:?}"),
+    };
+
+    assert_eq!(resp.status, 200);
+    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert_eq!(body["refreshToken"], "rotated-refresh-token");
+
+    let updated_account = db
+        .get_user_accounts(&user_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|candidate| candidate.id() == account.id())
+        .unwrap();
+    assert_eq!(
+        updated_account.refresh_token(),
+        Some("rotated-refresh-token"),
+        "refresh-token should persist rotated refresh tokens back to the DB"
+    );
+    assert!(
+        resp.headers
+            .get_all("Set-Cookie")
+            .any(|value| value.starts_with("better-auth.account_data=")),
+        "refresh-token should refresh the account_data cookie when it is the source of truth"
+    );
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/account.ts :: getAccessToken/refreshToken cookie-backed token refresh behavior; adapted to the Rust account and OAuth route behavior.
+#[tokio::test]
+async fn test_get_access_token_refresh_persists_rotated_tokens_for_cookie_matched_account() {
+    let config = Arc::new(test_config_with_account_cookie());
+    let db = create_test_database().await;
+
+    let (user_id, session_token) = setup_user_with_account(
+        &db,
+        &config,
+        "rotate-access@example.com",
+        "google",
+        Some("expired-access-token".to_string()),
+        Some("old-refresh-token".to_string()),
+    )
+    .await;
+    let account = db.get_user_accounts(&user_id).await.unwrap().remove(0);
+    let account_cookie = encode_account_cookie(
+        &account,
+        Some("expired-access-token"),
+        Some("old-refresh-token"),
+        Some(Utc::now() - Duration::seconds(10)),
+    );
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+    let mut oauth_config = OAuthConfig::default();
+    let mut provider = make_test_provider("http://localhost:65535");
+    provider.refresh_access_token = Some(Arc::new(RotatingRefreshHandler {
+        sequence: Arc::new(std::sync::Mutex::new(vec![(
+            "old-refresh-token".to_string(),
+            OAuthTokenSet {
+                access_token: Some("rotated-access-token".to_string()),
+                refresh_token: Some("rotated-refresh-token".to_string()),
+                access_token_expires_at: Some(Utc::now() + Duration::minutes(30)),
+                refresh_token_expires_at: Some(Utc::now() + Duration::hours(24)),
+                scopes: vec!["email".to_string()],
+                ..Default::default()
+            },
+        )])),
+    }));
+    oauth_config
+        .providers
+        .insert("google".to_string(), provider);
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+
+    let mut req = AuthRequest::new(HttpMethod::Post, "/get-access-token");
+    req.body = Some(json!({"providerId": "google"}).to_string().into_bytes());
+    req.headers
+        .insert("content-type".to_string(), "application/json".to_string());
+    set_session_and_account_cookies(&mut req, &session_token, &account_cookie);
+
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+    let resp = match result {
+        Ok(Some(resp)) => resp,
+        other => panic!("get-access-token should succeed, got {other:?}"),
+    };
+
+    assert_eq!(resp.status, 200);
+    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert_eq!(body["accessToken"], "rotated-access-token");
+
+    let updated_account = db
+        .get_user_accounts(&user_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|candidate| candidate.id() == account.id())
+        .unwrap();
+    assert_eq!(
+        updated_account.refresh_token(),
+        Some("rotated-refresh-token"),
+        "get-access-token refresh path should persist rotated refresh tokens back to the DB"
+    );
+    assert!(
+        resp.headers
+            .get_all("Set-Cookie")
+            .any(|value| value.starts_with("better-auth.account_data=")),
+        "get-access-token refresh path should refresh the account_data cookie when it is the source of truth"
     );
 }
 
