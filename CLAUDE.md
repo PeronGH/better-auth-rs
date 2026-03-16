@@ -272,12 +272,13 @@ A phase is only complete when all of the following are true:
    pinned TS runtime for that phase.
 
 Only completed phases may join the blocking schema-driven baseline.
-Currently, Phases 0 and 1 are the only completed phases, so the
-blocking baseline uses the generated `core` profile. Broader generated
-profiles remain reporting-only until later phases satisfy this
-completion rule. When the baseline moves, update this file, the default
-compat profile, and the blocking-vs-report split in the test suite in
-the same change.
+Phases 0, 1, and 2 now meet the completion rule. The blocking schema
+baseline still uses the generated `core` profile until the broader
+generated-profile baseline is explicitly promoted in the same change as
+the corresponding test and reporting updates. Broader generated
+profiles remain reporting-only until that promotion happens. When the
+baseline moves, update this file, the default compat profile, and the
+blocking-vs-report split in the test suite in the same change.
 
 Do not use a generic "remaining capability" phase. When a new TS feature
 family becomes in scope, add a new explicit phase with its own
