@@ -15,23 +15,25 @@ The supported public path is:
 
 ```rust
 use better_auth::{run_migrations, AuthConfig, BetterAuth};
-use better_auth::store::sea_orm::Database;
+use better_auth::store::{Database, DatabaseConnection};
 use better_auth::plugins::EmailPasswordPlugin;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database = Database::connect("sqlite::memory:").await?;
     run_migrations(&database).await?;
+    let auth_database: DatabaseConnection = database.clone();
 
     let auth = BetterAuth::new(
         AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
             .base_url("http://localhost:3000"),
     )
-    .database(database)
+    .database(auth_database)
     .plugin(EmailPasswordPlugin::new().enable_signup(true))
     .build()
     .await?;
 
+    // Keep using `database` for your app's own tables and queries.
     println!("plugins: {:?}", auth.plugin_names());
     Ok(())
 }
@@ -42,7 +44,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 For production, pass a PostgreSQL connection string to SeaORM and then run the same migrations:
 
 ```rust
-use better_auth::{run_migrations, store::sea_orm::Database};
+use better_auth::{run_migrations};
+use better_auth::store::Database;
 
 let database = Database::connect("postgresql://user:pass@localhost:5432/mydb").await?;
 run_migrations(&database).await?;
@@ -56,5 +59,5 @@ reference server.
 
 ## Notes
 
-- `run_migrations` creates the built-in auth tables used by the core and currently implemented plugins.
+- `run_migrations` records Better Auth schema state in the `better_auth_migrations` table so it can coexist cleanly with your app's own SeaORM migrator history.
 - `MemoryCacheAdapter` is still available for cache/rate-limit use cases. It is separate from database persistence.

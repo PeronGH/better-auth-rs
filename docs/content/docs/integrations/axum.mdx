@@ -20,7 +20,7 @@ Use `.axum_router()` when `Arc<BetterAuth>` is the router state:
 
 ```rust
 use better_auth::{run_migrations, AuthConfig, BetterAuth};
-use better_auth::store::sea_orm::Database;
+use better_auth::store::Database;
 use better_auth::plugins::{
     EmailPasswordPlugin, SessionManagementPlugin,
     PasswordManagementPlugin, AccountManagementPlugin,
@@ -72,12 +72,13 @@ use better_auth::{run_migrations, AuthConfig, BetterAuth};
 use better_auth::integrations::axum::{AxumIntegration, CurrentSession};
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
 use better_auth::prelude::AuthUser;
-use better_auth::store::sea_orm::Database;
+use better_auth::store::{Database, DatabaseConnection};
 use std::sync::Arc;
 
 #[derive(Clone)]
 struct AppState {
     auth: Arc<BetterAuth>,
+    db: DatabaseConnection,
     app_name: &'static str,
 }
 
@@ -104,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
                 .base_url("http://localhost:8080"),
         )
-        .database(database)
+        .database(database.clone())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .build()
@@ -113,6 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = AppState {
         auth: auth.clone(),
+        db: database,
         app_name: "my-app",
     };
 
@@ -212,7 +214,7 @@ use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalS
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
 use better_auth::{run_migrations, AuthConfig, BetterAuth};
 use better_auth::prelude::AuthUser;
-use better_auth::store::sea_orm::Database;
+use better_auth::store::Database;
 use std::sync::Arc;
 
 #[tokio::main]

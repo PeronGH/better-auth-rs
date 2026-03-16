@@ -27,7 +27,8 @@ better-auth = "0.9"
 ```
 
 ```rust
-use better_auth::{run_migrations, store::sea_orm::Database, BetterAuth, AuthConfig};
+use better_auth::{run_migrations, BetterAuth, AuthConfig};
+use better_auth::store::Database;
 use better_auth::plugins::EmailPasswordPlugin;
 
 #[tokio::main]

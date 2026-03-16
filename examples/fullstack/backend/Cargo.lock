@@ -1162,7 +1162,6 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "better-auth",
- "better-auth-core",
  "serde",
  "serde_json",
  "tokio",

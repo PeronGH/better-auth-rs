@@ -51,7 +51,10 @@ impl AuthBuilder {
         }
     }
 
-    /// Set the SeaORM connection for auth persistence.
+    /// Set the SeaORM connection handle for auth persistence.
+    ///
+    /// Clone the same [`DatabaseConnection`] into the rest of your application
+    /// state when Better Auth and app tables share one database.
     pub fn database(mut self, database: DatabaseConnection) -> Self {
         self.database = Some(database);
         self
@@ -295,7 +298,12 @@ impl BetterAuth {
         &self.config
     }
 
-    /// Get the auth store.
+    /// Get the shared SeaORM connection handle used by Better Auth.
+    pub fn database_connection(&self) -> &DatabaseConnection {
+        self.database.connection()
+    }
+
+    #[doc(hidden)]
     pub fn database(&self) -> &Arc<AuthStore> {
         &self.database
     }

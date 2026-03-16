@@ -8,7 +8,8 @@ This guide walks through a minimal working example: configure auth, sign up a us
 ## Setup
 
 ```rust
-use better_auth::{run_migrations, store::sea_orm::Database, BetterAuth, AuthConfig};
+use better_auth::{run_migrations, BetterAuth, AuthConfig};
+use better_auth::store::Database;
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
 use better_auth::prelude::{AuthRequest, HttpMethod};
 use std::collections::HashMap;

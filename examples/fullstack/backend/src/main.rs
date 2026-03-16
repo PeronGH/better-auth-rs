@@ -2,7 +2,7 @@ use axum::{Json, Router, response::IntoResponse, routing::get};
 use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::middleware::CsrfConfig;
 use better_auth::plugins::{EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin};
-use better_auth::store::sea_orm::Database;
+use better_auth::store::Database;
 use better_auth::{run_migrations, AuthConfig, BetterAuth};
 use std::sync::Arc;
 use tokio::net::TcpListener;

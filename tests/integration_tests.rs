@@ -12,9 +12,9 @@
 
 mod compat;
 
-use better_auth::store::AuthStore;
 use better_auth::store::sea_orm::Database;
 use better_auth::{BetterAuth, run_migrations};
+use better_auth_core::AuthStore;
 use compat::helpers::*;
 use std::sync::Arc;
 

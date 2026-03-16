@@ -66,7 +66,14 @@ description: Complete reference for all configuration fields and defaults.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | `bool` | `true` | Enable CSRF checks |
+| `enabled` | `bool` | `true` | Enable request-origin CSRF checks and callback/redirect target validation |
+
+## AdvancedConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `disable_csrf_check` | `bool` | `false` | Disable request-origin and Fetch Metadata CSRF protections |
+| `disable_origin_check` | `bool` | `false` | Skip callback / redirect target origin validation |
 
 ## RateLimitConfig
 

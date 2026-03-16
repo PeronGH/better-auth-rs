@@ -5,7 +5,7 @@ use better_auth::plugins::{
     SessionManagementPlugin,
 };
 use better_auth::prelude::AuthUser;
-use better_auth::store::sea_orm::Database;
+use better_auth::store::Database;
 use better_auth::{AuthConfig, BetterAuth, run_migrations};
 use std::sync::Arc;
 use tokio::net::TcpListener;

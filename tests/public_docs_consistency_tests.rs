@@ -30,6 +30,7 @@ fn docs_use_current_minor_version_and_canonical_paths() {
 
     let readme = read_repo_file("README.md");
     let installation = read_repo_file("docs/content/docs/installation.mdx");
+    let quick_start = read_repo_file("docs/content/docs/quick-start.mdx");
     let axum = read_repo_file("docs/content/docs/integrations/axum.mdx");
 
     assert!(
@@ -45,9 +46,11 @@ fn docs_use_current_minor_version_and_canonical_paths() {
         "axum guide should use the current minor crate version",
     );
 
-    for text in [&readme, &installation, &axum] {
+    for text in [&readme, &quick_start, &axum] {
         assert!(!text.contains("better_auth::handlers"));
         assert!(!text.contains("better_auth::types"));
+        assert!(text.contains("better_auth::store::Database"));
+        assert!(!text.contains("better_auth::store::sea_orm::Database"));
     }
 }
 

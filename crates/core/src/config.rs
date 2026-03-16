@@ -315,7 +315,10 @@ pub struct AdvancedConfig {
     /// If `true`, the CSRF-check middleware is disabled.
     pub disable_csrf_check: bool,
 
-    /// If `true`, the Origin header check is skipped.
+    /// If `true`, callback / redirect target origin validation is skipped.
+    ///
+    /// This mirrors Better Auth TS `advanced.disableOriginCheck`.
+    /// It does **not** disable the request-origin CSRF checks.
     pub disable_origin_check: bool,
 
     /// Cross-subdomain cookie sharing configuration.
@@ -599,6 +602,11 @@ impl AuthConfig {
         self
     }
 
+    pub fn disable_origin_check(mut self, disabled: bool) -> Self {
+        self.advanced.disable_origin_check = disabled;
+        self
+    }
+
     pub fn cross_sub_domain_cookies(mut self, domain: impl Into<String>) -> Self {
         self.advanced.cross_sub_domain_cookies = Some(CrossSubDomainConfig {
             domain: domain.into(),
@@ -657,7 +665,7 @@ impl AuthConfig {
 pub fn extract_origin(url: &str) -> Option<String> {
     let scheme_end = url.find("://")?;
     let rest = &url[scheme_end + 3..];
-    let host_end = rest.find('/').unwrap_or(rest.len());
+    let host_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let origin = format!("{}{}", &url[..scheme_end + 3], &rest[..host_end]);
     Some(origin)
 }
@@ -692,6 +700,24 @@ mod tests {
         assert_eq!(
             extract_origin("http://localhost:3000/api"),
             Some("http://localhost:3000".to_string())
+        );
+    }
+
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn extract_origin_with_query() {
+        assert_eq!(
+            extract_origin("https://example.com?foo=bar"),
+            Some("https://example.com".to_string())
+        );
+    }
+
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn extract_origin_with_fragment() {
+        assert_eq!(
+            extract_origin("https://example.com#fragment"),
+            Some("https://example.com".to_string())
         );
     }
 
@@ -746,12 +772,14 @@ mod tests {
             .base_path("/auth")
             .password_min_length(12)
             .disable_csrf_check(true)
+            .disable_origin_check(true)
             .cookie_prefix("myapp");
 
         assert_eq!(cfg.app_name, "MyApp");
         assert_eq!(cfg.base_path, "/auth");
         assert_eq!(cfg.password.min_length, 12);
         assert!(cfg.advanced.disable_csrf_check);
+        assert!(cfg.advanced.disable_origin_check);
         assert_eq!(cfg.advanced.cookie_prefix, Some("myapp".to_string()));
     }
 
