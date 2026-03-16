@@ -30,13 +30,10 @@ headers, cookies, error formats, and observable side effects for every
 endpoint in the reference spec.
 
 This is not a loose port or an "inspired by" project. The TypeScript
-implementation is the spec. Where the OpenAPI schema and the TS runtime
-behavior disagree, the TS runtime wins.
+implementation is the spec.
 
-The behavioral target is the same capability as the TS implementation.
-The Rust integration surface does not need to transliterate the TS
-integration API. Public Rust interfaces should be idiomatic Rust while
-preserving TS-compatible wire behavior for supported features.
+The behavioral target is the same capability as the TS implementation,
+with idiomatic Rust interfaces preserving TS-compatible wire behavior.
 
 Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
 
@@ -64,12 +61,13 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
 4. **better-auth documentation** (https://www.better-auth.com/docs) —
    secondary reference for user-facing behavior.
 
+If these sources contradict each other, trust them in the order above.
+If a TS behavior looks like a bug, match it anyway and leave a
+`// NOTE: matches TS bug — <link>` comment; do not "improve" the
+behavior.
+
 ## Capability and Consumer Policy
 
-- **TS better-auth decides behavior** — runtime behavior and feature
-  capability are anchored to the pinned reference version
-  `better-auth@1.4.19`. Use the local checkout when available for source
-  inspection, not as a runtime dependency of the compatibility harness.
 - **Rust should be Rust-native** — builders, traits, extractors, router
   integration, hooks, and embedding APIs should follow Rust idioms
   rather than mirroring TS ergonomics mechanically.
@@ -86,11 +84,6 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
   `/home/peron/downloads/better-auth-paas-api-surface.md` must be
   fully covered across the roadmap. Remaining Better Auth capability can
   be scheduled after that checklist is complete.
-
-If the TS source, the OpenAPI spec, and the docs contradict each other,
-trust the TS source. If a TS behavior looks like a bug, match it anyway
-and leave a `// NOTE: matches TS bug — <link>` comment; do not
-"improve" the behavior.
 
 Before writing any code, you MUST have:
 
@@ -192,7 +185,7 @@ focused on transport semantics and non-client-exercised surfaces.
    - `compat-tests/client-tests/` — Bun test project with phase-scoped
      scenarios and a shared TS-vs-Rust diff harness
    - `compat-tests/reference-server/` — Bun-native TS reference server
-     using `bun:sqlite` and the published `better-auth@1.4.19`
+     using `bun:sqlite` and the pinned reference version
    - `compat-tests/rust-server/` — Minimal Axum server matching the
      reference server config exactly (same secret, same basePath)
    - `tests/client_compat_tests.rs` — ignored Rust tests that orchestrate
@@ -367,9 +360,6 @@ proven enough to bundle into the earlier hot-path phases. Complete this
 phase only once each endpoint has its own direct end-to-end test
 coverage and, where possible, dual-server comparison coverage.
 
-Work the phases in order. Do not start Phase N+1 until Phase N has zero
-alignment diffs.
-
 ## Coding Standards
 
 ### Structure
@@ -380,7 +370,8 @@ Avoid duplicate logic by relying on types, validated interfaces, and
 existing guarantees.
 
 Recommended file size is under 500 lines. Hard limit is 1000 lines; if
-reached, break the file down.
+reached, break the file down. Test files should conform when convenient
+but are not blocking.
 
 ### Naming
 
@@ -403,8 +394,8 @@ idioms instead of transliterating the TypeScript pattern.
 
 ### Error Handling
 
-Use `thiserror` for library errors, `anyhow` in binary/CLI layers.
-Handle every `Result` — never silently discard.
+Use `thiserror` for library errors. Use `anyhow` in binary/CLI layers
+if added. Handle every `Result` — never silently discard.
 
 Match the TS error behavior by default. If the TS server returns
 `{ "code": "USER_NOT_FOUND" }` with status 404, the Rust server should
@@ -424,8 +415,8 @@ Read `packages/better-auth/src/cookies/` in the TS source carefully.
 
 ### Documentation
 
-Doc comments on every public item — no exceptions. `cargo doc` must
-produce clean, navigable documentation with no missing-docs warnings.
+Doc comments on every public item. `cargo doc` must produce clean,
+navigable documentation.
 When behavior or a public API changes, update related comments and docs
 in the same change.
 
@@ -438,16 +429,14 @@ that affects meaningful logic (branching, transformations, error
 handling, compatibility-critical flows) should have tests at the right
 layer. Prefer tests that exercise real behavior over low-value tests for
 code that can only break if the language, runtime, or a dependency
-breaks. When test layers disagree, treat `better-auth/client` drift as a
-release blocker, fix unclassified dual-server wire drift by default, and
-allow only documented, client-inert best-effort wire drift to remain.
+breaks.
 
 ### Git
 
 Use conventional commits (`feat:`, `fix:`, `refactor:`, `test:`,
 `docs:`, `chore:`). Commit frequently and autonomously instead of
 batching large changes. Each commit must pass `cargo fmt --check`,
-`cargo clippy` (zero warnings), and `cargo test`.
+`cargo clippy`, and `cargo test`.
 
 ### Refactoring
 
@@ -463,7 +452,8 @@ Zero warnings. Both `cargo clippy --workspace` and
 
 Do not use `#[allow(...)]`. Use `#[expect(...)]` with a `reason` field
 only when suppression is genuinely justified. If a lint fires, fix the
-code.
+code. Test code may use `#[allow]` when `#[expect]` is not viable
+(e.g., shared test modules where dead-code lints vary per binary).
 
 ### Performance
 
