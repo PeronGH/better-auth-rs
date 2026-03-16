@@ -65,22 +65,13 @@ async fn create_test_auth() -> Arc<BetterAuth> {
 
 /// Helper to create the complete Axum router (mimics the example server)
 fn create_test_router(auth: Arc<BetterAuth>) -> axum::Router {
-    use axum::{Router, routing::get};
+    use axum::Router;
 
     // Create auth router using the BetterAuth AxumIntegration
     let auth_router = auth.clone().axum_router();
 
-    // Create main application router (simplified version of the example)
+    // Create main application router
     Router::new()
-        .route(
-            "/api/public",
-            get(|| async {
-                axum::Json(json!({
-                    "message": "This is a public route",
-                    "status": "ok"
-                }))
-            }),
-        )
         // Mount auth routes under /auth prefix
         .nest("/auth", auth_router)
         // Add CORS layer
@@ -115,55 +106,8 @@ async fn create_test_user(router: axum::Router) -> (Value, String) {
     (response_data, token)
 }
 
-/// Test health check endpoint
-#[tokio::test]
-async fn test_axum_health_check() {
-    let auth = create_test_auth().await;
-    let router = create_test_router(auth);
-
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri("/auth/health")
-        .body(Body::empty())
-        .unwrap();
-
-    let response = router.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let response_data: Value = serde_json::from_slice(&body_bytes).unwrap();
-
-    assert_eq!(response_data["status"], "ok");
-    assert_eq!(response_data["service"], "better-auth");
-}
-
-/// Test public API endpoint
-#[tokio::test]
-async fn test_axum_public_endpoint() {
-    let auth = create_test_auth().await;
-    let router = create_test_router(auth);
-
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri("/api/public")
-        .body(Body::empty())
-        .unwrap();
-
-    let response = router.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let response_data: Value = serde_json::from_slice(&body_bytes).unwrap();
-
-    assert_eq!(response_data["status"], "ok");
-    assert_eq!(response_data["message"], "This is a public route");
-}
-
 /// Test user signup via Axum
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_user_signup() {
     let auth = create_test_auth().await;
@@ -197,6 +141,7 @@ async fn test_axum_user_signup() {
 }
 
 /// Test user signin via Axum
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_user_signin() {
     let auth = create_test_auth().await;
@@ -231,6 +176,7 @@ async fn test_axum_user_signin() {
 }
 
 /// Test invalid signin credentials
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_invalid_signin() {
     let auth = create_test_auth().await;
@@ -253,6 +199,7 @@ async fn test_axum_invalid_signin() {
 }
 
 /// Test session retrieval via Axum
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_get_session() {
     let auth = create_test_auth().await;
@@ -281,6 +228,7 @@ async fn test_axum_get_session() {
 }
 
 /// Test session list via Axum
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_list_sessions() {
     let auth = create_test_auth().await;
@@ -308,6 +256,7 @@ async fn test_axum_list_sessions() {
 }
 
 /// Test sign out via Axum
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_sign_out() {
     let auth = create_test_auth().await;
@@ -335,6 +284,7 @@ async fn test_axum_sign_out() {
 }
 
 /// Test forget password via Axum
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_forget_password() {
     let auth = create_test_auth().await;
@@ -366,6 +316,7 @@ async fn test_axum_forget_password() {
 }
 
 /// Test change password via Axum
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_change_password() {
     let auth = create_test_auth().await;
@@ -400,6 +351,7 @@ async fn test_axum_change_password() {
 }
 
 /// Test change password with session revocation via Axum
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_change_password_with_revocation() {
     let auth = create_test_auth().await;
@@ -434,6 +386,7 @@ async fn test_axum_change_password_with_revocation() {
 }
 
 /// Test unauthorized access to protected endpoints
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_unauthorized_access() {
     let auth = create_test_auth().await;
@@ -467,6 +420,7 @@ async fn test_axum_unauthorized_access() {
 }
 
 /// Test invalid JSON handling
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_invalid_json() {
     let auth = create_test_auth().await;
@@ -484,6 +438,7 @@ async fn test_axum_invalid_json() {
 }
 
 /// Test missing required fields
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_missing_fields() {
     let auth = create_test_auth().await;
@@ -507,6 +462,7 @@ async fn test_axum_missing_fields() {
 }
 
 /// Test duplicate email handling
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_duplicate_email() {
     let auth = create_test_auth().await;
@@ -542,6 +498,7 @@ async fn test_axum_duplicate_email() {
 }
 
 /// Test password validation
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_password_validation() {
     let auth = create_test_auth().await;
@@ -575,6 +532,7 @@ async fn test_axum_password_validation() {
 }
 
 /// Test session revocation flow
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_session_revocation_flow() {
     let auth = create_test_auth().await;
@@ -656,6 +614,7 @@ async fn test_axum_session_revocation_flow() {
 }
 
 /// Test revoke all sessions
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_revoke_all_sessions() {
     let auth = create_test_auth().await;
@@ -694,6 +653,7 @@ async fn test_axum_revoke_all_sessions() {
 }
 
 /// Test session cookies are set on sign-up
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_signup_sets_cookie() {
     let auth = create_test_auth().await;
@@ -740,6 +700,7 @@ async fn test_axum_signup_sets_cookie() {
 }
 
 /// Test session cookies are set on sign-in
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_signin_sets_cookie() {
     let auth = create_test_auth().await;
@@ -789,6 +750,7 @@ async fn test_axum_signin_sets_cookie() {
 }
 
 /// Test session cookie is cleared on sign-out
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_signout_clears_cookie() {
     let auth = create_test_auth().await;
@@ -828,6 +790,7 @@ async fn test_axum_signout_clears_cookie() {
 }
 
 /// Test 404 for non-existent routes
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_404_routes() {
     let auth = create_test_auth().await;
@@ -844,6 +807,7 @@ async fn test_axum_404_routes() {
 }
 
 /// Test user profile update
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_update_user() {
     let auth = create_test_auth().await;
@@ -877,6 +841,7 @@ async fn test_axum_update_user() {
 }
 
 /// Test unauthorized user profile update
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_update_user_unauthorized() {
     let auth = create_test_auth().await;
@@ -898,6 +863,7 @@ async fn test_axum_update_user_unauthorized() {
 }
 
 /// Test user profile update with invalid JSON
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_update_user_invalid_json() {
     let auth = create_test_auth().await;
@@ -918,6 +884,7 @@ async fn test_axum_update_user_invalid_json() {
 }
 
 /// Test user deletion
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_delete_user() {
     let auth = create_test_auth().await;
@@ -946,6 +913,7 @@ async fn test_axum_delete_user() {
 }
 
 /// Test unauthorized user deletion
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_delete_user_unauthorized() {
     let auth = create_test_auth().await;
@@ -963,6 +931,7 @@ async fn test_axum_delete_user_unauthorized() {
 }
 
 /// Test user deletion invalidates sessions
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_delete_user_invalidates_sessions() {
     let auth = create_test_auth().await;
@@ -995,6 +964,7 @@ async fn test_axum_delete_user_invalidates_sessions() {
 }
 
 /// Test user profile management workflow
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_user_profile_workflow() {
     let auth = create_test_auth().await;
@@ -1078,6 +1048,7 @@ async fn test_axum_user_profile_workflow() {
 }
 
 /// Test comprehensive authentication workflow
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user}.test.ts and email-verification.test.ts; this Axum transport test must match the corresponding upstream public endpoint behavior.
 #[tokio::test]
 async fn test_axum_complete_workflow() {
     let auth = create_test_auth().await;

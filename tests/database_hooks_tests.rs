@@ -224,6 +224,7 @@ impl DatabaseHooks for DeleteCaptureHook {
     }
 }
 
+// Upstream reference: packages/better-auth/src/db/db.test.ts :: describe("db") and packages/better-auth/src/plugins/organization/organization-hook.test.ts; adapted to the Rust database hook surface.
 #[tokio::test]
 async fn plugin_database_hooks_run_before_builder_hooks() {
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -256,6 +257,7 @@ async fn plugin_database_hooks_run_before_builder_hooks() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/db/db.test.ts :: describe("db") and packages/better-auth/src/plugins/organization/organization-hook.test.ts; adapted to the Rust database hook surface.
 #[tokio::test]
 async fn request_context_is_present_for_requests_and_absent_for_direct_store_calls() {
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -292,6 +294,7 @@ async fn request_context_is_present_for_requests_and_absent_for_direct_store_cal
     );
 }
 
+// Upstream reference: packages/better-auth/src/db/db.test.ts :: describe("db") and packages/better-auth/src/plugins/organization/organization-hook.test.ts; adapted to the Rust database hook surface.
 #[tokio::test]
 async fn onboarding_hook_can_provision_app_data_with_the_shared_transaction() {
     let database = test_database().await;
@@ -327,6 +330,7 @@ async fn onboarding_hook_can_provision_app_data_with_the_shared_transaction() {
     assert!(tx_seen.load(Ordering::SeqCst));
 }
 
+// Upstream reference: packages/better-auth/src/db/db.test.ts :: describe("db") and packages/better-auth/src/plugins/organization/organization-hook.test.ts; adapted to the Rust database hook surface.
 #[tokio::test]
 async fn delete_hooks_receive_the_loaded_user_entity() {
     let emails = Arc::new(Mutex::new(Vec::new()));

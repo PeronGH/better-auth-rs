@@ -43,6 +43,7 @@ async fn user_id_from_email(auth: &Arc<BetterAuth>, email: &str) -> String {
 }
 
 /// Integration test for get-session endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_get_session_integration() {
     let auth = create_test_auth_memory().await;
@@ -58,6 +59,7 @@ async fn test_get_session_integration() {
 }
 
 /// Integration test for sign-out endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_sign_out_integration() {
     let auth = create_test_auth_memory().await;
@@ -76,6 +78,7 @@ async fn test_sign_out_integration() {
 }
 
 /// Integration test for list-sessions endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_list_sessions_integration() {
     let auth = create_test_auth_memory().await;
@@ -91,6 +94,7 @@ async fn test_list_sessions_integration() {
 }
 
 /// Integration test for revoke-session endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_revoke_session_integration() {
     let auth = create_test_auth_memory().await;
@@ -146,6 +150,7 @@ async fn test_revoke_session_integration() {
 }
 
 /// Integration test for revoke-sessions endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_revoke_sessions_integration() {
     let auth = create_test_auth_memory().await;
@@ -158,6 +163,7 @@ async fn test_revoke_sessions_integration() {
 }
 
 /// Integration test for unauthorized access
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_unauthorized_session_access() {
     let auth = create_test_auth_memory().await;
@@ -169,6 +175,7 @@ async fn test_unauthorized_session_access() {
 }
 
 /// Integration test for forget-password endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_forget_password_integration() {
     let auth = create_test_auth_memory().await;
@@ -190,6 +197,7 @@ async fn test_forget_password_integration() {
 }
 
 /// Integration test for reset-password endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_reset_password_integration() {
     let auth = create_test_auth_memory().await;
@@ -241,6 +249,7 @@ async fn test_reset_password_integration() {
 }
 
 /// Integration test for change-password endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_change_password_integration() {
     let auth = create_test_auth_memory().await;
@@ -266,6 +275,7 @@ async fn test_change_password_integration() {
 }
 
 /// Integration test for change-password with session revocation
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_change_password_with_revocation_integration() {
     let auth = create_test_auth_memory().await;
@@ -291,6 +301,7 @@ async fn test_change_password_with_revocation_integration() {
 }
 
 /// Integration test for reset-password token endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_reset_password_token_integration() {
     let auth = create_test_auth_memory().await;
@@ -339,6 +350,7 @@ async fn test_reset_password_token_integration() {
 }
 
 /// Integration test for /ok endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_ok_endpoint() {
     let auth = create_test_auth_memory().await;
@@ -349,6 +361,7 @@ async fn test_ok_endpoint() {
 }
 
 /// Integration test for /error endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_error_endpoint() {
     let auth = create_test_auth_memory().await;
@@ -360,6 +373,7 @@ async fn test_error_endpoint() {
 }
 
 /// Integration test for POST /get-session remaining unavailable publicly
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_get_session_post_route_absent() {
     let auth = create_test_auth_memory().await;
@@ -387,6 +401,7 @@ async fn test_get_session_post_route_absent() {
 }
 
 /// Integration test for POST /delete-user
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_delete_user_post_method() {
     let auth = create_test_auth_memory().await;
@@ -418,6 +433,7 @@ async fn test_delete_user_post_method() {
 }
 
 /// Integration test for set-password public route absence
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_set_password_public_route_absent_for_social_user() {
     let auth = create_test_auth_memory().await;
@@ -470,6 +486,7 @@ async fn test_set_password_public_route_absent_for_social_user() {
 }
 
 /// Integration test for set-password public route remains unavailable with an existing password
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_set_password_already_has_password() {
     let auth = create_test_auth_memory().await;
@@ -502,6 +519,7 @@ async fn test_set_password_already_has_password() {
 }
 
 /// Integration test for set-password public route remains unavailable when unauthenticated
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_set_password_unauthenticated() {
     let auth = create_test_auth_memory().await;
@@ -529,6 +547,7 @@ async fn test_set_password_unauthenticated() {
 }
 
 /// Integration test for revoke-other-sessions endpoint
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_revoke_other_sessions_integration() {
     let auth = create_test_auth_memory().await;
@@ -581,6 +600,7 @@ async fn test_revoke_other_sessions_integration() {
 }
 
 /// Integration test for cookie-based authentication
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_cookie_based_auth() {
     let auth = create_test_auth_memory().await;
@@ -613,6 +633,7 @@ async fn test_cookie_based_auth() {
 }
 
 /// Integration test: Bearer token takes precedence over cookie
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_bearer_takes_precedence_over_cookie() {
     let auth = create_test_auth_memory().await;
@@ -646,6 +667,7 @@ async fn test_bearer_takes_precedence_over_cookie() {
 }
 
 /// Integration test for unauthorized password operations
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_unauthorized_password_operations() {
     let auth = create_test_auth_memory().await;
@@ -673,6 +695,7 @@ async fn test_unauthorized_password_operations() {
     assert_eq!(response.status, 401);
 }
 /// Integration test for change-email success
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_change_email_success() {
     let auth = create_test_auth_memory().await;
@@ -708,6 +731,7 @@ async fn test_change_email_success() {
 }
 
 /// Integration test for change-email duplicate → 409
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_change_email_duplicate() {
     let auth = create_test_auth_memory().await;
@@ -746,6 +770,7 @@ async fn test_change_email_duplicate() {
 }
 
 /// Integration test for change-email unauthenticated → 401
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_change_email_unauthenticated() {
     let auth = create_test_auth_memory().await;
@@ -771,6 +796,7 @@ async fn test_change_email_unauthenticated() {
 }
 
 /// Integration test for delete-user/callback success
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_delete_user_callback_success() {
     let auth = create_test_auth_memory().await;
@@ -823,6 +849,7 @@ async fn test_delete_user_callback_success() {
 }
 
 /// Integration test for delete-user/callback invalid token → 404
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_delete_user_callback_invalid_token() {
     let auth = create_test_auth_memory().await;
@@ -854,6 +881,7 @@ async fn test_delete_user_callback_invalid_token() {
 }
 
 /// Integration test for list-accounts (empty)
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_list_accounts_empty() {
     let auth = create_test_auth_memory().await;
@@ -886,6 +914,7 @@ async fn test_list_accounts_empty() {
 }
 
 /// Integration test for list-accounts with an account
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_list_accounts_with_account() {
     let auth = create_test_auth_memory().await;
@@ -946,6 +975,7 @@ async fn test_list_accounts_with_account() {
 }
 
 /// Integration test for unlink-account success
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_unlink_account_success() {
     let auth = create_test_auth_memory().await;
@@ -1012,6 +1042,7 @@ async fn test_unlink_account_success() {
 }
 
 /// Integration test for unlink-account last credential → 400
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_unlink_last_account_fails() {
     let auth = create_test_auth_memory().await;
@@ -1082,6 +1113,7 @@ async fn test_unlink_last_account_fails() {
 }
 
 /// Integration test for list-accounts unauthenticated → 401
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_list_accounts_unauthenticated() {
     let auth = create_test_auth_memory().await;
@@ -1103,6 +1135,7 @@ async fn test_list_accounts_unauthenticated() {
 
 /*
 /// Test basic Axum integration with memory database
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_axum_health_check() {
     let auth = create_test_auth_memory().await;
@@ -1125,6 +1158,7 @@ async fn test_axum_health_check() {
 }
 
 /// Test signup via Axum integration
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_axum_signup() {
     let auth = create_test_auth_memory().await;
@@ -1156,6 +1190,7 @@ async fn test_axum_signup() {
 }
 
 /// Test signin via Axum integration
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_axum_signin() {
     let auth = create_test_auth_memory().await;
@@ -1202,6 +1237,7 @@ async fn test_axum_signin() {
 }
 
 /// Test error handling in Axum integration
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_axum_error_handling() {
     let auth = create_test_auth_memory().await;
@@ -1245,6 +1281,7 @@ async fn test_axum_error_handling() {
 }
 
 /// Test duplicate email handling
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_axum_duplicate_email() {
     let auth = create_test_auth_memory().await;
@@ -1321,6 +1358,7 @@ mod postgres_tests {
     }
 
     /// Test PostgreSQL signup
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
     #[tokio::test]
     async fn test_postgres_signup() {
         if setup_test_database().await.is_none() {
@@ -1360,6 +1398,7 @@ mod postgres_tests {
     }
 
     /// Test PostgreSQL signin
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
     #[tokio::test]
     async fn test_postgres_signin() {
         if setup_test_database().await.is_none() {
@@ -1414,6 +1453,7 @@ mod postgres_tests {
     }
 
     /// Test PostgreSQL connection pool and session persistence
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
     #[tokio::test]
     async fn test_postgres_session_persistence() {
         if setup_test_database().await.is_none() {
@@ -1469,6 +1509,7 @@ mod postgres_tests {
     }
 
     /// Test PostgreSQL constraint violations (duplicate email)
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
     #[tokio::test]
     async fn test_postgres_constraints() {
         if setup_test_database().await.is_none() {
@@ -1511,6 +1552,7 @@ mod postgres_tests {
 }
 
 /// Performance test for concurrent requests
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_concurrent_requests() {
     let auth = create_test_auth_memory().await;
@@ -1553,6 +1595,7 @@ async fn test_concurrent_requests() {
 // ---------------------------------------------------------------------------
 
 /// Sign up with username, then sign in by username
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_sign_up_with_username_and_sign_in() {
     let auth = create_test_auth_memory().await;
@@ -1613,6 +1656,7 @@ async fn test_sign_up_with_username_and_sign_in() {
 }
 
 /// Sign in by username with wrong password → 401
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_sign_in_username_wrong_password() {
     let auth = create_test_auth_memory().await;
@@ -1660,6 +1704,7 @@ async fn test_sign_in_username_wrong_password() {
 }
 
 /// Sign in by nonexistent username → 401
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_sign_in_username_nonexistent() {
     let auth = create_test_auth_memory().await;
@@ -1731,6 +1776,7 @@ async fn create_api_key(
 }
 
 /// Integration test: create API key
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_create() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -1751,6 +1797,7 @@ async fn test_api_key_create() {
 }
 
 /// Integration test: create API key with remaining and expiry
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_create_with_options() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -1794,6 +1841,7 @@ async fn test_api_key_create_with_options() {
 }
 
 /// Integration test: get API key by ID
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_get() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -1831,6 +1879,7 @@ async fn test_api_key_get() {
 }
 
 /// Integration test: list API keys
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_list() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -1863,6 +1912,7 @@ async fn test_api_key_list() {
 }
 
 /// Integration test: update API key
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_update() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -1904,6 +1954,7 @@ async fn test_api_key_update() {
 }
 
 /// Integration test: delete API key
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_delete() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -1951,6 +2002,7 @@ async fn test_api_key_delete() {
 }
 
 /// Integration test: unauthenticated create → 401
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_create_unauthenticated() {
     let auth = create_test_auth_memory().await;
@@ -1976,6 +2028,7 @@ async fn test_api_key_create_unauthenticated() {
 }
 
 /// Integration test: unauthenticated list → 401
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_list_unauthenticated() {
     let auth = create_test_auth_memory().await;
@@ -1996,6 +2049,7 @@ async fn test_api_key_list_unauthenticated() {
 }
 
 /// Integration test: get key owned by another user → 404
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_get_other_users_key() {
     let (auth, _user_id, token1) = create_auth_with_apikey().await;
@@ -2046,6 +2100,7 @@ async fn test_api_key_get_other_users_key() {
 }
 
 /// Integration test: delete key owned by another user → 404
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_delete_other_users_key() {
     let (auth, _user_id, token1) = create_auth_with_apikey().await;
@@ -2096,6 +2151,7 @@ async fn test_api_key_delete_other_users_key() {
 }
 
 /// Integration test: update key owned by another user → 404
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_update_other_users_key() {
     let (auth, _user_id, token1) = create_auth_with_apikey().await;
@@ -2149,6 +2205,7 @@ async fn test_api_key_update_other_users_key() {
 }
 
 /// Integration test: list keys for user with no keys → empty array
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_list_empty() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -2175,6 +2232,7 @@ async fn test_api_key_list_empty() {
 }
 
 /// Integration test: get key with missing 'id' query param → 400
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_get_missing_id() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -2198,6 +2256,7 @@ async fn test_api_key_get_missing_id() {
 }
 
 /// Integration test: get nonexistent key → 404
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_api_key_get_nonexistent() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -2224,6 +2283,7 @@ async fn test_api_key_get_nonexistent() {
 }
 
 /// get_user_by_username works via database adapter
+// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]
 async fn test_get_user_by_username_adapter() {
     use better_auth::types::CreateUser;

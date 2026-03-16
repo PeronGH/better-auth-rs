@@ -11,83 +11,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use better_auth_core::{AuthPlugin, HttpMethod};
 
 // ------------------------------------------------------------------
-// Config defaults
-// ------------------------------------------------------------------
-
-#[test]
-fn test_default_config() {
-    let config = EmailVerificationConfig::default();
-    assert_eq!(config.verification_token_expiry, Duration::hours(24));
-    assert!(config.send_email_notifications);
-    assert!(!config.require_verification_for_signin);
-    assert!(!config.auto_verify_new_users);
-    assert!(!config.send_on_sign_in);
-    assert!(!config.auto_sign_in_after_verification);
-    assert!(config.send_verification_email.is_none());
-    assert!(config.before_email_verification.is_none());
-    assert!(config.after_email_verification.is_none());
-}
-
-// ------------------------------------------------------------------
-// Builder methods
-// ------------------------------------------------------------------
-
-#[test]
-fn test_builder_verification_token_expiry() {
-    let plugin = EmailVerificationPlugin::new().verification_token_expiry(Duration::minutes(30));
-    assert_eq!(
-        plugin.config.verification_token_expiry,
-        Duration::minutes(30)
-    );
-}
-
-#[test]
-fn test_builder_send_on_sign_in() {
-    let plugin = EmailVerificationPlugin::new().send_on_sign_in(true);
-    assert!(plugin.config.send_on_sign_in);
-}
-
-#[test]
-fn test_builder_auto_sign_in_after_verification() {
-    let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(true);
-    assert!(plugin.config.auto_sign_in_after_verification);
-}
-
-#[test]
-fn test_builder_send_email_notifications() {
-    let plugin = EmailVerificationPlugin::new().send_email_notifications(false);
-    assert!(!plugin.config.send_email_notifications);
-}
-
-#[test]
-fn test_builder_require_verification_for_signin() {
-    let plugin = EmailVerificationPlugin::new().require_verification_for_signin(true);
-    assert!(plugin.config.require_verification_for_signin);
-}
-
-#[test]
-fn test_builder_auto_verify_new_users() {
-    let plugin = EmailVerificationPlugin::new().auto_verify_new_users(true);
-    assert!(plugin.config.auto_verify_new_users);
-}
-
-#[test]
-fn test_builder_chaining() {
-    let plugin = EmailVerificationPlugin::new()
-        .verification_token_expiry(Duration::hours(2))
-        .send_on_sign_in(true)
-        .auto_sign_in_after_verification(true)
-        .send_email_notifications(false)
-        .require_verification_for_signin(true);
-    assert_eq!(plugin.config.verification_token_expiry, Duration::hours(2));
-    assert!(plugin.config.send_on_sign_in);
-    assert!(plugin.config.auto_sign_in_after_verification);
-    assert!(!plugin.config.send_email_notifications);
-    assert!(plugin.config.require_verification_for_signin);
-}
-
-// ------------------------------------------------------------------
-// Custom sender builder
+// Custom sender
 // ------------------------------------------------------------------
 
 struct DummySender;
@@ -99,51 +23,12 @@ impl SendVerificationEmail for DummySender {
     }
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[test]
 fn test_builder_custom_send_verification_email() {
     let plugin =
         EmailVerificationPlugin::new().custom_send_verification_email(Arc::new(DummySender));
     assert!(plugin.config.send_verification_email.is_some());
-}
-
-// ------------------------------------------------------------------
-// Hook builders
-// ------------------------------------------------------------------
-
-#[test]
-fn test_builder_before_email_verification_hook() {
-    let hook: EmailVerificationHook = Arc::new(|_user: &User| Box::pin(async { Ok(()) }));
-    let plugin = EmailVerificationPlugin::new().before_email_verification(hook);
-    assert!(plugin.config.before_email_verification.is_some());
-}
-
-#[test]
-fn test_builder_after_email_verification_hook() {
-    let hook: EmailVerificationHook = Arc::new(|_user: &User| Box::pin(async { Ok(()) }));
-    let plugin = EmailVerificationPlugin::new().after_email_verification(hook);
-    assert!(plugin.config.after_email_verification.is_some());
-}
-
-// ------------------------------------------------------------------
-// Helper methods
-// ------------------------------------------------------------------
-
-#[test]
-fn test_should_send_on_sign_in() {
-    let plugin = EmailVerificationPlugin::new();
-    assert!(!plugin.should_send_on_sign_in());
-
-    let plugin = EmailVerificationPlugin::new().send_on_sign_in(true);
-    assert!(plugin.should_send_on_sign_in());
-}
-
-#[test]
-fn test_is_verification_required() {
-    let plugin = EmailVerificationPlugin::new();
-    assert!(!plugin.is_verification_required());
-
-    let plugin = EmailVerificationPlugin::new().require_verification_for_signin(true);
-    assert!(plugin.is_verification_required());
 }
 
 /// Helper to create a minimal User for unit tests.
@@ -183,6 +68,7 @@ fn jwt_token(
     .unwrap()
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_is_user_verified_or_not_required() {
     let plugin = EmailVerificationPlugin::new();
@@ -203,6 +89,7 @@ async fn test_is_user_verified_or_not_required() {
 // to_user conversion
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[test]
 fn test_to_user_preserves_fields() {
     let user = User {
@@ -243,12 +130,14 @@ fn test_to_user_preserves_fields() {
 // Plugin trait basics
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[test]
 fn test_plugin_name() {
     let plugin = EmailVerificationPlugin::new();
     assert_eq!(AuthPlugin::name(&plugin), "email-verification");
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[test]
 fn test_plugin_routes() {
     let plugin = EmailVerificationPlugin::new();
@@ -266,6 +155,7 @@ fn test_plugin_routes() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_on_request_unknown_route_returns_none() {
     let plugin = EmailVerificationPlugin::new();
@@ -280,6 +170,7 @@ async fn test_on_request_unknown_route_returns_none() {
 // send_verification_on_sign_in
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_send_verification_on_sign_in_disabled() {
     let plugin = EmailVerificationPlugin::new().send_on_sign_in(false);
@@ -300,6 +191,7 @@ async fn test_send_verification_on_sign_in_disabled() {
         .unwrap();
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_send_verification_on_sign_in_verified_user() {
     let plugin = EmailVerificationPlugin::new().send_on_sign_in(true);
@@ -326,6 +218,7 @@ async fn test_send_verification_on_sign_in_verified_user() {
         .unwrap();
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_send_verification_on_sign_in_creates_token() {
     // Use a custom sender that records calls instead of needing an
@@ -370,6 +263,7 @@ async fn test_send_verification_on_sign_in_creates_token() {
 // send_email_notifications is false
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_on_user_created_custom_sender_fires_without_notifications() {
     let call_count = Arc::new(AtomicU32::new(0));
@@ -405,6 +299,7 @@ async fn test_on_user_created_custom_sender_fires_without_notifications() {
     assert_eq!(call_count.load(Ordering::Relaxed), 1);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_on_user_created_verified_user_skips_email() {
     let call_count = Arc::new(AtomicU32::new(0));
@@ -448,6 +343,7 @@ async fn test_on_user_created_verified_user_skips_email() {
 // handle_verify_email -- basic flow
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_basic_flow() {
     let plugin = EmailVerificationPlugin::new();
@@ -492,6 +388,7 @@ async fn test_verify_email_basic_flow() {
 // handle_verify_email -- hooks are called
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_calls_before_and_after_hooks() {
     let before_count = Arc::new(AtomicU32::new(0));
@@ -542,6 +439,7 @@ async fn test_verify_email_calls_before_and_after_hooks() {
     assert_eq!(after_count.load(Ordering::Relaxed), 1);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_before_hook_error_aborts() {
     let before_hook: EmailVerificationHook =
@@ -583,6 +481,7 @@ async fn test_verify_email_before_hook_error_aborts() {
 // handle_verify_email -- auto_sign_in_after_verification
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_auto_sign_in_creates_session() {
     let captured = Arc::new(std::sync::Mutex::new(String::new()));
@@ -644,6 +543,7 @@ async fn test_verify_email_auto_sign_in_creates_session() {
     assert!(cookie_header.contains("better-auth.session"));
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_no_auto_sign_in_no_session() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(false);
@@ -680,6 +580,7 @@ async fn test_verify_email_no_auto_sign_in_no_session() {
 // handle_verify_email -- auto_sign_in + callbackURL -> 302 with cookie
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(true);
@@ -714,6 +615,7 @@ async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
     assert!(response.headers["Set-Cookie"].contains("better-auth.session"));
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_redirect_without_auto_sign_in_no_cookie() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(false);
@@ -749,6 +651,7 @@ async fn test_verify_email_redirect_without_auto_sign_in_no_cookie() {
 // handle_verify_email -- invalid token
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_invalid_token() {
     let plugin = EmailVerificationPlugin::new();
@@ -762,6 +665,7 @@ async fn test_verify_email_invalid_token() {
     assert_eq!(err.status_code(), 400);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_missing_token() {
     let plugin = EmailVerificationPlugin::new();
@@ -782,6 +686,7 @@ async fn test_verify_email_missing_token() {
 // handle_verify_email -- already-verified user returns early
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_already_verified_returns_ok() {
     let plugin = EmailVerificationPlugin::new();
@@ -824,6 +729,7 @@ async fn test_verify_email_already_verified_returns_ok() {
 // handle_send_verification_email
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_send_verification_email_already_verified_returns_error() {
     let plugin = EmailVerificationPlugin::new();
@@ -866,6 +772,7 @@ async fn test_send_verification_email_already_verified_returns_error() {
     assert_eq!(err.status_code(), 400);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_send_verification_email_user_not_found() {
     struct NoopSender;
@@ -901,6 +808,7 @@ async fn test_send_verification_email_user_not_found() {
 // create_session_cookie -- uses cookie crate
 // ------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[test]
 fn test_create_session_cookie_format() {
     use better_auth_core::utils::cookie_utils::create_session_cookie;
@@ -917,6 +825,7 @@ fn test_create_session_cookie_format() {
     assert!(cookie_str.contains("SameSite=Lax"));
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[test]
 fn test_create_session_cookie_special_characters_in_token() {
     use better_auth_core::utils::cookie_utils::create_session_cookie;

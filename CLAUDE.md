@@ -462,6 +462,15 @@ layer. Prefer tests that exercise real behavior over low-value tests for
 code that can only break if the language, runtime, or a dependency
 breaks.
 
+Rust-only behavior tests must be grounded in upstream Better Auth. Every
+non-compat Rust behavior test must include an immediately preceding
+comment that points to the upstream TS test or upstream source handler
+it is adapted from, using `// Upstream reference:` or
+`// Upstream source:`. If a Rust test has no upstream behavior or source
+anchor, delete it instead of keeping a Rust-owned oracle. Do not keep
+tests that normalize approved drift, "acceptable deviations", or other
+Rust-only behavior.
+
 ### Git
 
 Use conventional commits (`feat:`, `fix:`, `refactor:`, `test:`,

@@ -80,6 +80,7 @@ async fn create_reset_token(ctx: &AuthContext, user_id: &str) -> String {
     reset_token
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_request_password_reset_success() {
     let plugin = plugin_with_reset_sender();
@@ -109,6 +110,7 @@ async fn test_request_password_reset_success() {
     assert_eq!(response_data.message, PASSWORD_RESET_SUCCESS_MESSAGE);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_request_password_reset_unknown_email() {
     let plugin = plugin_with_reset_sender();
@@ -137,6 +139,7 @@ async fn test_request_password_reset_unknown_email() {
     assert_eq!(response_data.message, PASSWORD_RESET_SUCCESS_MESSAGE);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_success() {
     let plugin = PasswordManagementPlugin::new();
@@ -185,6 +188,7 @@ async fn test_reset_password_success() {
     assert!(verification_check.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_invalid_token() {
     let plugin = PasswordManagementPlugin::new();
@@ -206,6 +210,7 @@ async fn test_reset_password_invalid_token() {
     assert_eq!(err.status_code(), 400);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_weak_password() {
     let plugin = PasswordManagementPlugin::new();
@@ -229,6 +234,7 @@ async fn test_reset_password_weak_password() {
     assert_eq!(err.status_code(), 400);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_success() {
     let plugin = PasswordManagementPlugin::new();
@@ -270,6 +276,7 @@ async fn test_change_password_success() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_with_session_revocation() {
     let plugin = PasswordManagementPlugin::new();
@@ -296,6 +303,7 @@ async fn test_change_password_with_session_revocation() {
     assert!(response_data["token"].is_string()); // New token when revoking sessions
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_sets_cookie_on_session_revocation() {
     let plugin = PasswordManagementPlugin::new();
@@ -339,6 +347,7 @@ async fn test_change_password_sets_cookie_on_session_revocation() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_no_cookie_without_revocation() {
     let plugin = PasswordManagementPlugin::new();
@@ -367,6 +376,7 @@ async fn test_change_password_no_cookie_without_revocation() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_revoke_with_boolean() {
     let plugin = PasswordManagementPlugin::new();
@@ -397,6 +407,7 @@ async fn test_change_password_revoke_with_boolean() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_wrong_current_password() {
     let plugin = PasswordManagementPlugin::new();
@@ -418,6 +429,7 @@ async fn test_change_password_wrong_current_password() {
     assert_eq!(err.status_code(), 400);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_unauthorized() {
     let plugin = PasswordManagementPlugin::new();
@@ -439,6 +451,7 @@ async fn test_change_password_unauthorized() {
     assert_eq!(err.status_code(), 401);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_token_endpoint_redirects_with_callback_token() {
     let plugin = PasswordManagementPlugin::new();
@@ -475,6 +488,7 @@ async fn test_reset_password_token_endpoint_redirects_with_callback_token() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_token_endpoint_with_callback() {
     let plugin = PasswordManagementPlugin::new();
@@ -517,6 +531,7 @@ async fn test_reset_password_token_endpoint_with_callback() {
     assert!(location_header.unwrap().contains(&reset_token));
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_token_endpoint_invalid_token() {
     let plugin = PasswordManagementPlugin::new();
@@ -543,6 +558,7 @@ async fn test_reset_password_token_endpoint_invalid_token() {
     assert!(response.headers["Location"].contains("error=INVALID_TOKEN"));
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_password_validation() {
     let plugin = PasswordManagementPlugin::new();
@@ -577,6 +593,7 @@ async fn test_password_validation() {
     assert!(plugin.validate_password("Password123", &ctx).is_err());
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_password_hashing_and_verification() {
     let plugin = PasswordManagementPlugin::new();
@@ -596,6 +613,7 @@ async fn test_password_hashing_and_verification() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_plugin_routes() {
     let plugin = PasswordManagementPlugin::new();
@@ -624,6 +642,7 @@ async fn test_plugin_routes() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_plugin_on_request_routing() {
     let plugin = plugin_with_reset_sender();
@@ -662,6 +681,7 @@ async fn test_plugin_on_request_routing() {
     assert!(response.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_configuration() {
     let config = PasswordManagementConfig {
@@ -677,6 +697,7 @@ async fn test_configuration() {
     assert!(!plugin.config.send_email_notifications);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_send_reset_password_custom_sender() {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -731,6 +752,7 @@ async fn test_send_reset_password_custom_sender() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_on_password_reset_callback() {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -772,6 +794,7 @@ async fn test_on_password_reset_callback() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_revoke_sessions_on_password_reset_false() {
     let plugin = PasswordManagementPlugin::new().revoke_sessions_on_password_reset(false);
@@ -805,6 +828,7 @@ async fn test_revoke_sessions_on_password_reset_false() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_revoke_sessions_on_password_reset_true() {
     let plugin = PasswordManagementPlugin::new().revoke_sessions_on_password_reset(true);

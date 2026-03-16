@@ -221,6 +221,7 @@ fn make_test_provider(mock_url: &str) -> OAuthProvider {
 // Test 1: Token encryption — encrypted tokens in DB, decrypted via get-access-token
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
     let config = Arc::new(test_config_with_encryption());
@@ -305,6 +306,7 @@ async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
     }
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_encrypt_decrypt_roundtrip() {
     let secret = TEST_SECRET;
@@ -326,6 +328,7 @@ async fn test_encrypt_decrypt_roundtrip() {
     }
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_encryption_disabled_stores_plaintext() {
     let config = Arc::new(test_config()); // encryption OFF by default
@@ -348,6 +351,7 @@ async fn test_encryption_disabled_stores_plaintext() {
     assert_eq!(accounts[0].access_token(), Some(plaintext_access));
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_get_access_token_rejects_plaintext_when_encryption_is_enabled() {
     let config = Arc::new(test_config_with_encryption());
@@ -384,6 +388,7 @@ async fn test_get_access_token_rejects_plaintext_when_encryption_is_enabled() {
     assert!(result.is_err(), "plaintext tokens must not be accepted");
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_refresh_token_rejects_plaintext_when_encryption_is_enabled() {
     let config = Arc::new(test_config_with_encryption());
@@ -427,6 +432,7 @@ async fn test_refresh_token_rejects_plaintext_when_encryption_is_enabled() {
 // Test 2: allow_unlinking_all — unlink handler respects config
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_unlink_last_account_blocked_by_default() {
     let config = Arc::new(test_config()); // allow_unlinking_all = false by default
@@ -477,6 +483,7 @@ async fn test_unlink_last_account_blocked_by_default() {
     }
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_unlink_last_account_allowed_when_configured() {
     let config = Arc::new(test_config_allow_unlinking_all());
@@ -521,6 +528,7 @@ async fn test_unlink_last_account_allowed_when_configured() {
     }
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_unlink_non_last_account_always_allowed() {
     // Even with allow_unlinking_all=false, unlinking one of multiple accounts should work
@@ -603,6 +611,7 @@ async fn test_unlink_non_last_account_always_allowed() {
 // Test 3: account_linking.enabled=false — callback rejects linking for existing emails
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_account_linking_disabled_rejects_new_provider() {
     let mock_url = start_mock_oauth_server("existing@example.com").await;
@@ -701,6 +710,7 @@ async fn test_account_linking_disabled_rejects_new_provider() {
 // Test 4: handle_link_social + callback token encryption for new users
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_link_social_returns_redirect_url_with_state() {
     let config = Arc::new(test_config_with_encryption());
@@ -765,6 +775,7 @@ async fn test_link_social_returns_redirect_url_with_state() {
     }
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
 async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
     let mock_url = start_mock_oauth_server("newuser@example.com").await;

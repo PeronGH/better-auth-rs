@@ -707,6 +707,7 @@ mod tests {
         )
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts and packages/better-auth/src/api/routes/sign-in.test.ts; adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_auto_sign_in_false_returns_no_session() {
         let plugin = EmailPasswordPlugin::new().auto_sign_in(false);
@@ -733,6 +734,7 @@ mod tests {
         assert!(body["user"]["id"].is_string());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts and packages/better-auth/src/api/routes/sign-in.test.ts; adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_auto_sign_in_true_returns_session() {
         let plugin = EmailPasswordPlugin::new(); // default auto_sign_in=true
@@ -757,6 +759,7 @@ mod tests {
         );
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts and packages/better-auth/src/api/routes/sign-in.test.ts; adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_password_max_length_rejection() {
         let plugin = EmailPasswordPlugin::new().password_max_length(128);
@@ -775,6 +778,7 @@ mod tests {
         assert_eq!(response.status, 200);
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts and packages/better-auth/src/api/routes/sign-in.test.ts; adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_custom_password_hasher() {
         /// A simple test hasher that prefixes the password with "hashed:"

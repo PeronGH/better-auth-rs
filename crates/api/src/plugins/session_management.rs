@@ -389,6 +389,7 @@ mod tests {
     use better_auth_core::{CreateSession, CreateUser, Session};
     use chrono::{Duration, Utc};
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_get_session_success() {
         let plugin = SessionManagementPlugin::new();
@@ -424,6 +425,7 @@ mod tests {
         );
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_get_session_unauthorized() {
         // /get-session returns 200 with null body when unauthenticated.
@@ -444,6 +446,7 @@ mod tests {
         assert!(body.is_null());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_sign_out_success() {
         let plugin = SessionManagementPlugin::new();
@@ -473,6 +476,7 @@ mod tests {
         assert!(session_check.is_none());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_list_sessions_success() {
         let plugin = SessionManagementPlugin::new();
@@ -509,6 +513,7 @@ mod tests {
         assert_eq!(sessions.len(), 2);
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_revoke_session_success() {
         let plugin = SessionManagementPlugin::new();
@@ -548,6 +553,7 @@ mod tests {
         assert!(session1_check.is_some());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_revoke_session_forbidden_different_user() {
         let plugin = SessionManagementPlugin::new();
@@ -595,6 +601,7 @@ mod tests {
         );
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_revoke_sessions_success() {
         let plugin = SessionManagementPlugin::new();
@@ -630,6 +637,7 @@ mod tests {
         assert_eq!(user_sessions.len(), 0);
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_plugin_routes() {
         let plugin = SessionManagementPlugin::new();
@@ -668,6 +676,7 @@ mod tests {
         );
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_plugin_on_request_routing() {
         let plugin = SessionManagementPlugin::new();
@@ -710,6 +719,7 @@ mod tests {
         assert!(response.is_none());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_configuration() {
         let plugin = SessionManagementPlugin::new()

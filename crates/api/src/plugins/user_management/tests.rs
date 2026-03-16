@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 // -- change email tests ────────────────────────────────────────────
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_change_email_success() {
     let plugin = UserManagementPlugin::new().change_email_enabled(true);
@@ -33,6 +34,7 @@ async fn test_change_email_success() {
     assert_eq!(response.status, 200);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_change_email_same_email() {
     let plugin = UserManagementPlugin::new().change_email_enabled(true);
@@ -58,6 +60,7 @@ async fn test_change_email_same_email() {
     assert_eq!(err.status_code(), 400);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_change_email_unauthenticated() {
     let plugin = UserManagementPlugin::new().change_email_enabled(true);
@@ -83,6 +86,7 @@ async fn test_change_email_unauthenticated() {
     assert_eq!(err.status_code(), 401);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_change_email_immediate_when_update_without_verification() {
     let plugin = UserManagementPlugin::new()
@@ -135,6 +139,7 @@ async fn test_change_email_immediate_when_update_without_verification() {
 
 // -- delete user tests ─────────────────────────────────────────────
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_delete_user_immediate() {
     let plugin = UserManagementPlugin::new()
@@ -165,6 +170,7 @@ async fn test_delete_user_immediate() {
     assert!(deleted_user.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_delete_user_with_verification() {
     let plugin = UserManagementPlugin::new()
@@ -226,6 +232,7 @@ async fn test_delete_user_with_verification() {
     assert!(deleted.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_delete_user_unauthenticated() {
     let plugin = UserManagementPlugin::new()
@@ -252,6 +259,7 @@ async fn test_delete_user_unauthenticated() {
     assert_eq!(err.status_code(), 401);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_delete_user_verify_invalid_token() {
     let plugin = UserManagementPlugin::new().delete_user_enabled(true);
@@ -281,6 +289,7 @@ async fn test_delete_user_verify_invalid_token() {
     assert_eq!(err.status_code(), 404);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_delete_user_before_hook_abort() {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -338,6 +347,7 @@ async fn test_delete_user_before_hook_abort() {
     assert!(!called.load(Ordering::SeqCst));
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_plugin_routes_conditional() {
     // All disabled
@@ -367,6 +377,7 @@ async fn test_plugin_routes_conditional() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_on_request_disabled_routes_passthrough() {
     let plugin = UserManagementPlugin::new(); // both disabled
