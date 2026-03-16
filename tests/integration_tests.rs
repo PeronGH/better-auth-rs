@@ -1134,29 +1134,6 @@ async fn test_list_accounts_unauthenticated() {
 }
 
 /*
-/// Test basic Axum integration with memory database
-// Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
-#[tokio::test]
-async fn test_axum_health_check() {
-    let auth = create_test_auth_memory().await;
-
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri("/health")
-        .body(Body::empty())
-        .unwrap();
-
-    let response = call_service(auth, request).await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let response_json: Value = serde_json::from_slice(&body).unwrap();
-
-    assert_eq!(response_json["status"], "ok");
-    assert_eq!(response_json["service"], "better-auth");
-}
-
 /// Test signup via Axum integration
 // Upstream reference: packages/better-auth/src/api/routes/{sign-up,sign-in,sign-out,session-api,password,update-user,account,email-verification}.test.ts and packages/better-auth/src/plugins/{username,api-key}.*.test.ts; this Rust test must match the corresponding upstream endpoint case exactly.
 #[tokio::test]

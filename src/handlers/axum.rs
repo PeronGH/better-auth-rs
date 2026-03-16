@@ -16,9 +16,7 @@ use crate::BetterAuth;
 use better_auth_core::SessionManager;
 #[cfg(feature = "axum")]
 use better_auth_core::entity::AuthSession as AuthSessionTrait;
-use better_auth_core::{
-    AuthError, AuthRequest, AuthResponse, HealthCheckResponse, HttpMethod, OkResponse, core_paths,
-};
+use better_auth_core::{AuthError, AuthRequest, AuthResponse, HttpMethod, OkResponse, core_paths};
 
 /// Integration trait for Axum web framework
 #[cfg(feature = "axum")]
@@ -45,11 +43,6 @@ impl AxumIntegration for Arc<BetterAuth> {
         }
         if !disabled_paths.contains(&core_paths::ERROR.to_string()) {
             router = router.route(core_paths::ERROR, get(error_check));
-        }
-
-        // Add default health check route
-        if !disabled_paths.contains(&core_paths::HEALTH.to_string()) {
-            router = router.route(core_paths::HEALTH, get(health_check));
         }
 
         // Add OpenAPI spec endpoint
@@ -112,14 +105,6 @@ async fn error_check(
         .unwrap_or_else(|| "UNKNOWN".to_string());
     let html = core_paths::error_page_html(&error_code);
     axum::response::Html(html)
-}
-
-#[cfg(feature = "axum")]
-async fn health_check() -> impl IntoResponse {
-    axum::Json(HealthCheckResponse {
-        status: "ok",
-        service: "better-auth",
-    })
 }
 
 #[cfg(feature = "axum")]
