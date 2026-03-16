@@ -53,8 +53,13 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
    when it is available. The portable reference harness itself must not
    depend on that checkout at runtime; it uses the published package
    pinned to `better-auth@1.4.19`.
-3. **`better-auth.yaml` OpenAPI spec** — the structural contract for
-   endpoints, request/response schemas, and field names.
+3. **Generated upstream OpenAPI profiles** — the structural contract for
+   endpoints, request/response schemas, and field names comes from the
+   pinned published `better-auth` package via
+   `compat-tests/reference-server/generate-openapi.mjs`. The generated
+   `core` profile is the current blocking structural baseline while
+   wider surfaces are still aligning; use `aligned-rs` and `all-in` for
+   broader informational reporting as later phases come online.
 4. **better-auth documentation** (https://www.better-auth.com/docs) —
    secondary reference for user-facing behavior.
 
@@ -88,9 +93,9 @@ and leave a `// NOTE: matches TS bug — <link>` comment; do not
 
 Before writing any code, you MUST have:
 
-- The reference server dependencies installed
-  (`cd compat-tests/reference-server && bun install`).
-- The `better-auth.yaml` spec in the workspace root.
+- The reference-server dependencies installed
+  (`cd compat-tests/reference-server && bun install`) so the generated
+  upstream OpenAPI profiles are available to tests.
 
 If the local Better Auth checkout is available at
 `/home/peron/dev/better-auth`, use it for source inspection. If it is
@@ -471,12 +476,17 @@ approval. Keep the implementation direct and clean.
 
 The reference server is pinned to `better-auth@1.4.19`. When upgrading:
 
-1. Update `compat-tests/reference-server/package.json`.
-2. Run `bun install`.
-3. Re-run the full alignment check.
-4. Update `better-auth.yaml` from the new version's OpenAPI output.
-5. Fix any new mismatches.
-6. Commit the version bump and all fixes together.
+1. Update `compat-tests/reference-server/package.json` so
+   `better-auth` and `@better-auth/passkey` stay pinned to the same
+   version, and update `compat-tests/client-tests/package.json` to the
+   same `better-auth` version.
+2. Run `bun install` in `compat-tests/reference-server` and
+   `compat-tests/client-tests`.
+3. Re-run the full alignment check so generated upstream OpenAPI,
+   dual-server compatibility, and wire checks all reflect the new
+   version.
+4. Fix any new mismatches.
+5. Commit the version bump and all fixes together.
 
 Do not upgrade the reference version until the current version has zero
 alignment diffs.

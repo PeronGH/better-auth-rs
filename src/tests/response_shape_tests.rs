@@ -1,9 +1,9 @@
 //! Response shape contract tests.
 //!
 //! These tests validate that the response JSON structure of each endpoint
-//! matches the expected shape from the reference Better-Auth OpenAPI spec
-//! (`better-auth.yaml`). Tests are written against `handle_request()` directly
-//! (no HTTP server needed).
+//! matches the expected shape from the reference Better Auth contract.
+//! Tests are written against `handle_request()` directly (no HTTP server
+//! needed).
 
 use crate::plugins::{
     AccountManagementPlugin, ApiKeyPlugin, EmailPasswordPlugin, EmailVerificationPlugin,

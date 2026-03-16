@@ -1,8 +1,10 @@
 //! Compatibility tests that compare our implementation against the
-//! reference `better-auth.yaml` OpenAPI specification (v1.4.18).
+//! generated upstream OpenAPI contract from the pinned Better Auth package.
 //!
 //! These tests ensure route coverage and response shape alignment with
 //! the canonical Better-Auth TypeScript implementation.
+
+mod compat;
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -19,32 +21,37 @@ use serde_json::Value;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Parse the reference OpenAPI YAML and return a map of path → set of HTTP methods.
+/// Parse the generated upstream OpenAPI and return a map of path → set of HTTP methods.
 fn load_reference_spec() -> BTreeMap<String, HashSet<String>> {
-    let yaml_str = std::fs::read_to_string("better-auth.yaml")
-        .expect("better-auth.yaml must exist in project root");
-
-    let doc: Value = serde_yaml::from_str(&yaml_str).expect("better-auth.yaml must be valid YAML");
-
-    let paths = doc["paths"]
-        .as_object()
-        .expect("better-auth.yaml must have a 'paths' key");
+    let spec =
+        compat::schema::load_openapi_spec_with_profile(compat::schema::OpenApiProfile::AllIn);
+    let paths = spec.paths.as_ref().expect("generated spec must have paths");
 
     let mut result = BTreeMap::new();
     for (path, methods) in paths {
         let mut method_set = HashSet::new();
-        if let Some(obj) = methods.as_object() {
-            for method in obj.keys() {
-                // Skip non-method keys like "parameters"
-                match method.as_str() {
-                    "get" | "post" | "put" | "delete" | "patch" | "options" | "head" => {
-                        method_set.insert(method.clone());
-                    }
-                    _ => {}
-                }
-            }
+        if methods.get.is_some() {
+            let _ = method_set.insert("get".to_string());
         }
-        result.insert(path.clone(), method_set);
+        if methods.post.is_some() {
+            let _ = method_set.insert("post".to_string());
+        }
+        if methods.put.is_some() {
+            let _ = method_set.insert("put".to_string());
+        }
+        if methods.delete.is_some() {
+            let _ = method_set.insert("delete".to_string());
+        }
+        if methods.patch.is_some() {
+            let _ = method_set.insert("patch".to_string());
+        }
+        if methods.options.is_some() {
+            let _ = method_set.insert("options".to_string());
+        }
+        if methods.head.is_some() {
+            let _ = method_set.insert("head".to_string());
+        }
+        let _ = result.insert(path.clone(), method_set);
     }
     result
 }
@@ -91,7 +98,7 @@ fn collect_implemented_routes(auth: &BetterAuth) -> BTreeMap<String, HashSet<Str
         ("/delete-user/callback", "get"),
     ];
     for (path, method) in core {
-        routes
+        let _ = routes
             .entry(path.to_string())
             .or_default()
             .insert(method.to_string());
@@ -109,7 +116,7 @@ fn collect_implemented_routes(auth: &BetterAuth) -> BTreeMap<String, HashSet<Str
                 HttpMethod::Options => "options",
                 HttpMethod::Head => "head",
             };
-            routes
+            let _ = routes
                 .entry(route.path.clone())
                 .or_default()
                 .insert(method_str.to_string());
@@ -313,7 +320,8 @@ async fn send_json_request(
     let mut req = AuthRequest::new(method, path);
     if let Some(b) = body {
         req.body = Some(b.to_string().into_bytes());
-        req.headers
+        let _ = req
+            .headers
             .insert("content-type".to_string(), "application/json".to_string());
     }
     let resp = auth
@@ -387,7 +395,7 @@ async fn test_contract_signin_response_shape() {
     let auth = create_full_auth().await;
 
     // Create user first
-    send_json_request(
+    let _ = send_json_request(
         &auth,
         HttpMethod::Post,
         "/sign-up/email",
@@ -442,7 +450,8 @@ async fn test_contract_signout_response_shape() {
 
     // Sign out
     let mut req = AuthRequest::new(HttpMethod::Post, "/sign-out");
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
     let resp = auth
         .handle_request(req)

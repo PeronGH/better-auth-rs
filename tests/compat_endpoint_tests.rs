@@ -24,10 +24,6 @@ async fn test_spec_driven_endpoint_validation() {
     let (status, body) = send_request(&auth, get_request("/ok")).await;
     validator.validate_endpoint("/ok", "get", status, &body);
 
-    // --- GET /error ---
-    let (status, body) = send_request(&auth, get_request("/error")).await;
-    validator.validate_endpoint("/error", "get", status, &body);
-
     // --- POST /sign-up/email (success) ---
     let (status, body) = send_request(
         &auth,
@@ -249,6 +245,12 @@ async fn test_spec_driven_endpoint_validation() {
     // All known incompatibilities have been fixed.
     // Track any future gaps here so the gate catches *new* regressions.
     let known_failing: HashSet<&str> = HashSet::new();
+
+    assert_eq!(
+        validator.skipped_count(),
+        0,
+        "Spec-driven validation skipped endpoints; path or method drift is losing coverage."
+    );
 
     let unexpected_failures: Vec<_> = validator
         .results

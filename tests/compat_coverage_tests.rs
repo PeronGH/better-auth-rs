@@ -12,12 +12,12 @@ use std::collections::{BTreeMap, HashSet};
 use better_auth::types::HttpMethod;
 
 use compat::helpers::*;
-use compat::schema::load_openapi_spec;
+use compat::schema::{OpenApiProfile, load_openapi_spec_with_profile};
 
 /// Analyze which endpoints from the reference spec are implemented.
 #[tokio::test]
 async fn test_route_coverage_analysis() {
-    let spec = load_openapi_spec();
+    let spec = load_openapi_spec_with_profile(OpenApiProfile::AllIn);
     let auth = create_test_auth().await;
 
     // Collect reference endpoints from the typed spec
