@@ -171,24 +171,9 @@ impl SessionManagementPlugin {
         }
 
         let mut response = AuthResponse::json(200, &SuccessResponse { success: true })?;
-        response.headers.append(
-            "Set-Cookie",
-            better_auth_core::utils::cookie_utils::create_clear_session_cookie(&ctx.config),
-        );
-        response.headers.append(
-            "Set-Cookie",
-            better_auth_core::utils::cookie_utils::create_clear_cookie(
-                &related_cookie_name(&ctx.config, "session_data"),
-                &ctx.config,
-            ),
-        );
-        response.headers.append(
-            "Set-Cookie",
-            better_auth_core::utils::cookie_utils::create_clear_cookie(
-                &related_cookie_name(&ctx.config, "dont_remember"),
-                &ctx.config,
-            ),
-        );
+        for cookie in sign_out_cookies(&ctx.config) {
+            response.headers.append("Set-Cookie", cookie);
+        }
         Ok(response)
     }
 
@@ -248,6 +233,29 @@ fn related_cookie_name(config: &AuthConfig, suffix: &str) -> String {
         .unwrap_or_else(|| format!("better-auth.{}", suffix))
 }
 
+fn sign_out_cookies(config: &AuthConfig) -> Vec<String> {
+    let mut cookies = vec![
+        better_auth_core::utils::cookie_utils::create_clear_session_cookie(config),
+        better_auth_core::utils::cookie_utils::create_clear_cookie(
+            &related_cookie_name(config, "session_data"),
+            config,
+        ),
+        better_auth_core::utils::cookie_utils::create_clear_cookie(
+            &related_cookie_name(config, "dont_remember"),
+            config,
+        ),
+    ];
+
+    if config.account.store_account_cookie {
+        cookies.push(better_auth_core::utils::cookie_utils::create_clear_cookie(
+            &related_cookie_name(config, "account_data"),
+            config,
+        ));
+    }
+
+    cookies
+}
+
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;
@@ -286,17 +294,7 @@ mod axum_impl {
         };
 
         let mut headers = axum::http::HeaderMap::new();
-        for cookie in [
-            state.clear_session_cookie(),
-            better_auth_core::utils::cookie_utils::create_clear_cookie(
-                &related_cookie_name(&state.config, "session_data"),
-                &state.config,
-            ),
-            better_auth_core::utils::cookie_utils::create_clear_cookie(
-                &related_cookie_name(&state.config, "dont_remember"),
-                &state.config,
-            ),
-        ] {
+        for cookie in sign_out_cookies(&state.config) {
             let header_value = HeaderValue::from_str(&cookie).map_err(|error| {
                 AuthError::internal(format!("Invalid cookie header: {}", error))
             })?;
@@ -386,6 +384,7 @@ mod axum_impl {
 mod tests {
     use super::*;
     use crate::plugins::test_helpers;
+    use better_auth_core::config::AccountConfig;
     use better_auth_core::{CreateSession, CreateUser, Session};
     use chrono::{Duration, Utc};
 
@@ -474,6 +473,70 @@ mod tests {
 
         let session_check = ctx.database.get_session(&session.token).await.unwrap();
         assert!(session_check.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_sign_out_clears_account_cookie_when_enabled() {
+        let plugin = SessionManagementPlugin::new();
+        let config = test_helpers::create_test_config().account(AccountConfig {
+            store_account_cookie: true,
+            ..Default::default()
+        });
+        let ctx = test_helpers::create_test_context_with_config(config).await;
+        let (_user, session) = test_helpers::create_user_and_session(
+            &ctx,
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
+            Duration::hours(24),
+        )
+        .await;
+
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Post,
+            "/sign-out",
+            Some(&session.token),
+            Some(b"{}".to_vec()),
+        );
+        let response = plugin.handle_sign_out(&req, &ctx).await.unwrap();
+
+        let account_cookie_name = format!("{}=", related_cookie_name(&ctx.config, "account_data"));
+        assert!(
+            response
+                .headers
+                .get_all("Set-Cookie")
+                .any(|cookie| cookie.starts_with(&account_cookie_name)),
+            "sign-out should clear the account_data cookie when store_account_cookie is enabled"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sign_out_does_not_emit_account_cookie_when_disabled() {
+        let plugin = SessionManagementPlugin::new();
+        let (ctx, _user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
+            Duration::hours(24),
+        )
+        .await;
+
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Post,
+            "/sign-out",
+            Some(&session.token),
+            Some(b"{}".to_vec()),
+        );
+        let response = plugin.handle_sign_out(&req, &ctx).await.unwrap();
+
+        let account_cookie_name = format!("{}=", related_cookie_name(&ctx.config, "account_data"));
+        assert!(
+            !response
+                .headers
+                .get_all("Set-Cookie")
+                .any(|cookie| cookie.starts_with(&account_cookie_name)),
+            "sign-out should not emit account_data clearing cookies when store_account_cookie is disabled"
+        );
     }
 
     // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
