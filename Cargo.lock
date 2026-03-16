@@ -468,6 +468,7 @@ dependencies = [
  "base64",
  "better-auth-api",
  "better-auth-core",
+ "better-auth-seaorm",
  "chrono",
  "clap",
  "jsonwebtoken",
@@ -554,6 +555,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "better-auth-seaorm"
+version = "0.9.0"
+dependencies = [
+ "async-trait",
+ "better-auth-core",
+ "sea-orm",
+ "sea-orm-migration",
 ]
 
 [[package]]

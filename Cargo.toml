@@ -11,7 +11,7 @@ workspace = true
 
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/api"]
+members = ["crates/core", "crates/api", "crates/seaorm"]
 exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compat-tests/rust-server"]
 
 [workspace.package]
@@ -72,6 +72,10 @@ axum = "0.8"
 tower = "0.5"
 url = "2"
 
+# Database
+sea-orm = { version = "2.0.0-rc.37", features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite", "macros", "with-chrono", "with-json", "with-uuid"] }
+sea-orm-migration = { version = "2.0.0-rc.37", features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite"] }
+
 # Cache
 redis = "0.27"
 
@@ -89,6 +93,7 @@ redis-cache = ["dep:redis"]
 # Core crates
 better-auth-core = { workspace = true }
 better-auth-api = { workspace = true }
+better-auth-seaorm = { version = "0.9.0", path = "crates/seaorm" }
 
 # Asynchronous runtime
 tokio = { workspace = true }

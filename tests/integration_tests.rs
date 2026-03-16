@@ -13,8 +13,7 @@
 mod compat;
 
 use better_auth::store::AuthStore;
-use better_auth::store::sea_orm::Database;
-use better_auth::{BetterAuth, run_migrations};
+use better_auth::{BetterAuth, Database, run_migrations};
 use compat::helpers::*;
 use std::sync::Arc;
 
@@ -1299,7 +1298,7 @@ async fn test_axum_duplicate_email() {
 
 mod postgres_tests {
     use super::*;
-    use better_auth::{run_migrations, store::sea_orm::Database};
+    use better_auth::{Database, run_migrations};
     use std::env;
 
     /// Helper to create test BetterAuth instance with PostgreSQL

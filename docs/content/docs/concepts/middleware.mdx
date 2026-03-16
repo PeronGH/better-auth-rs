@@ -5,29 +5,26 @@ description: Built-in middleware for CSRF, CORS, rate limiting, and body limits.
 
 Better Auth includes middleware that runs before and after every request. Enable them on the builder.
 
-## CSRF Protection
+## Request Protection
 
-Validates the `Origin` or `Referer` header against the configured base URL on mutating requests (POST, PUT, DELETE, PATCH).
+Better Auth enables request protection by default. The Rust backend follows the TypeScript model:
+
+- cookie-bearing mutating requests validate `Origin` / `Referer` against the configured base URL and `trusted_origins`
+- first-login form flows use Fetch Metadata plus trusted-origin validation
+- same-origin frontend SDK requests do not require a separate CSRF token header
 
 ```rust
-use better_auth::middleware::CsrfConfig;
 use better_auth::{AuthConfig, BetterAuth};
 
 let config = AuthConfig::new(secret)
-        .trusted_origins(vec!["https://myapp.com".to_string()]);
+    .trusted_origins(vec!["https://myapp.com".to_string()]);
 
 let auth = BetterAuth::new(config)
-    .csrf(CsrfConfig::new().enabled(true))
     .build()
     .await?;
 ```
 
-| Option | Type | Default |
-|--------|------|---------|
-| `trusted_origins` | `Vec<String>` | `[]` |
-| `enabled` | `bool` | `true` |
-
-Returns `403 Forbidden` when the origin is not trusted.
+Disable request protection only through `AuthConfig::disable_csrf_check(true)` when you intentionally want the TS-equivalent bypass.
 
 ## Rate Limiting
 

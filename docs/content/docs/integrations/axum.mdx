@@ -19,8 +19,7 @@ tokio = { version = "1", features = ["full"] }
 Use `.axum_router()` when `Arc<BetterAuth>` is the router state:
 
 ```rust
-use better_auth::{run_migrations, AuthConfig, BetterAuth};
-use better_auth::store::sea_orm::Database;
+use better_auth::{run_migrations, AuthConfig, BetterAuth, Database};
 use better_auth::plugins::{
     EmailPasswordPlugin, SessionManagementPlugin,
     PasswordManagementPlugin, AccountManagementPlugin,
@@ -68,11 +67,10 @@ Axum extract `Arc<BetterAuth>` from your application state via `FromRef`.
 ```rust
 use axum::extract::FromRef;
 use axum::{Json, Router, routing::get};
-use better_auth::{run_migrations, AuthConfig, BetterAuth};
+use better_auth::{run_migrations, AuthConfig, BetterAuth, Database};
 use better_auth::integrations::axum::{AxumIntegration, CurrentSession};
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
 use better_auth::prelude::AuthUser;
-use better_auth::store::sea_orm::Database;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -210,9 +208,8 @@ Both extractors look for the session token in this order:
 use axum::{Json, Router, response::IntoResponse, routing::get};
 use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
-use better_auth::{run_migrations, AuthConfig, BetterAuth};
+use better_auth::{run_migrations, AuthConfig, BetterAuth, Database};
 use better_auth::prelude::AuthUser;
-use better_auth::store::sea_orm::Database;
 use std::sync::Arc;
 
 #[tokio::main]

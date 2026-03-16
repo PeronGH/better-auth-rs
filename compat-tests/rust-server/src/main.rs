@@ -16,7 +16,7 @@ use better_auth::plugins::{
     },
     password_management::SendResetPassword,
 };
-use better_auth::{AuthBuilder, AuthConfig, run_migrations, store::sea_orm::Database};
+use better_auth::{AuthBuilder, AuthConfig, Database, run_migrations};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

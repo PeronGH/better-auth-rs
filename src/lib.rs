@@ -5,9 +5,8 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use better_auth::{run_migrations, AuthConfig, BetterAuth};
+//! use better_auth::{run_migrations, AuthConfig, BetterAuth, Database};
 //! use better_auth::plugins::EmailPasswordPlugin;
-//! use better_auth::store::sea_orm::Database;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -49,6 +48,10 @@ pub mod plugins;
 pub mod prelude;
 pub mod store;
 
-pub use better_auth_core::store::run_migrations;
 pub use better_auth_core::{AuthConfig, AuthError, AuthResult};
+pub use better_auth_seaorm::{
+    AuthMigrator, AuthStore, ConfigurableAuthMigrator, Database, DatabaseConnection,
+    MigrationOptions, auth_migrations, run_migrations, run_migrations_with, sea_orm,
+    sea_orm_migration,
+};
 pub use core::{AuthBuilder, BetterAuth};

@@ -11,8 +11,8 @@ use better_auth_core::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
         CsrfMiddleware, Middleware, RateLimitConfig, RateLimitMiddleware,
     },
-    sea_orm::DatabaseConnection,
 };
+use better_auth_seaorm::DatabaseConnection;
 
 pub struct BetterAuth {
     config: Arc<AuthConfig>,
@@ -298,6 +298,11 @@ impl BetterAuth {
     /// Get the auth store.
     pub fn database(&self) -> &Arc<AuthStore> {
         &self.database
+    }
+
+    /// Get the shared SeaORM connection backing this auth instance.
+    pub fn database_connection(&self) -> &DatabaseConnection {
+        self.database.connection()
     }
 
     /// Get the session manager.

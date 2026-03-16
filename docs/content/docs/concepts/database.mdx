@@ -3,7 +3,7 @@ title: Database
 description: SeaORM-backed database integration for Better Auth.
 ---
 
-Better Auth uses a SeaORM `DatabaseConnection` for auth persistence.
+Better Auth uses a SeaORM `DatabaseConnection` for auth persistence and re-exports the SeaORM runtime directly from the root crate.
 
 The supported public path is:
 
@@ -14,8 +14,7 @@ The supported public path is:
 ## Setup
 
 ```rust
-use better_auth::{run_migrations, AuthConfig, BetterAuth};
-use better_auth::store::sea_orm::Database;
+use better_auth::{run_migrations, AuthConfig, BetterAuth, Database};
 use better_auth::plugins::EmailPasswordPlugin;
 
 #[tokio::main]
@@ -42,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 For production, pass a PostgreSQL connection string to SeaORM and then run the same migrations:
 
 ```rust
-use better_auth::{run_migrations, store::sea_orm::Database};
+use better_auth::{run_migrations, Database};
 
 let database = Database::connect("postgresql://user:pass@localhost:5432/mydb").await?;
 run_migrations(&database).await?;
@@ -56,5 +55,8 @@ reference server.
 
 ## Notes
 
-- `run_migrations` creates the built-in auth tables used by the core and currently implemented plugins.
+- `run_migrations` uses the default `better_auth_migrations` migration table.
+- `run_migrations_with(&db, MigrationOptions { table_name, .. })` lets you choose a custom auth migration table.
+- `auth_migrations()` exposes the built-in Better Auth migrations for composition with an application migrator.
+- `BetterAuth::database_connection()` is the supported way to reuse the exact shared SeaORM connection in application code.
 - `MemoryCacheAdapter` is still available for cache/rate-limit use cases. It is separate from database persistence.

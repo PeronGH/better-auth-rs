@@ -2,8 +2,7 @@ use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
 use better_auth::prelude::{AuthRequest, HttpMethod};
-use better_auth::store::sea_orm::Database;
-use better_auth::{AuthConfig, BetterAuth, run_migrations};
+use better_auth::{AuthConfig, BetterAuth, Database, run_migrations};
 use std::collections::HashMap;
 
 #[tokio::main]

@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, Once, OnceLock};
 
 use better_auth::{
-    AuthBuilder, AuthConfig, BetterAuth,
+    AuthBuilder, AuthConfig, BetterAuth, Database, DatabaseConnection,
     plugins::{
         AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, EmailPasswordPlugin,
         EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
@@ -18,7 +18,6 @@ use better_auth::{
     },
     prelude::{AuthRequest, HttpMethod},
     run_migrations,
-    store::sea_orm::{Database, DatabaseConnection},
 };
 use serde_json::Value;
 

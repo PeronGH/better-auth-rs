@@ -1,9 +1,7 @@
 use axum::{Json, Router, response::IntoResponse, routing::get};
 use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
-use better_auth::middleware::CsrfConfig;
 use better_auth::plugins::{EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin};
-use better_auth::store::sea_orm::Database;
-use better_auth::{run_migrations, AuthConfig, BetterAuth};
+use better_auth::{AuthConfig, BetterAuth, Database, run_migrations};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use axum::http::HeaderName;
@@ -44,7 +42,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let auth = Arc::new(
         BetterAuth::new(config)
-            .csrf(CsrfConfig::new().enabled(true))
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
