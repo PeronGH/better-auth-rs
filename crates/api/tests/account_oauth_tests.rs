@@ -50,6 +50,17 @@ fn test_config_with_encryption() -> AuthConfig {
         })
 }
 
+fn test_config_with_encryption_skip_state_cookie_check() -> AuthConfig {
+    AuthConfig::new(TEST_SECRET)
+        .base_url("http://localhost:3000")
+        .password_min_length(6)
+        .account(AccountConfig {
+            encrypt_oauth_tokens: true,
+            skip_state_cookie_check: true,
+            ..Default::default()
+        })
+}
+
 fn test_config_linking_disabled() -> AuthConfig {
     AuthConfig::new(TEST_SECRET)
         .base_url("http://localhost:3000")
@@ -668,11 +679,9 @@ async fn test_account_linking_disabled_rejects_new_provider() {
     // Set up the OAuth state in the verification table
     let state = "test-state-linking-disabled";
     let payload = json!({
-        "provider": "test",
-        "callback_url": format!("{}/callback/test", mock_url),
-        "code_verifier": "test-verifier",
-        "link_user_id": null,
-        "scopes": "email",
+        "callbackURL": format!("{}/callback/test", mock_url),
+        "codeVerifier": "test-verifier",
+        "expiresAt": (chrono::Utc::now() + chrono::Duration::minutes(10)).timestamp_millis(),
     });
 
     db.create_verification(CreateVerification {
@@ -801,7 +810,7 @@ async fn test_link_social_returns_redirect_url_with_state() {
 async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
     let mock_url = start_mock_oauth_server("newuser@example.com").await;
 
-    let config = Arc::new(test_config_with_encryption());
+    let config = Arc::new(test_config_with_encryption_skip_state_cookie_check());
     let db = create_test_database().await;
 
     let mut oauth_config = OAuthConfig::default();
@@ -812,11 +821,9 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
     // Set up the OAuth state for a brand-new user (no link_user_id)
     let state = "encrypt-new-user-state";
     let payload = json!({
-        "provider": "test",
-        "callback_url": format!("{}/callback/test", mock_url),
-        "code_verifier": "test-verifier",
-        "link_user_id": null,
-        "scopes": "email",
+        "callbackURL": format!("{}/callback/test", mock_url),
+        "codeVerifier": "test-verifier",
+        "expiresAt": (chrono::Utc::now() + chrono::Duration::minutes(10)).timestamp_millis(),
     });
 
     db.create_verification(CreateVerification {
@@ -839,10 +846,15 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
 
     let oauth_plugin = OAuthPlugin::with_config(oauth_config);
     let result = oauth_plugin.on_request(&req, &ctx).await;
+    let expected_location = format!("{}/callback/test", mock_url);
 
     match result {
         Ok(Some(resp)) => {
-            assert_eq!(resp.status, 200);
+            assert_eq!(resp.status, 302);
+            assert_eq!(
+                resp.headers.get("Location").map(String::as_str),
+                Some(expected_location.as_str()),
+            );
 
             // Verify the user was created and tokens are stored encrypted
             let user = db

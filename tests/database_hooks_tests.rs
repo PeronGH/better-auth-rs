@@ -7,9 +7,7 @@ use better_auth::hooks::{DatabaseHookContext, DatabaseHooks, HookControl};
 use better_auth::plugin::{AuthContext, AuthInitContext, AuthPlugin, AuthRoute};
 use better_auth::plugins::EmailPasswordPlugin;
 use better_auth::prelude::{AuthRequest, AuthResponse, CreateUser, HttpMethod, User};
-use better_auth::store::sea_orm::sea_query::{
-    Alias, ColumnDef, Expr, ExprTrait, Query, Table,
-};
+use better_auth::store::sea_orm::sea_query::{Alias, ColumnDef, Expr, ExprTrait, Query, Table};
 use better_auth::store::sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use better_auth::{AuthBuilder, AuthConfig, run_migrations};
 
