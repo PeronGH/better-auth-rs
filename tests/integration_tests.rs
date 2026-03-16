@@ -6,7 +6,7 @@
 mod compat;
 
 use better_auth::store::AuthStore;
-use better_auth::store::store::sea_orm::Database;
+use better_auth::store::sea_orm::Database;
 use better_auth::{BetterAuth, run_migrations};
 use compat::helpers::*;
 use std::sync::Arc;

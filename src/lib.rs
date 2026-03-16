@@ -7,7 +7,7 @@
 //! ```rust,no_run
 //! use better_auth::{run_migrations, AuthConfig, BetterAuth};
 //! use better_auth::plugins::EmailPasswordPlugin;
-//! use better_auth::store::store::sea_orm::Database;
+//! use better_auth::store::sea_orm::Database;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {

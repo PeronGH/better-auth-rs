@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use better_auth::plugin::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth::plugins::EmailPasswordPlugin;
 use better_auth::prelude::{AuthRequest, AuthResponse, HttpMethod};
-use better_auth::store::store::sea_orm::{Database, DatabaseConnection};
+use better_auth::store::sea_orm::{Database, DatabaseConnection};
 use better_auth::{AuthBuilder, AuthConfig, AuthResult, BetterAuth, run_migrations};
 
 struct RouteTestPlugin;

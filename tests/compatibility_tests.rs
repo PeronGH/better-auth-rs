@@ -13,7 +13,7 @@ use better_auth::{
     plugins::EmailPasswordPlugin,
     prelude::{AuthRequest, HttpMethod},
     run_migrations,
-    store::store::sea_orm::{Database, DatabaseConnection},
+    store::sea_orm::{Database, DatabaseConnection},
 };
 use serde_json::Value;
 
