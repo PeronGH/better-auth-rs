@@ -6,7 +6,7 @@ are easy to miss by only reading the code.
 Update this file when one of these changes:
 
 - source-of-truth hierarchy or reference server version
-- alignment phase definitions or completion status
+- alignment phase definitions or completion status (in `ROADMAP.md`)
 - feedback loop infrastructure or what it compares
 - coding conventions that future agents would otherwise keep only in
   their head
@@ -260,6 +260,9 @@ behavior fix is its own commit.
 
 ### Phase Completion Rule
 
+Phase definitions are in `ROADMAP.md`. The completion rules below govern
+when a phase is considered done.
+
 A phase is only valid if it is self-contained: every endpoint and
 behavior in that phase must be end-to-end testable using only the
 capabilities from that phase and the phases before it.
@@ -290,110 +293,29 @@ Do not use a generic "remaining capability" phase. When a new TS feature
 family becomes in scope, add a new explicit phase with its own
 self-contained test plan.
 
-### Alignment phases
+### Phase Dependencies
 
-**Phase 0 — Core auth flow:**
-`/sign-up/email`, `/sign-in/email`, `/get-session`, `/sign-out`,
-`/ok`, `/error`
-
-**Phase 1 — Session and password management:**
-`/list-sessions`, `/revoke-session`, `/revoke-sessions`,
-`/revoke-other-sessions`, `/refresh-token`, `/get-access-token`,
-`/request-password-reset`, `/reset-password`, `/change-password`
-
-**Phase 2 — User self-service and verification:**
-`/update-user`, `/delete-user`, `/delete-user/callback`,
-`/change-email`, `/send-verification-email`, `/verify-email`
-
-Phase 2 is self-contained on top of Phases 0 and 1. Completion requires
-direct end-to-end coverage for each endpoint in this group.
-
-**Phase 3 — Social-linked account surface:**
-`/sign-in/social`, `/callback`, `/link-social`, `/list-accounts`,
-`/unlink-account`
-
-Phase 3 is self-contained on top of Phases 0, 1, and 2. Completion
-requires dual-server coverage for the Google/mock-OAuth flows in this
-group, including callback behavior and the direct id-token sign-in/link
-branches.
-
-**Phase 4 — Machine auth and API-key CRUD:**
-Bearer behavior, `/api-key/create`, `/api-key/list`, `/api-key/get`,
-`/api-key/update`, `/api-key/delete`, `/api-key/verify`
-
-Phase 4 is self-contained on top of Phases 0 and 1. Completion requires
-both endpoint tests and end-to-end request-path tests using
-`Authorization: Bearer` and `x-api-key`.
-
-**Phase 5 — Organization core:**
-`/organization/create`, `/organization/check-slug`,
-`/organization/update`, `/organization/delete`,
-`/organization/get-full-organization`, `/organization/set-active`,
-`/organization/list`, `/organization/list-members`,
-`/organization/get-active-member`,
-`/organization/get-active-member-role`,
-`/organization/update-member-role`,
-`/organization/remove-member`, `/organization/leave`,
-`/organization/invite-member`,
-`/organization/accept-invitation`,
-`/organization/reject-invitation`,
-`/organization/cancel-invitation`,
-`/organization/get-invitation`,
-`/organization/list-invitations`,
-`/organization/list-user-invitations`,
-`/organization/has-permission`
-
-Phase 5 comes before colder surfaces because organization CRUD,
-membership, and invitation flows already have meaningful local coverage.
-
-**Phase 6 — Admin core:**
-`/admin/list-users`, `/admin/create-user`, `/admin/remove-user`,
-`/admin/set-user-password`, `/admin/set-role`,
-`/admin/has-permission`
-
-Phase 6 finishes the admin endpoints with the strongest current local
-coverage before moving to less-proven admin flows.
-
-**Phase 7 — Passkey surface:**
-All `/passkey/*` endpoints.
-
-Phase 7 is still relatively early because passkey option generation,
-management, and error-shape paths are already implemented and tested.
-
-**Phase 8 — Organization advanced:**
-`/organization/create-team`, `/organization/remove-team`,
-`/organization/update-team`, `/organization/list-teams`,
-`/organization/set-active-team`, `/organization/list-user-teams`,
-`/organization/list-team-members`,
-`/organization/add-team-member`,
-`/organization/remove-team-member`,
-`/organization/create-role`, `/organization/delete-role`,
-`/organization/list-roles`, `/organization/get-role`,
-`/organization/update-role`
-
-Phase 8 depends on Phase 5 and is otherwise self-contained.
-
-**Phase 9 — Admin extended support flows:**
-`/admin/get-user`, `/admin/update-user`, `/admin/ban-user`,
-`/admin/unban-user`, `/admin/impersonate-user`,
-`/admin/stop-impersonating`, `/admin/list-user-sessions`,
-`/admin/revoke-user-session`, `/admin/revoke-user-sessions`
-
-Phase 9 depends on Phase 6 and is otherwise self-contained.
-
-**Phase 10 — Two-factor authentication:**
-All `/two-factor/*` endpoints.
-
-Phase 10 is intentionally isolated because the 2FA surface has its own
-state machine and needs dedicated end-to-end coverage.
-
-**Phase 11 — Cold account and token surfaces:**
-`/verify-password`, `/update-session`, `/account-info`, `/token`
-
-Phase 11 is reserved for the smaller cold surfaces that are not yet
-proven enough to bundle into the earlier hot-path phases. Complete this
-phase only once each endpoint has its own direct end-to-end test
-coverage and, where possible, dual-server comparison coverage.
+- Phase 2 is self-contained on top of Phases 0 and 1.
+- Phase 3 is self-contained on top of Phases 0, 1, and 2. Completion
+  requires dual-server coverage for the Google/mock-OAuth flows,
+  including callback behavior and the direct id-token sign-in/link
+  branches.
+- Phase 4 is self-contained on top of Phases 0 and 1.
+- Phase 5 comes before colder surfaces because organization CRUD,
+  membership, and invitation flows already have meaningful local
+  coverage.
+- Phase 6 finishes the admin endpoints with the strongest current local
+  coverage before moving to less-proven admin flows.
+- Phase 7 is still relatively early because passkey option generation,
+  management, and error-shape paths are already implemented and tested.
+- Phase 8 depends on Phase 5 and is otherwise self-contained.
+- Phase 9 depends on Phase 6 and is otherwise self-contained.
+- Phase 10 is intentionally isolated because the 2FA surface has its own
+  state machine and needs dedicated end-to-end coverage.
+- Phase 11 is reserved for the smaller cold surfaces that are not yet
+  proven enough to bundle into the earlier hot-path phases. Complete this
+  phase only once each endpoint has its own direct end-to-end test
+  coverage and, where possible, dual-server comparison coverage.
 
 ## Coding Standards
 
