@@ -1,3 +1,10 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "email normalization tests intentionally use panic-on-failure assertions and direct JSON indexing for concise behavior checks"
+)]
+
 mod compat;
 
 use better_auth::prelude::{CreateUser, UpdateUser};

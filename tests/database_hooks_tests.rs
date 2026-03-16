@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "database hook tests intentionally fail fast on fixture setup and use direct JSON indexing for focused assertions"
+)]
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 

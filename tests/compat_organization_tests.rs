@@ -2,6 +2,12 @@
 //!
 //! Tests the full Organization lifecycle: create, update, delete, members,
 //! invitations, and permissions against the OpenAPI spec.
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "organization compatibility tests intentionally use direct JSON assertions over generated fixtures"
+)]
 
 mod compat;
 

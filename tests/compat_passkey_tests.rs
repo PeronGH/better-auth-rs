@@ -4,6 +4,10 @@
 //! against the OpenAPI spec. Note: WebAuthn flows require browser interaction,
 //! so we validate response shapes for the options-generation endpoints and
 //! error shapes for verification endpoints (which need real attestation data).
+#![allow(
+    clippy::indexing_slicing,
+    reason = "passkey contract tests use direct JSON indexing for concise response assertions"
+)]
 
 mod compat;
 

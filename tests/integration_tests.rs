@@ -2,6 +2,13 @@
     unused_results,
     reason = "integration tests intentionally ignore helper return values like HashMap::insert"
 )]
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "integration tests intentionally use panic-on-failure assertions and direct JSON indexing for endpoint behavior checks"
+)]
 
 mod compat;
 
@@ -39,7 +46,7 @@ async fn user_id_from_email(auth: &Arc<BetterAuth>, email: &str) -> String {
         .get_user_by_email(email)
         .await
         .unwrap()
-        .and_then(|user| Some(user.id))
+        .map(|user| user.id)
         .unwrap_or_else(|| panic!("expected user for email {email}"))
 }
 

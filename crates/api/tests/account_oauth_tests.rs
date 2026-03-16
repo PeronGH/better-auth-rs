@@ -26,11 +26,13 @@ const TEST_SECRET: &str = "test-secret-key-that-is-at-least-32-characters-long";
 static LOCAL_PROXY_BYPASS: Once = Once::new();
 
 fn ensure_local_proxy_bypass() {
-    LOCAL_PROXY_BYPASS.call_once(|| unsafe {
+    LOCAL_PROXY_BYPASS.call_once(|| {
         // SAFETY: Tests in this binary all need the same localhost bypass values.
         // We set them once before issuing any local OAuth mock-server requests.
-        std::env::set_var("NO_PROXY", "localhost,127.0.0.1");
-        std::env::set_var("no_proxy", "localhost,127.0.0.1");
+        unsafe { std::env::set_var("NO_PROXY", "localhost,127.0.0.1") };
+        // SAFETY: Tests in this binary all need the same localhost bypass values.
+        // We set them once before issuing any local OAuth mock-server requests.
+        unsafe { std::env::set_var("no_proxy", "localhost,127.0.0.1") };
     });
 }
 

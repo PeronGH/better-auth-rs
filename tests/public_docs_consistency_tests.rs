@@ -1,3 +1,8 @@
+#![allow(
+    clippy::expect_used,
+    reason = "doc consistency tests intentionally panic immediately when required repo files are missing"
+)]
+
 use std::fs;
 use std::path::PathBuf;
 

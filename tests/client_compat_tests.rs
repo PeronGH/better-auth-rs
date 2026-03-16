@@ -1,8 +1,4 @@
 #![expect(
-    clippy::expect_used,
-    reason = "test harness code should panic on orchestration failures"
-)]
-#![expect(
     clippy::panic,
     reason = "test harness code should panic on orchestration failures"
 )]
@@ -115,7 +111,7 @@ fn start_rust_compat_server(port: u16) -> ManagedChild {
     ManagedChild::new("rust-compat", child)
 }
 
-async fn run_bun_phase_suite(paths: &[&str], ts_port: u16, rust_port: u16) {
+fn run_bun_phase_suite(paths: &[&str], ts_port: u16, rust_port: u16) {
     let output = Command::new("bun")
         .arg("test")
         .args(paths)
@@ -147,7 +143,7 @@ async fn run_client_compat(paths: &[&str]) {
     wait_for_health(ts_port, &mut ts_server, Duration::from_secs(20)).await;
     wait_for_health(rust_port, &mut rust_server, Duration::from_secs(90)).await;
 
-    run_bun_phase_suite(paths, ts_port, rust_port).await;
+    run_bun_phase_suite(paths, ts_port, rust_port);
 }
 
 #[tokio::test]

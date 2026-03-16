@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "surface tests intentionally use panic-on-failure assertions and direct JSON indexing for API shape checks"
+)]
+
 use async_trait::async_trait;
 use better_auth::plugin::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth::plugins::EmailPasswordPlugin;

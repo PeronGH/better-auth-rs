@@ -55,14 +55,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(&signup_body),
         None,
     )
-    .await;
+    .await?;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
-    let token = data["token"].as_str().unwrap_or_default().to_string();
+    let token = data
+        .get("token")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     if let Some(user) = data.get("user") {
-        println!("User: {}", user["email"]);
-        println!("Username: {}", user["username"]);
-        println!("ID: {}", user["id"]);
+        println!(
+            "User: {}",
+            user.get("email")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("<missing>")
+        );
+        println!(
+            "Username: {}",
+            user.get("username")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("<missing>")
+        );
+        println!(
+            "ID: {}",
+            user.get("id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("<missing>")
+        );
     }
     println!();
 
@@ -79,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(&signin_body),
         None,
     )
-    .await;
+    .await?;
     println!("Status: {}\n", response.status);
 
     // --- Sign in by username ---
@@ -95,24 +114,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(&signin_body),
         None,
     )
-    .await;
+    .await?;
     println!("Status: {}\n", response.status);
 
     // --- Get session ---
     println!("=== Get session ===");
-    let response = send(&auth, HttpMethod::Get, "/get-session", None, Some(&token)).await;
+    let response = send(&auth, HttpMethod::Get, "/get-session", None, Some(&token)).await?;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
-    println!("Session user: {}\n", data["user"]["email"]);
+    println!(
+        "Session user: {}\n",
+        data.get("user")
+            .and_then(|user| user.get("email"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<missing>")
+    );
 
     // --- List sessions ---
     println!("=== List sessions ===");
-    let response = send(&auth, HttpMethod::Get, "/list-sessions", None, Some(&token)).await;
+    let response = send(&auth, HttpMethod::Get, "/list-sessions", None, Some(&token)).await?;
     println!("Status: {}\n", response.status);
 
     // --- List accounts ---
     println!("=== List accounts ===");
-    let response = send(&auth, HttpMethod::Get, "/list-accounts", None, Some(&token)).await;
+    let response = send(&auth, HttpMethod::Get, "/list-accounts", None, Some(&token)).await?;
     println!("Status: {}\n", response.status);
 
     // --- Duplicate registration (should fail) ---
@@ -124,7 +149,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(&signup_body),
         None,
     )
-    .await;
+    .await?;
     println!("Status: {} (expected error)\n", response.status);
 
     // --- Wrong password (should fail) ---
@@ -140,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(&wrong_body),
         None,
     )
-    .await;
+    .await?;
     println!("Status: {} (expected 401)\n", response.status);
 
     println!("PostgreSQL example completed successfully!");
@@ -155,7 +180,7 @@ async fn send(
     path: &str,
     body: Option<&serde_json::Value>,
     bearer_token: Option<&str>,
-) -> better_auth::prelude::AuthResponse {
+) -> Result<better_auth::prelude::AuthResponse, better_auth::AuthError> {
     let mut headers = HashMap::new();
     if body.is_some() {
         _ = headers.insert("content-type".to_string(), "application/json".to_string());
@@ -172,7 +197,7 @@ async fn send(
         HashMap::new(),
     );
 
-    auth.handle_request(request).await.unwrap()
+    auth.handle_request(request).await
 }
 
 /// Helper: parse JSON body
@@ -182,14 +207,13 @@ fn parse_body(body: &[u8]) -> serde_json::Value {
 
 /// Hide password in database URL for logging output
 fn hide_password(url: &str) -> String {
-    if let Some(at_pos) = url.find('@') {
-        if let Some(colon_pos) = url[..at_pos].rfind(':') {
-            if let Some(slash_pos) = url[..colon_pos].rfind('/') {
-                let before_password = &url[..slash_pos + 1];
-                let after_password = &url[at_pos..];
-                return format!("{}****{}", before_password, after_password);
-            }
-        }
+    if let Some(at_pos) = url.find('@')
+        && let Some(colon_pos) = url[..at_pos].rfind(':')
+        && let Some(slash_pos) = url[..colon_pos].rfind('/')
+    {
+        let before_password = &url[..slash_pos + 1];
+        let after_password = &url[at_pos..];
+        return format!("{}****{}", before_password, after_password);
     }
     url.to_string()
 }

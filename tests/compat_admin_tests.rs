@@ -7,6 +7,12 @@
 //! - POST /admin/set-user-password
 //! - POST /admin/set-role
 //! - POST /admin/has-permission
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "admin compatibility tests intentionally use panic-on-failure assertions and direct JSON indexing for endpoint contract checks"
+)]
 
 mod compat;
 
@@ -208,7 +214,7 @@ async fn test_admin_remove_user_success() {
     let (status, json) = send_request(&auth, req).await;
 
     assert_eq!(status, 200, "remove-user should succeed: {}", json);
-    assert_eq!(json["success"].as_bool().unwrap(), true);
+    assert!(json["success"].as_bool().unwrap());
 
     // Verify user is actually gone
     let user = auth.database().get_user_by_id(user_id).await.unwrap();
@@ -254,7 +260,7 @@ async fn test_admin_set_user_password_success() {
     let (status, json) = send_request(&auth, req).await;
 
     assert_eq!(status, 200, "set-user-password should succeed: {}", json);
-    assert_eq!(json["status"].as_bool().unwrap(), true);
+    assert!(json["status"].as_bool().unwrap());
 
     // Verify the new password works by signing in
     let (_, _signin_json) = signin_user(&auth, "target@test.com", "newpassword1").await;
@@ -350,7 +356,7 @@ async fn test_admin_has_permission_admin_succeeds() {
     let (status, json) = send_request(&auth, req).await;
 
     assert_eq!(status, 200, "has-permission should succeed: {}", json);
-    assert_eq!(json["success"].as_bool().unwrap(), true);
+    assert!(json["success"].as_bool().unwrap());
 }
 
 #[tokio::test]

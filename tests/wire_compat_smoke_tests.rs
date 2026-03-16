@@ -1,10 +1,6 @@
-#![expect(
-    clippy::expect_used,
-    reason = "test code — panicking on failures is the correct behavior"
-)]
-#![expect(
-    clippy::panic,
-    reason = "test code — panicking on failures is the correct behavior"
+#![allow(
+    clippy::indexing_slicing,
+    reason = "wire smoke tests use direct JSON indexing for concise transport assertions"
 )]
 
 mod compat;

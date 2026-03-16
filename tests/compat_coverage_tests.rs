@@ -2,6 +2,9 @@
 
 #![allow(
     unused_results,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
     reason = "test code discards set insertion results while building coverage fixtures"
 )]
 

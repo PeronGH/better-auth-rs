@@ -377,11 +377,13 @@ mod tests {
     static LOCAL_PROXY_BYPASS: Once = Once::new();
 
     fn ensure_local_proxy_bypass() {
-        LOCAL_PROXY_BYPASS.call_once(|| unsafe {
+        LOCAL_PROXY_BYPASS.call_once(|| {
             // SAFETY: Test code in this module only needs localhost proxy bypass
             // values, and they are set once before issuing local HTTP requests.
-            std::env::set_var("NO_PROXY", "localhost,127.0.0.1");
-            std::env::set_var("no_proxy", "localhost,127.0.0.1");
+            unsafe { std::env::set_var("NO_PROXY", "localhost,127.0.0.1") };
+            // SAFETY: Test code in this module only needs localhost proxy bypass
+            // values, and they are set once before issuing local HTTP requests.
+            unsafe { std::env::set_var("no_proxy", "localhost,127.0.0.1") };
         });
     }
 

@@ -2,6 +2,12 @@
 //!
 //! These tests exercise each API endpoint and validate responses against the
 //! OpenAPI spec schema.
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "endpoint smoke tests intentionally use direct JSON assertions against the generated spec"
+)]
 
 mod compat;
 

@@ -1,4 +1,8 @@
 //! Field-level smoke tests for camelCase enforcement and representative type signatures.
+#![allow(
+    clippy::indexing_slicing,
+    reason = "field-level compatibility tests use direct JSON indexing for concise response shape assertions"
+)]
 
 mod compat;
 

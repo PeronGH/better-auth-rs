@@ -3,6 +3,12 @@
 //! These are pure (non-async) tests that verify shape comparison, camelCase
 //! detection, type-signature extraction, and schema resolution without
 //! spinning up an auth instance.
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "unit tests intentionally use panic-on-failure assertions and direct indexing for compact fixture checks"
+)]
 
 mod compat;
 

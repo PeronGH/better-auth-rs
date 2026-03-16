@@ -27,11 +27,13 @@ type TestAuth = BetterAuth;
 static LOCAL_PROXY_BYPASS: Once = Once::new();
 
 fn ensure_local_proxy_bypass() {
-    LOCAL_PROXY_BYPASS.call_once(|| unsafe {
+    LOCAL_PROXY_BYPASS.call_once(|| {
         // SAFETY: Test helpers set a single stable localhost proxy bypass
         // before issuing any mock OAuth localhost requests.
-        std::env::set_var("NO_PROXY", "localhost,127.0.0.1");
-        std::env::set_var("no_proxy", "localhost,127.0.0.1");
+        unsafe { std::env::set_var("NO_PROXY", "localhost,127.0.0.1") };
+        // SAFETY: Test helpers set a single stable localhost proxy bypass
+        // before issuing any mock OAuth localhost requests.
+        unsafe { std::env::set_var("no_proxy", "localhost,127.0.0.1") };
     });
 }
 

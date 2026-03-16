@@ -1,5 +1,9 @@
 //! Cross-endpoint consistency tests — verify user/session objects are
 //! structurally identical across different API responses.
+#![allow(
+    clippy::indexing_slicing,
+    reason = "consistency tests use direct JSON indexing to compare response object shapes"
+)]
 
 mod compat;
 

@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "architecture guard tests intentionally fail fast on fixture traversal and string-scan assumptions"
+)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 

@@ -3,6 +3,13 @@
 //!
 //! These tests ensure route coverage and response shape alignment with
 //! the canonical Better-Auth TypeScript implementation.
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "compatibility tests intentionally use panic-on-failure assertions and direct JSON indexing for contract checks"
+)]
 
 mod compat;
 
@@ -613,7 +620,7 @@ async fn test_contract_validation_error_shape() {
     .await;
 
     assert!(
-        status >= 400 && status < 500,
+        (400..500).contains(&status),
         "Validation error should be 4xx, got {}",
         status
     );
