@@ -60,37 +60,6 @@ impl CsrfMiddleware {
             HttpMethod::Post | HttpMethod::Put | HttpMethod::Delete | HttpMethod::Patch
         )
     }
-
-    fn request_origin(req: &AuthRequest) -> Option<String> {
-        req.headers.get("origin").cloned().or_else(|| {
-            req.headers
-                .get("referer")
-                .and_then(|referer| extract_origin(referer))
-        })
-    }
-
-    fn reject(message: &str) -> AuthResult<Option<AuthResponse>> {
-        Ok(Some(AuthResponse::json(
-            403,
-            &crate::types::CodeMessageResponse {
-                code: "CSRF_ERROR",
-                message: message.to_string(),
-            },
-        )?))
-    }
-
-    fn validate_origin(
-        &self,
-        origin: Option<String>,
-        require_origin: bool,
-    ) -> AuthResult<Option<AuthResponse>> {
-        match origin {
-            Some(origin) if self.auth_config.is_origin_trusted(&origin) => Ok(None),
-            Some(_) => Self::reject("Cross-site request blocked"),
-            None if require_origin => Self::reject("Missing or null Origin header"),
-            None => Ok(None),
-        }
-    }
 }
 
 #[async_trait]
@@ -100,7 +69,7 @@ impl Middleware for CsrfMiddleware {
     }
 
     async fn before_request(&self, req: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
-        if !self.config.enabled || self.auth_config.advanced.disable_csrf_check {
+        if !self.config.enabled {
             return Ok(None);
         }
 
@@ -109,28 +78,27 @@ impl Middleware for CsrfMiddleware {
             return Ok(None);
         }
 
-        let request_origin = Self::request_origin(req);
-        let has_cookies = req.headers.contains_key("cookie");
-        if has_cookies {
-            return self.validate_origin(request_origin, true);
+        // Check Origin header first, then Referer
+        let request_origin = req
+            .headers
+            .get("origin")
+            .cloned()
+            .or_else(|| req.headers.get("referer").and_then(|r| extract_origin(r)));
+
+        match request_origin {
+            Some(origin) if self.auth_config.is_origin_trusted(&origin) => Ok(None),
+            Some(_origin) => Ok(Some(AuthResponse::json(
+                403,
+                &crate::types::CodeMessageResponse {
+                    code: "CSRF_ERROR",
+                    message: "Cross-site request blocked".to_string(),
+                },
+            )?)),
+            // If no Origin/Referer header is present, allow the request.
+            // This handles same-origin requests from older browsers and
+            // non-browser clients (curl, SDKs, etc.).
+            None => Ok(None),
         }
-
-        let sec_fetch_site = req.headers.get("sec-fetch-site").map(String::as_str);
-        let sec_fetch_mode = req.headers.get("sec-fetch-mode").map(String::as_str);
-        let sec_fetch_dest = req.headers.get("sec-fetch-dest").map(String::as_str);
-        let has_fetch_metadata = [sec_fetch_site, sec_fetch_mode, sec_fetch_dest]
-            .into_iter()
-            .flatten()
-            .any(|value| !value.trim().is_empty());
-
-        if has_fetch_metadata {
-            if sec_fetch_site == Some("cross-site") && sec_fetch_mode == Some("navigate") {
-                return Self::reject("Cross-site navigation login blocked");
-            }
-            return self.validate_origin(request_origin, true);
-        }
-
-        Ok(None)
     }
 }
 
@@ -140,17 +108,11 @@ mod tests {
     use crate::config::extract_origin;
     use std::collections::HashMap;
 
-    fn make_post(origin: Option<&str>, with_cookie: bool) -> AuthRequest {
+    fn make_post(origin: Option<&str>) -> AuthRequest {
         let mut headers = HashMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
         if let Some(o) = origin {
             headers.insert("origin".to_string(), o.to_string());
-        }
-        if with_cookie {
-            headers.insert(
-                "cookie".to_string(),
-                "better-auth.session_token=test".to_string(),
-            );
         }
         AuthRequest {
             method: HttpMethod::Post,
@@ -174,7 +136,7 @@ mod tests {
     #[tokio::test]
     async fn test_csrf_allows_same_origin() {
         let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
-        let req = make_post(Some("http://localhost:3000"), true);
+        let req = make_post(Some("http://localhost:3000"));
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
@@ -182,7 +144,7 @@ mod tests {
     #[tokio::test]
     async fn test_csrf_blocks_cross_origin() {
         let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
-        let req = make_post(Some("http://evil.com"), true);
+        let req = make_post(Some("http://evil.com"));
         let resp = mw.before_request(&req).await.unwrap();
         assert!(resp.is_some());
         assert_eq!(resp.unwrap().status, 403);
@@ -195,7 +157,7 @@ mod tests {
             CsrfConfig::new(),
             test_auth_config(vec!["https://myapp.com".to_string()]),
         );
-        let req = make_post(Some("https://myapp.com"), true);
+        let req = make_post(Some("https://myapp.com"));
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
@@ -206,7 +168,7 @@ mod tests {
             CsrfConfig::new(),
             test_auth_config(vec!["https://*.example.com".to_string()]),
         );
-        let req = make_post(Some("https://app.example.com"), true);
+        let req = make_post(Some("https://app.example.com"));
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
@@ -233,32 +195,8 @@ mod tests {
     #[tokio::test]
     async fn test_csrf_allows_no_origin_header() {
         let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
-        let req = make_post(None, false);
+        let req = make_post(None);
         assert!(mw.before_request(&req).await.unwrap().is_none());
-    }
-
-    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
-    #[tokio::test]
-    async fn test_csrf_blocks_cookie_request_without_origin() {
-        let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
-        let req = make_post(None, true);
-        let resp = mw.before_request(&req).await.unwrap();
-        assert!(resp.is_some());
-        assert_eq!(resp.unwrap().status, 403);
-    }
-
-    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
-    #[tokio::test]
-    async fn test_csrf_blocks_cross_site_navigation_without_cookies() {
-        let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
-        let mut req = make_post(Some("http://evil.com"), false);
-        req.headers
-            .insert("sec-fetch-site".to_string(), "cross-site".to_string());
-        req.headers
-            .insert("sec-fetch-mode".to_string(), "navigate".to_string());
-        let resp = mw.before_request(&req).await.unwrap();
-        assert!(resp.is_some());
-        assert_eq!(resp.unwrap().status, 403);
     }
 
     // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.

@@ -27,7 +27,7 @@ better-auth = "0.9"
 ```
 
 ```rust
-use better_auth::{run_migrations, AuthConfig, BetterAuth, Database};
+use better_auth::{run_migrations, store::sea_orm::Database, BetterAuth, AuthConfig};
 use better_auth::plugins::EmailPasswordPlugin;
 
 #[tokio::main]
@@ -85,7 +85,6 @@ Better Auth RS ships with a rich set of plugins. Enable only what you need:
 |-------|-------------|
 | [`better-auth`](https://crates.io/crates/better-auth) | Main crate — re-exports and framework integration |
 | [`better-auth-core`](https://crates.io/crates/better-auth-core) | Core auth runtime, store, middleware, and error handling |
-| [`better-auth-seaorm`](https://crates.io/crates/better-auth-seaorm) | SeaORM integration, migrations, and shared database surface |
 | [`better-auth-api`](https://crates.io/crates/better-auth-api) | Plugin implementations |
 
 ## Documentation

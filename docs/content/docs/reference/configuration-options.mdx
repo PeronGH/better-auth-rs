@@ -10,7 +10,6 @@ description: Complete reference for all configuration fields and defaults.
 | `secret` | `String` | (required) | Signing secret, minimum 32 characters |
 | `base_url` | `String` | `"http://localhost:3000"` | Application base URL |
 | `trusted_origins` | `Vec<String>` | `[]` | Additional trusted origins |
-| `advanced.disable_csrf_check` | `bool` | `false` | Disable TS-style request protection |
 | `session` | `SessionConfig` | See below | Session settings |
 | `jwt` | `JwtConfig` | See below | JWT settings |
 | `password` | `PasswordConfig` | See below | Password policy |
@@ -62,6 +61,12 @@ description: Complete reference for all configuration fields and defaults.
 | `memory_cost` | `u32` | `4096` | Memory usage in KiB |
 | `time_cost` | `u32` | `3` | Number of iterations |
 | `parallelism` | `u32` | `1` | Degree of parallelism |
+
+## CsrfConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `bool` | `true` | Enable CSRF checks |
 
 ## RateLimitConfig
 

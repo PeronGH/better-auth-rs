@@ -65,19 +65,17 @@ let config = AuthConfig::new("secret-key")
 
 ## CSRF Protection
 
-Better Auth includes built-in request protection that matches the TypeScript implementation:
-
-- cookie-backed mutating requests validate `Origin` or `Referer`
-- first-login form flows use Fetch Metadata checks plus trusted-origin validation
-- same-origin frontend SDK requests do not require a separate CSRF token header
+Better Auth includes built-in CSRF protection that validates the `Origin` or `Referer` header on mutating requests (POST, PUT, DELETE, PATCH).
 
 ```rust
+use better_auth::middleware::CsrfConfig;
 use better_auth::{AuthConfig, BetterAuth};
 
 let config = AuthConfig::new(secret)
-    .trusted_origins(vec!["https://myapp.com".to_string()]);
+        .trusted_origins(vec!["https://myapp.com".to_string()]);
 
 let auth = BetterAuth::new(config)
+    .csrf(CsrfConfig::new().enabled(true))
     .build()
     .await?;
 ```
@@ -173,7 +171,7 @@ let config = AuthConfig::new(&secret);
 - [ ] Set `cookie_secure: true` (requires HTTPS)
 - [ ] Set `cookie_http_only: true`
 - [ ] Set `cookie_same_site: Lax` or `Strict`
-- [ ] Configure trusted origins and keep request protection enabled
+- [ ] Enable CSRF protection with trusted origins
 - [ ] Configure rate limiting on all authentication endpoints
 - [ ] Use a strong, random secret key (32+ characters)
 - [ ] Load secrets from environment variables, not code

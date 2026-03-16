@@ -149,8 +149,7 @@ use async_trait::async_trait;
 use better_auth::error::AuthResult;
 use better_auth::hooks::{DatabaseHookContext, DatabaseHooks};
 use better_auth::prelude::User;
-use better_auth::sea_orm::{ConnectionTrait, Statement};
-use better_auth::DatabaseConnection;
+use better_auth::store::sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 
 #[derive(Clone)]
 struct ProvisionWorkspaceHook {

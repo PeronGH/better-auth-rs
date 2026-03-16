@@ -8,9 +8,8 @@ use async_trait::async_trait;
 use better_auth::plugin::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth::plugins::EmailPasswordPlugin;
 use better_auth::prelude::{AuthRequest, AuthResponse, HttpMethod};
-use better_auth::{
-    AuthBuilder, AuthConfig, AuthResult, BetterAuth, Database, DatabaseConnection, run_migrations,
-};
+use better_auth::store::sea_orm::{Database, DatabaseConnection};
+use better_auth::{AuthBuilder, AuthConfig, AuthResult, BetterAuth, run_migrations};
 
 struct RouteTestPlugin;
 
@@ -134,21 +133,4 @@ async fn test_openapi_spec_includes_core_and_plugin_routes() {
         spec["paths"]["/route-test"]["post"]["operationId"],
         "route_test_post"
     );
-}
-
-// Rust-specific surface: `BetterAuth::database_connection` documents the
-// supported shared-connection pattern for SeaORM-backed applications.
-#[tokio::test]
-async fn test_database_connection_accessor_exposes_shared_connection() {
-    let database = test_database().await;
-    let auth = BetterAuth::new(test_config())
-        .database(database.clone())
-        .build()
-        .await
-        .expect("build should succeed");
-
-    auth.database_connection()
-        .ping()
-        .await
-        .expect("shared SeaORM connection should remain usable");
 }

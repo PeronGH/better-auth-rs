@@ -11,9 +11,8 @@ use better_auth::plugins::{
     SessionManagementPlugin, UserManagementPlugin, password_management::SendResetPassword,
 };
 use better_auth::prelude::AuthUser;
-use better_auth::{
-    AuthBuilder, AuthConfig, BetterAuth, Database, DatabaseConnection, run_migrations,
-};
+use better_auth::store::sea_orm::{Database, DatabaseConnection};
+use better_auth::{AuthBuilder, AuthConfig, BetterAuth, run_migrations};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tower::ServiceExt; // for oneshot

@@ -16,10 +16,11 @@ mod compat;
 use std::collections::{BTreeMap, HashSet};
 
 use better_auth::{
-    AuthBuilder, AuthConfig, BetterAuth, Database, DatabaseConnection,
+    AuthBuilder, AuthConfig, BetterAuth,
     plugins::EmailPasswordPlugin,
     prelude::{AuthRequest, HttpMethod},
     run_migrations,
+    store::sea_orm::{Database, DatabaseConnection},
 };
 use serde_json::Value;
 
