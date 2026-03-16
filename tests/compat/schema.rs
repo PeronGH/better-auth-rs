@@ -39,7 +39,7 @@ pub struct FieldExpectation {
 /// Upstream OpenAPI profile to generate from the pinned published TS package.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpenApiProfile {
-    /// Current blocking structural contract while later phases remain report-only.
+    /// Default blocking structural contract.
     Core,
     /// Blocking structural contract for the Better Auth surface we intend to match.
     AlignedRs,
@@ -65,7 +65,6 @@ static ALL_IN_OPENAPI: OnceLock<Result<String, String>> = OnceLock::new();
 ///
 /// The default blocking contract is the generated `core` profile from the
 /// pinned published `better-auth` package in `compat-tests/reference-server`.
-/// This is the current baseline, not the long-term scope boundary.
 pub fn load_openapi_spec() -> oas3::spec::Spec {
     load_openapi_spec_with_profile(OpenApiProfile::Core)
 }

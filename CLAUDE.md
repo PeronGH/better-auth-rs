@@ -56,10 +56,11 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
 3. **Generated upstream OpenAPI profiles** — the structural contract for
    endpoints, request/response schemas, and field names comes from the
    pinned published `better-auth` package via
-   `compat-tests/reference-server/generate-openapi.mjs`. The generated
-   `core` profile is the current blocking structural baseline while
-   wider surfaces are still aligning; use `aligned-rs` and `all-in` for
-   broader informational reporting as later phases come online.
+   `compat-tests/reference-server/generate-openapi.mjs`. Use the
+   generated profiles as structural inputs for tests and reporting. If a
+   checked-in copy is kept and it is identical to the generated output,
+   it is equally authoritative as the same source of truth; drift
+   between them is unacceptable.
 4. **better-auth documentation** (https://www.better-auth.com/docs) —
    secondary reference for user-facing behavior.
 
@@ -248,6 +249,14 @@ A phase is only complete when all of the following are true:
 2. Every endpoint or behavior in the phase has dual-server TS
    comparison coverage whenever a reference-server comparison is
    possible.
+
+Only completed phases may join the blocking schema-driven baseline.
+Currently, Phases 0 and 1 are the only completed phases, so the
+blocking baseline uses the generated `core` profile. Broader generated
+profiles remain reporting-only until later phases satisfy this
+completion rule. When the baseline moves, update this file, the default
+compat profile, and the blocking-vs-report split in the test suite in
+the same change.
 
 Do not use a generic "remaining capability" phase. When a new TS feature
 family becomes in scope, add a new explicit phase with its own

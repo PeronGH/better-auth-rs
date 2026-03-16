@@ -182,7 +182,11 @@ fn test_default_profile_is_core() {
 
     assert!(
         paths.contains_key("/sign-up/email"),
-        "core profile should include the current blocking auth baseline"
+        "core profile should include default auth endpoints"
+    );
+    assert!(
+        paths.contains_key("/list-sessions"),
+        "core profile should include session endpoints"
     );
     assert!(
         !paths.contains_key("/admin/list-users"),
