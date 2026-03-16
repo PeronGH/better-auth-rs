@@ -1068,7 +1068,7 @@ async fn social_sign_in_core(
     let callback_url = body
         .callback_url
         .clone()
-        .unwrap_or_else(|| auth_base_url(ctx));
+        .unwrap_or_else(|| ctx.config.base_url.clone());
     validate_redirect_target(&callback_url, ctx, "Invalid callbackURL")?;
     if let Some(error_callback_url) = body.error_callback_url.as_deref() {
         validate_redirect_target(error_callback_url, ctx, "Invalid errorCallbackURL")?;
@@ -1110,7 +1110,7 @@ async fn link_social_core(
     let callback_url = body
         .callback_url
         .clone()
-        .unwrap_or_else(|| auth_base_url(ctx));
+        .unwrap_or_else(|| ctx.config.base_url.clone());
     validate_redirect_target(&callback_url, ctx, "Invalid callbackURL")?;
     if let Some(error_callback_url) = body.error_callback_url.as_deref() {
         validate_redirect_target(error_callback_url, ctx, "Invalid errorCallbackURL")?;

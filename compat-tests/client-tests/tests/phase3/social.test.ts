@@ -256,3 +256,39 @@ compatScenario("github social sign-in with unverified fallback email does not li
     session: ctx.snapshot(session),
   };
 });
+
+compatScenario("github social sign-in without callbackURL redirects back to app root", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase3-github-default-callback");
+  await ctx.setGitHubProfile({
+    id: ctx.uniqueToken("phase3-github-default-id"),
+    login: ctx.uniqueToken("phase3-github-default-login"),
+    emails: [
+      {
+        email,
+        primary: true,
+        verified: true,
+        visibility: "private",
+      },
+    ],
+  });
+
+  const signIn = await primary.client.signIn.social({
+    provider: "github",
+  });
+  const state = extractState(signIn.data?.url);
+  const callback = await ctx.rawRequest({
+    path: `/api/auth/callback/github?code=compat-code&state=${encodeURIComponent(state)}`,
+    redirect: "manual",
+  });
+  const session = await primary.client.getSession();
+
+  return {
+    signIn: {
+      redirect: signIn.data?.redirect,
+      hasState: Boolean(state),
+    },
+    callback: ctx.snapshot(callback),
+    session: ctx.snapshot(session),
+  };
+});
