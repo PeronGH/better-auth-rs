@@ -252,6 +252,15 @@ fn append_clear_session_cookies(
             config,
         ),
     );
+    if config.account.store_account_cookie {
+        response.headers.append(
+            "Set-Cookie",
+            better_auth_core::utils::cookie_utils::create_clear_cookie(
+                &related_cookie_name(config, "account_data"),
+                config,
+            ),
+        );
+    }
 }
 
 fn related_cookie_name(config: &better_auth_core::AuthConfig, suffix: &str) -> String {
@@ -319,29 +328,13 @@ impl UserManagementPlugin {
         if let Some(callback_url) = query.callback_url {
             let mut headers = better_auth_core::Headers::new();
             _ = headers.insert("Location".to_string(), callback_url);
-            headers.append(
-                "Set-Cookie".to_string(),
-                better_auth_core::utils::cookie_utils::create_clear_session_cookie(&ctx.config),
-            );
-            headers.append(
-                "Set-Cookie".to_string(),
-                better_auth_core::utils::cookie_utils::create_clear_cookie(
-                    &related_cookie_name(&ctx.config, "session_data"),
-                    &ctx.config,
-                ),
-            );
-            headers.append(
-                "Set-Cookie".to_string(),
-                better_auth_core::utils::cookie_utils::create_clear_cookie(
-                    &related_cookie_name(&ctx.config, "dont_remember"),
-                    &ctx.config,
-                ),
-            );
-            return Ok(AuthResponse {
+            let mut response = AuthResponse {
                 status: 302,
                 headers,
                 body: Vec::new(),
-            });
+            };
+            append_clear_session_cookies(&mut response, &ctx.config);
+            return Ok(response);
         }
 
         let mut response = AuthResponse::json(200, &response)?;
@@ -443,27 +436,33 @@ mod axum_impl {
         let ctx = state.to_context();
         let response = delete_user_core(&body, &user, &session, &ps.config, &ctx).await?;
         let mut response = Json(response).into_response();
-        _ = response.headers_mut().append(
-            header::SET_COOKIE,
-            HeaderValue::from_str(&state.clear_session_cookie())
-                .map_err(|_| AuthError::internal("Invalid cookie header"))?,
-        );
-        _ = response.headers_mut().append(
-            header::SET_COOKIE,
-            HeaderValue::from_str(&better_auth_core::utils::cookie_utils::create_clear_cookie(
+        for cookie in [
+            state.clear_session_cookie(),
+            better_auth_core::utils::cookie_utils::create_clear_cookie(
                 &related_cookie_name(&state.config, "session_data"),
                 &state.config,
-            ))
-            .map_err(|_| AuthError::internal("Invalid cookie header"))?,
-        );
-        _ = response.headers_mut().append(
-            header::SET_COOKIE,
-            HeaderValue::from_str(&better_auth_core::utils::cookie_utils::create_clear_cookie(
+            ),
+            better_auth_core::utils::cookie_utils::create_clear_cookie(
                 &related_cookie_name(&state.config, "dont_remember"),
                 &state.config,
-            ))
-            .map_err(|_| AuthError::internal("Invalid cookie header"))?,
-        );
+            ),
+        ] {
+            _ = response.headers_mut().append(
+                header::SET_COOKIE,
+                HeaderValue::from_str(&cookie)
+                    .map_err(|_| AuthError::internal("Invalid cookie header"))?,
+            );
+        }
+        if state.config.account.store_account_cookie {
+            _ = response.headers_mut().append(
+                header::SET_COOKIE,
+                HeaderValue::from_str(&better_auth_core::utils::cookie_utils::create_clear_cookie(
+                    &related_cookie_name(&state.config, "account_data"),
+                    &state.config,
+                ))
+                .map_err(|_| AuthError::internal("Invalid cookie header"))?,
+            );
+        }
         Ok(response)
     }
 
@@ -481,52 +480,66 @@ mod axum_impl {
 
         if let Some(callback_url) = query.callback_url {
             let mut response = axum::response::Redirect::to(&callback_url).into_response();
-            _ = response.headers_mut().append(
-                header::SET_COOKIE,
-                HeaderValue::from_str(&state.clear_session_cookie())
-                    .map_err(|_| AuthError::internal("Invalid cookie header"))?,
-            );
-            _ = response.headers_mut().append(
-                header::SET_COOKIE,
-                HeaderValue::from_str(&better_auth_core::utils::cookie_utils::create_clear_cookie(
+            for cookie in [
+                state.clear_session_cookie(),
+                better_auth_core::utils::cookie_utils::create_clear_cookie(
                     &related_cookie_name(&state.config, "session_data"),
                     &state.config,
-                ))
-                .map_err(|_| AuthError::internal("Invalid cookie header"))?,
-            );
-            _ = response.headers_mut().append(
-                header::SET_COOKIE,
-                HeaderValue::from_str(&better_auth_core::utils::cookie_utils::create_clear_cookie(
+                ),
+                better_auth_core::utils::cookie_utils::create_clear_cookie(
                     &related_cookie_name(&state.config, "dont_remember"),
                     &state.config,
-                ))
-                .map_err(|_| AuthError::internal("Invalid cookie header"))?,
-            );
+                ),
+            ] {
+                _ = response.headers_mut().append(
+                    header::SET_COOKIE,
+                    HeaderValue::from_str(&cookie)
+                        .map_err(|_| AuthError::internal("Invalid cookie header"))?,
+                );
+            }
+            if state.config.account.store_account_cookie {
+                _ = response.headers_mut().append(
+                    header::SET_COOKIE,
+                    HeaderValue::from_str(
+                        &better_auth_core::utils::cookie_utils::create_clear_cookie(
+                            &related_cookie_name(&state.config, "account_data"),
+                            &state.config,
+                        ),
+                    )
+                    .map_err(|_| AuthError::internal("Invalid cookie header"))?,
+                );
+            }
             return Ok(response);
         }
 
         let mut response = Json(response).into_response();
-        _ = response.headers_mut().append(
-            header::SET_COOKIE,
-            HeaderValue::from_str(&state.clear_session_cookie())
-                .map_err(|_| AuthError::internal("Invalid cookie header"))?,
-        );
-        _ = response.headers_mut().append(
-            header::SET_COOKIE,
-            HeaderValue::from_str(&better_auth_core::utils::cookie_utils::create_clear_cookie(
+        for cookie in [
+            state.clear_session_cookie(),
+            better_auth_core::utils::cookie_utils::create_clear_cookie(
                 &related_cookie_name(&state.config, "session_data"),
                 &state.config,
-            ))
-            .map_err(|_| AuthError::internal("Invalid cookie header"))?,
-        );
-        _ = response.headers_mut().append(
-            header::SET_COOKIE,
-            HeaderValue::from_str(&better_auth_core::utils::cookie_utils::create_clear_cookie(
+            ),
+            better_auth_core::utils::cookie_utils::create_clear_cookie(
                 &related_cookie_name(&state.config, "dont_remember"),
                 &state.config,
-            ))
-            .map_err(|_| AuthError::internal("Invalid cookie header"))?,
-        );
+            ),
+        ] {
+            _ = response.headers_mut().append(
+                header::SET_COOKIE,
+                HeaderValue::from_str(&cookie)
+                    .map_err(|_| AuthError::internal("Invalid cookie header"))?,
+            );
+        }
+        if state.config.account.store_account_cookie {
+            _ = response.headers_mut().append(
+                header::SET_COOKIE,
+                HeaderValue::from_str(&better_auth_core::utils::cookie_utils::create_clear_cookie(
+                    &related_cookie_name(&state.config, "account_data"),
+                    &state.config,
+                ))
+                .map_err(|_| AuthError::internal("Invalid cookie header"))?,
+            );
+        }
         Ok(response)
     }
 

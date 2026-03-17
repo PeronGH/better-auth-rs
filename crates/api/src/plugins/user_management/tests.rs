@@ -1,7 +1,7 @@
 use super::*;
 use crate::plugins::test_helpers;
 use async_trait::async_trait;
-use better_auth_core::CreateUser;
+use better_auth_core::{AccountConfig, CreateUser};
 use chrono::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -170,6 +170,46 @@ async fn test_delete_user_immediate() {
     assert!(deleted_user.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.ts :: deleteUser calls `deleteSessionCookie(ctx)`, which clears the account_data cookie when account.storeAccountCookie is enabled.
+#[tokio::test]
+async fn test_delete_user_immediate_clears_account_cookie_when_enabled() {
+    let plugin = UserManagementPlugin::new()
+        .delete_user_enabled(true)
+        .require_delete_verification(false);
+    let config = test_helpers::create_test_config().account(AccountConfig {
+        store_account_cookie: true,
+        ..Default::default()
+    });
+    let ctx = test_helpers::create_test_context_with_config(config).await;
+    let (_user, session) = test_helpers::create_user_and_session(
+        &ctx,
+        CreateUser::new()
+            .with_email("account-cookie@test.com")
+            .with_name("Account Cookie")
+            .with_email_verified(true),
+        Duration::hours(24),
+    )
+    .await;
+
+    let req = test_helpers::create_auth_request(
+        HttpMethod::Post,
+        "/delete-user",
+        Some(&session.token),
+        Some(b"{}".to_vec()),
+        HashMap::new(),
+    );
+
+    let response = plugin.handle_delete_user(&req, &ctx).await.unwrap();
+    let account_cookie_name = format!("{}=", related_cookie_name(&ctx.config, "account_data"));
+    assert!(
+        response
+            .headers
+            .get_all("Set-Cookie")
+            .any(|cookie| cookie.starts_with(&account_cookie_name)),
+        "delete-user should clear the account_data cookie when store_account_cookie is enabled"
+    );
+}
+
 // Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_delete_user_with_verification() {
@@ -230,6 +270,66 @@ async fn test_delete_user_with_verification() {
     // User should now be gone
     let deleted = ctx.database.get_user_by_id(&user.id).await.unwrap();
     assert!(deleted.is_none());
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/update-user.ts :: deleteUserCallback calls `deleteSessionCookie(ctx)`, which clears the account_data cookie when account.storeAccountCookie is enabled.
+#[tokio::test]
+async fn test_delete_user_callback_clears_account_cookie_when_enabled() {
+    let plugin = UserManagementPlugin::new()
+        .delete_user_enabled(true)
+        .require_delete_verification(true);
+    let config = test_helpers::create_test_config().account(AccountConfig {
+        store_account_cookie: true,
+        ..Default::default()
+    });
+    let ctx = test_helpers::create_test_context_with_config(config).await;
+    let (user, session) = test_helpers::create_user_and_session(
+        &ctx,
+        CreateUser::new()
+            .with_email("callback-cookie@test.com")
+            .with_name("Callback Cookie")
+            .with_email_verified(true),
+        Duration::hours(24),
+    )
+    .await;
+
+    let token = "delete-cookie-token";
+    ctx.database
+        .create_verification(better_auth_core::CreateVerification {
+            identifier: format!("delete-account-{token}"),
+            value: user.id.clone(),
+            expires_at: chrono::Utc::now() + Duration::hours(24),
+        })
+        .await
+        .unwrap();
+
+    let mut query = HashMap::new();
+    query.insert("token".to_string(), token.to_string());
+    query.insert(
+        "callbackURL".to_string(),
+        "https://example.com/goodbye".to_string(),
+    );
+    let req = test_helpers::create_auth_request(
+        HttpMethod::Get,
+        "/delete-user/callback",
+        Some(&session.token),
+        None,
+        query,
+    );
+
+    let response = plugin
+        .handle_delete_user_callback(&req, &ctx)
+        .await
+        .unwrap();
+    assert_eq!(response.status, 302);
+    let account_cookie_name = format!("{}=", related_cookie_name(&ctx.config, "account_data"));
+    assert!(
+        response
+            .headers
+            .get_all("Set-Cookie")
+            .any(|cookie| cookie.starts_with(&account_cookie_name)),
+        "delete-user callback should clear the account_data cookie when store_account_cookie is enabled"
+    );
 }
 
 // Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
