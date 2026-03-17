@@ -11,7 +11,7 @@ Better Auth includes a built-in rate limiter that restricts the number of reques
 use better_auth::RateLimitConfig;
 use std::time::Duration;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .rate_limit(
         RateLimitConfig::new()
             .default_limit(Duration::from_secs(60), 100)

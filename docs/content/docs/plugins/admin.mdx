@@ -10,7 +10,7 @@ The `AdminPlugin` provides administrative endpoints for user management. All end
 ```rust
 use better_auth::plugins::AdminPlugin;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(AdminPlugin::new())
     .build()
@@ -22,7 +22,7 @@ let auth = BetterAuth::new(config)
 ```rust
 use better_auth::plugins::admin::AdminConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(
         AdminPlugin::new()

@@ -107,7 +107,7 @@ If your frontend and backend are on different origins, you need to:
 ```rust
 use better_auth::CorsConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .cors(
         CorsConfig::new()
             .allowed_origin("https://frontend.example.com")

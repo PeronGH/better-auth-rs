@@ -11,7 +11,7 @@ The `OAuthPlugin` enables social sign-in via OAuth 2.0 providers. It handles the
 use better_auth::plugins::OAuthPlugin;
 use better_auth::plugins::oauth::OAuthProvider;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(
         OAuthPlugin::new()
@@ -63,7 +63,7 @@ let custom_provider = OAuthProvider {
     },
 };
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(
         OAuthPlugin::new()

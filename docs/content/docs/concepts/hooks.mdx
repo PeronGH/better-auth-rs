@@ -25,7 +25,7 @@ impl DatabaseHooks for AuditHook {
     }
 }
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .database_hook(AuditHook)
     .build()
@@ -176,7 +176,7 @@ impl DatabaseHooks for ProvisionWorkspaceHook {
     }
 }
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database.clone())
     .database_hook(ProvisionWorkspaceHook { db: database })
     .build()
@@ -192,7 +192,7 @@ cleaner integration point.
 Multiple hooks can be registered. They execute in registration order:
 
 ```rust
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .database_hook(AuditHook)
     .database_hook(NormalizeEmail)

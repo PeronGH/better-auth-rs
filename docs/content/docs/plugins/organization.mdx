@@ -10,7 +10,7 @@ The `OrganizationPlugin` provides multi-tenancy support with organizations, memb
 ```rust
 use better_auth::plugins::OrganizationPlugin;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(OrganizationPlugin::new())
     .build()
@@ -22,7 +22,7 @@ let auth = BetterAuth::new(config)
 ```rust
 use better_auth::plugins::organization::OrganizationConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(
         OrganizationPlugin::new()
@@ -77,7 +77,7 @@ let config = OrganizationConfig {
     ..Default::default()
 };
 
-let auth = BetterAuth::new(auth_config)
+let auth = BetterAuth::<AppAuthSchema>::new(auth_config)
     .database(database)
     .plugin(OrganizationPlugin::with_config(config))
     .build()

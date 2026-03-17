@@ -10,7 +10,7 @@ The `SessionManagementPlugin` provides endpoints for querying, listing, and revo
 ```rust
 use better_auth::plugins::SessionManagementPlugin;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(SessionManagementPlugin::new())
     .build()

@@ -78,7 +78,7 @@ use better_auth::{AuthConfig, BetterAuth};
 let config = AuthConfig::new(secret)
         .trusted_origins(vec!["https://myapp.com".to_string()]);
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .csrf(CsrfConfig::new().enabled(true))
     .build()
     .await?;
@@ -94,7 +94,7 @@ Properly configured CORS prevents unauthorized cross-origin access:
 ```rust
 use better_auth::middleware::CorsConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .cors(
         CorsConfig::new()
             .allowed_origin("https://myapp.com")
@@ -152,7 +152,7 @@ Reject oversized request bodies to prevent denial-of-service:
 ```rust
 use better_auth::BodyLimitConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .body_limit(BodyLimitConfig::new().max_bytes(512 * 1024))
     .build()
     .await?;

@@ -47,7 +47,7 @@ impl EmailProvider for SmtpEmailProvider {
     }
 }
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .email_provider(SmtpEmailProvider { /* ... */ })
     .build()

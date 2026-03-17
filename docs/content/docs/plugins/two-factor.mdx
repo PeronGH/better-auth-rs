@@ -10,7 +10,7 @@ The `TwoFactorPlugin` adds two-factor authentication (2FA) to your application. 
 ```rust
 use better_auth::plugins::TwoFactorPlugin;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(TwoFactorPlugin::new())
     .build()
@@ -22,7 +22,7 @@ let auth = BetterAuth::new(config)
 ```rust
 use better_auth::plugins::two_factor::TwoFactorConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(
         TwoFactorPlugin::new().with_config(TwoFactorConfig {

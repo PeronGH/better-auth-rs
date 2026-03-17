@@ -10,7 +10,7 @@ The `PasskeyPlugin` enables passwordless authentication using the WebAuthn stand
 ```rust
 use better_auth::plugins::PasskeyPlugin;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(
         PasskeyPlugin::new()

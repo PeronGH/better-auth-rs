@@ -16,7 +16,7 @@ use better_auth::{AuthConfig, BetterAuth};
 let config = AuthConfig::new(secret)
         .trusted_origins(vec!["https://myapp.com".to_string()]);
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .csrf(CsrfConfig::new().enabled(true))
     .build()
     .await?;
@@ -37,7 +37,7 @@ Limits requests per client per time window.
 use better_auth::middleware::RateLimitConfig;
 use std::time::Duration;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .rate_limit(
         RateLimitConfig::new()
             .default_limit(Duration::from_secs(60), 100)
@@ -73,7 +73,7 @@ Adds Cross-Origin Resource Sharing headers and handles preflight `OPTIONS` reque
 ```rust
 use better_auth::middleware::CorsConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .cors(
         CorsConfig::new()
             .allowed_origin("https://myapp.com")
@@ -101,7 +101,7 @@ Rejects requests with bodies exceeding a size limit.
 ```rust
 use better_auth::BodyLimitConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .body_limit(BodyLimitConfig::new().max_bytes(512 * 1024))
     .build()
     .await?;

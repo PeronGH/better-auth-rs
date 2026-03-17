@@ -33,7 +33,7 @@ Better Auth uses a plugin system to compose authentication features. Each plugin
 Plugins are added via the builder:
 
 ```rust
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(EmailPasswordPlugin::new().enable_signup(true))
     .plugin(SessionManagementPlugin::new())

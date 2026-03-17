@@ -18,7 +18,7 @@ GET /auth/reference/openapi.json
 Generate the spec without a web server:
 
 ```rust
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(EmailPasswordPlugin::new())
     .build()

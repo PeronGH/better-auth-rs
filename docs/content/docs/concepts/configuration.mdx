@@ -90,7 +90,7 @@ that call `EmailProvider` directly. Configure it on the builder:
 ```rust
 use better_auth::email::ConsoleEmailProvider;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .email_provider(ConsoleEmailProvider)
     .build()
     .await?;

@@ -12,7 +12,7 @@ use chrono::Duration;
 use better_auth::plugins::EmailVerificationPlugin;
 use better_auth::email::ConsoleEmailProvider;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .email_provider(ConsoleEmailProvider) // Required for sending emails
     .plugin(

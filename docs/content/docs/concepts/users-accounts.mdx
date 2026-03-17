@@ -92,7 +92,7 @@ Provides endpoints for listing and unlinking accounts.
 ```rust
 use better_auth::plugins::AccountManagementPlugin;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .database(database)
     .plugin(AccountManagementPlugin::new())
     .build()
