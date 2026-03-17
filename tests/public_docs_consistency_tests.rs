@@ -34,7 +34,8 @@ fn docs_use_current_minor_version_and_canonical_paths() {
     let axum = read_repo_file("docs/content/docs/integrations/axum.mdx");
 
     assert!(
-        readme.contains(&format!("better-auth = \"{expected_minor}\"")),
+        readme.contains(&format!("better-auth = \"{expected_minor}\""))
+            || readme.contains(&format!("version = \"{expected_minor}\"")),
         "README should use the current minor crate version",
     );
     assert!(
@@ -68,13 +69,16 @@ fn docs_use_current_session_cookie_name() {
     }
 }
 
-// Rust-specific surface: the documented Axum integration should show the
-// generic AppState + FromRef pattern that downstream apps are expected to use.
+// Rust-specific surface: the documented Axum integration should point to a
+// canonical example file rather than asserting exact prose fragments.
 #[test]
-fn axum_docs_show_generic_app_state_integration() {
+fn axum_docs_reference_and_validate_canonical_example() {
     let axum = read_repo_file("docs/content/docs/integrations/axum.mdx");
+    let example = read_repo_file("examples/axum_server.rs");
 
-    assert!(axum.contains("axum_router_with_state::<AppState>()"));
-    assert!(axum.contains("impl FromRef<AppState> for Arc<BetterAuth<AppAuthSchema>>"));
-    assert!(axum.contains("better_auth::integrations::axum"));
+    assert!(axum.contains("examples/axum_server.rs"));
+    assert!(example.contains("impl FromRef<AppState> for Arc<BetterAuth<AppAuthSchema>>"));
+    assert!(example.contains("axum_router_with_state::<AppState>()"));
+    assert!(example.contains("CurrentSession<AppAuthSchema>"));
+    assert!(example.contains("OptionalSession<AppAuthSchema>"));
 }

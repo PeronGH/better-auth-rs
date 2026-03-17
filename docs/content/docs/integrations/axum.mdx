@@ -5,6 +5,8 @@ description: Integrate Better Auth with the Axum web framework.
 
 Better Auth provides first-class integration with [Axum](https://github.com/tokio-rs/axum) via the `axum` feature flag, including automatic route mounting and schema-aware session extractors.
 
+The canonical end-to-end example lives in [`examples/axum_server.rs`](../../../../examples/axum_server.rs). The code snippets below are shortened excerpts of that example.
+
 ## Setup
 
 ```toml title="Cargo.toml"
@@ -206,66 +208,13 @@ Both extractors look for the session token in this order:
 
 ## Full Example
 
-```rust,ignore
-use axum::{Json, Router, response::IntoResponse, routing::get};
-use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
-use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
-use better_auth::{AuthConfig, BetterAuth};
-use better_auth::prelude::AuthUser;
-use better_auth::store::Database;
-use std::sync::Arc;
+See [`examples/axum_server.rs`](../../../../examples/axum_server.rs) for the complete working server, including:
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
-        .base_url("http://localhost:8080");
-    let database = Database::connect("sqlite::memory:").await?;
-
-    let auth = Arc::new(
-        BetterAuth::<AppAuthSchema>::new(config)
-            .database(database)
-            .plugin(EmailPasswordPlugin::new().enable_signup(true))
-            .plugin(SessionManagementPlugin::new())
-            .build()
-            .await?
-    );
-
-    let auth_router = auth.clone().axum_router();
-
-    let app = Router::new()
-        .route("/api/profile", get(get_profile))
-        .route("/api/public", get(public_route))
-        .nest("/auth", auth_router)
-        .with_state(auth);
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
-    axum::serve(listener, app).await?;
-
-    Ok(())
-}
-
-/// Protected route — requires authentication
-async fn get_profile(
-    session: CurrentSession<AppAuthSchema>,
-) -> impl IntoResponse {
-    Json(serde_json::json!({
-        "id": session.user.id(),
-        "email": session.user.email(),
-        "name": session.user.name(),
-    }))
-}
-
-/// Public route — works for both authenticated and anonymous users
-async fn public_route(
-    session: OptionalSession<AppAuthSchema>,
-) -> impl IntoResponse {
-    let user = session.0.map(|s| s.user.id().to_string());
-    Json(serde_json::json!({
-        "authenticated": user.is_some(),
-        "user_id": user,
-    }))
-}
-```
+- app-owned auth entity declarations with `AuthEntity`
+- the `AppAuthSchema` definition with `AuthSchema`
+- `FromRef<AppState> for Arc<BetterAuth<AppAuthSchema>>`
+- `axum_router_with_state::<AppState>()`
+- `CurrentSession<AppAuthSchema>` and `OptionalSession<AppAuthSchema>`
 
 ## Request/Response Conversion
 

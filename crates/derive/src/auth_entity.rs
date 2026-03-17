@@ -88,21 +88,21 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     now: ::chrono::DateTime<::chrono::Utc>,
                 ) -> Self::ActiveModel {
                     Self::ActiveModel {
-                        id: ::sea_orm::ActiveValue::Set(id),
-                        email: ::sea_orm::ActiveValue::Set(create_user.email),
-                        name: ::sea_orm::ActiveValue::Set(create_user.name),
-                        image: ::sea_orm::ActiveValue::Set(create_user.image),
-                        email_verified: ::sea_orm::ActiveValue::Set(create_user.email_verified.unwrap_or(false)),
-                        username: ::sea_orm::ActiveValue::Set(create_user.username),
-                        display_username: ::sea_orm::ActiveValue::Set(create_user.display_username),
-                        two_factor_enabled: ::sea_orm::ActiveValue::Set(false),
-                        role: ::sea_orm::ActiveValue::Set(create_user.role),
-                        banned: ::sea_orm::ActiveValue::Set(false),
-                        ban_reason: ::sea_orm::ActiveValue::Set(::std::option::Option::None),
-                        ban_expires: ::sea_orm::ActiveValue::Set(::std::option::Option::None),
-                        metadata: ::sea_orm::ActiveValue::Set(create_user.metadata.unwrap_or(::serde_json::json!({}))),
-                        created_at: ::sea_orm::ActiveValue::Set(now),
-                        updated_at: ::sea_orm::ActiveValue::Set(now),
+                        id: ::better_auth::__private_core::sea_orm::ActiveValue::Set(id),
+                        email: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_user.email),
+                        name: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_user.name),
+                        image: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_user.image),
+                        email_verified: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_user.email_verified.unwrap_or(false)),
+                        username: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_user.username),
+                        display_username: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_user.display_username),
+                        two_factor_enabled: ::better_auth::__private_core::sea_orm::ActiveValue::Set(false),
+                        role: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_user.role),
+                        banned: ::better_auth::__private_core::sea_orm::ActiveValue::Set(false),
+                        ban_reason: ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::None),
+                        ban_expires: ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::None),
+                        metadata: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_user.metadata.unwrap_or(::serde_json::json!({}))),
+                        created_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(now),
+                        updated_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(now),
                     }
                 }
 
@@ -112,48 +112,48 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     now: ::chrono::DateTime<::chrono::Utc>,
                 ) {
                     if let ::std::option::Option::Some(email) = update.email {
-                        active.email = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(email));
+                        active.email = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(email));
                     }
                     if let ::std::option::Option::Some(name) = update.name {
-                        active.name = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(name));
+                        active.name = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(name));
                     }
                     if let ::std::option::Option::Some(image) = update.image {
-                        active.image = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(image));
+                        active.image = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(image));
                     }
                     if let ::std::option::Option::Some(email_verified) = update.email_verified {
-                        active.email_verified = ::sea_orm::ActiveValue::Set(email_verified);
+                        active.email_verified = ::better_auth::__private_core::sea_orm::ActiveValue::Set(email_verified);
                     }
                     if let ::std::option::Option::Some(username) = update.username {
-                        active.username = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(username));
+                        active.username = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(username));
                     }
                     if let ::std::option::Option::Some(display_username) = update.display_username {
-                        active.display_username = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(display_username));
+                        active.display_username = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(display_username));
                     }
                     if let ::std::option::Option::Some(role) = update.role {
-                        active.role = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(role));
+                        active.role = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(role));
                     }
                     if let ::std::option::Option::Some(two_factor_enabled) = update.two_factor_enabled {
-                        active.two_factor_enabled = ::sea_orm::ActiveValue::Set(two_factor_enabled);
+                        active.two_factor_enabled = ::better_auth::__private_core::sea_orm::ActiveValue::Set(two_factor_enabled);
                     }
                     if let ::std::option::Option::Some(metadata) = update.metadata {
-                        active.metadata = ::sea_orm::ActiveValue::Set(metadata);
+                        active.metadata = ::better_auth::__private_core::sea_orm::ActiveValue::Set(metadata);
                     }
                     if let ::std::option::Option::Some(banned) = update.banned {
-                        active.banned = ::sea_orm::ActiveValue::Set(banned);
+                        active.banned = ::better_auth::__private_core::sea_orm::ActiveValue::Set(banned);
                         if !banned {
-                            active.ban_reason = ::sea_orm::ActiveValue::Set(::std::option::Option::None);
-                            active.ban_expires = ::sea_orm::ActiveValue::Set(::std::option::Option::None);
+                            active.ban_reason = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::None);
+                            active.ban_expires = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::None);
                         }
                     }
                     if update.banned != ::std::option::Option::Some(false) {
                         if let ::std::option::Option::Some(ban_reason) = update.ban_reason {
-                            active.ban_reason = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(ban_reason));
+                            active.ban_reason = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(ban_reason));
                         }
                         if let ::std::option::Option::Some(ban_expires) = update.ban_expires {
-                            active.ban_expires = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(ban_expires));
+                            active.ban_expires = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(ban_expires));
                         }
                     }
-                    active.updated_at = ::sea_orm::ActiveValue::Set(now);
+                    active.updated_at = ::better_auth::__private_core::sea_orm::ActiveValue::Set(now);
                 }
             }
         },
@@ -191,17 +191,17 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     now: ::chrono::DateTime<::chrono::Utc>,
                 ) -> Self::ActiveModel {
                     Self::ActiveModel {
-                        id: ::sea_orm::ActiveValue::Set(id),
-                        user_id: ::sea_orm::ActiveValue::Set(create_session.user_id),
-                        token: ::sea_orm::ActiveValue::Set(token),
-                        expires_at: ::sea_orm::ActiveValue::Set(create_session.expires_at),
-                        created_at: ::sea_orm::ActiveValue::Set(now),
-                        updated_at: ::sea_orm::ActiveValue::Set(now),
-                        ip_address: ::sea_orm::ActiveValue::Set(create_session.ip_address),
-                        user_agent: ::sea_orm::ActiveValue::Set(create_session.user_agent),
-                        impersonated_by: ::sea_orm::ActiveValue::Set(create_session.impersonated_by),
-                        active_organization_id: ::sea_orm::ActiveValue::Set(create_session.active_organization_id),
-                        active: ::sea_orm::ActiveValue::Set(true),
+                        id: ::better_auth::__private_core::sea_orm::ActiveValue::Set(id),
+                        user_id: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_session.user_id),
+                        token: ::better_auth::__private_core::sea_orm::ActiveValue::Set(token),
+                        expires_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_session.expires_at),
+                        created_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(now),
+                        updated_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(now),
+                        ip_address: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_session.ip_address),
+                        user_agent: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_session.user_agent),
+                        impersonated_by: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_session.impersonated_by),
+                        active_organization_id: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_session.active_organization_id),
+                        active: ::better_auth::__private_core::sea_orm::ActiveValue::Set(true),
                     }
                 }
 
@@ -209,21 +209,21 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     active: &mut Self::ActiveModel,
                     expires_at: ::chrono::DateTime<::chrono::Utc>,
                 ) {
-                    active.expires_at = ::sea_orm::ActiveValue::Set(expires_at);
+                    active.expires_at = ::better_auth::__private_core::sea_orm::ActiveValue::Set(expires_at);
                 }
 
                 fn set_updated_at(
                     active: &mut Self::ActiveModel,
                     updated_at: ::chrono::DateTime<::chrono::Utc>,
                 ) {
-                    active.updated_at = ::sea_orm::ActiveValue::Set(updated_at);
+                    active.updated_at = ::better_auth::__private_core::sea_orm::ActiveValue::Set(updated_at);
                 }
 
                 fn set_active_organization_id(
                     active: &mut Self::ActiveModel,
                     organization_id: ::std::option::Option<::std::string::String>,
                 ) {
-                    active.active_organization_id = ::sea_orm::ActiveValue::Set(organization_id);
+                    active.active_organization_id = ::better_auth::__private_core::sea_orm::ActiveValue::Set(organization_id);
                 }
             }
         },
@@ -261,19 +261,19 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     now: ::chrono::DateTime<::chrono::Utc>,
                 ) -> Self::ActiveModel {
                     Self::ActiveModel {
-                        id: ::sea_orm::ActiveValue::Set(id),
-                        account_id: ::sea_orm::ActiveValue::Set(create_account.account_id),
-                        provider_id: ::sea_orm::ActiveValue::Set(create_account.provider_id),
-                        user_id: ::sea_orm::ActiveValue::Set(create_account.user_id),
-                        access_token: ::sea_orm::ActiveValue::Set(create_account.access_token),
-                        refresh_token: ::sea_orm::ActiveValue::Set(create_account.refresh_token),
-                        id_token: ::sea_orm::ActiveValue::Set(create_account.id_token),
-                        access_token_expires_at: ::sea_orm::ActiveValue::Set(create_account.access_token_expires_at),
-                        refresh_token_expires_at: ::sea_orm::ActiveValue::Set(create_account.refresh_token_expires_at),
-                        scope: ::sea_orm::ActiveValue::Set(create_account.scope),
-                        password: ::sea_orm::ActiveValue::Set(create_account.password),
-                        created_at: ::sea_orm::ActiveValue::Set(now),
-                        updated_at: ::sea_orm::ActiveValue::Set(now),
+                        id: ::better_auth::__private_core::sea_orm::ActiveValue::Set(id),
+                        account_id: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_account.account_id),
+                        provider_id: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_account.provider_id),
+                        user_id: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_account.user_id),
+                        access_token: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_account.access_token),
+                        refresh_token: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_account.refresh_token),
+                        id_token: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_account.id_token),
+                        access_token_expires_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_account.access_token_expires_at),
+                        refresh_token_expires_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_account.refresh_token_expires_at),
+                        scope: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_account.scope),
+                        password: ::better_auth::__private_core::sea_orm::ActiveValue::Set(create_account.password),
+                        created_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(now),
+                        updated_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(now),
                     }
                 }
 
@@ -283,27 +283,27 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     now: ::chrono::DateTime<::chrono::Utc>,
                 ) {
                     if let ::std::option::Option::Some(access_token) = update.access_token {
-                        active.access_token = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(access_token));
+                        active.access_token = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(access_token));
                     }
                     if let ::std::option::Option::Some(refresh_token) = update.refresh_token {
-                        active.refresh_token = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(refresh_token));
+                        active.refresh_token = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(refresh_token));
                     }
                     if let ::std::option::Option::Some(id_token) = update.id_token {
-                        active.id_token = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(id_token));
+                        active.id_token = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(id_token));
                     }
                     if let ::std::option::Option::Some(access_token_expires_at) = update.access_token_expires_at {
-                        active.access_token_expires_at = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(access_token_expires_at));
+                        active.access_token_expires_at = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(access_token_expires_at));
                     }
                     if let ::std::option::Option::Some(refresh_token_expires_at) = update.refresh_token_expires_at {
-                        active.refresh_token_expires_at = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(refresh_token_expires_at));
+                        active.refresh_token_expires_at = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(refresh_token_expires_at));
                     }
                     if let ::std::option::Option::Some(scope) = update.scope {
-                        active.scope = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(scope));
+                        active.scope = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(scope));
                     }
                     if let ::std::option::Option::Some(password) = update.password {
-                        active.password = ::sea_orm::ActiveValue::Set(::std::option::Option::Some(password));
+                        active.password = ::better_auth::__private_core::sea_orm::ActiveValue::Set(::std::option::Option::Some(password));
                     }
-                    active.updated_at = ::sea_orm::ActiveValue::Set(now);
+                    active.updated_at = ::better_auth::__private_core::sea_orm::ActiveValue::Set(now);
                 }
             }
         },
@@ -334,12 +334,12 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     now: ::chrono::DateTime<::chrono::Utc>,
                 ) -> Self::ActiveModel {
                     Self::ActiveModel {
-                        id: ::sea_orm::ActiveValue::Set(id),
-                        identifier: ::sea_orm::ActiveValue::Set(verification.identifier),
-                        value: ::sea_orm::ActiveValue::Set(verification.value),
-                        expires_at: ::sea_orm::ActiveValue::Set(verification.expires_at),
-                        created_at: ::sea_orm::ActiveValue::Set(now),
-                        updated_at: ::sea_orm::ActiveValue::Set(now),
+                        id: ::better_auth::__private_core::sea_orm::ActiveValue::Set(id),
+                        identifier: ::better_auth::__private_core::sea_orm::ActiveValue::Set(verification.identifier),
+                        value: ::better_auth::__private_core::sea_orm::ActiveValue::Set(verification.value),
+                        expires_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(verification.expires_at),
+                        created_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(now),
+                        updated_at: ::better_auth::__private_core::sea_orm::ActiveValue::Set(now),
                     }
                 }
             }
