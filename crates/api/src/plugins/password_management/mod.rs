@@ -98,7 +98,7 @@ impl std::fmt::Debug for PasswordManagementConfig {
 }
 
 #[async_trait]
-impl AuthPlugin for PasswordManagementPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for PasswordManagementPlugin {
     fn name(&self) -> &'static str {
         "password-management"
     }
@@ -115,7 +115,7 @@ impl AuthPlugin for PasswordManagementPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/request-password-reset") => {
@@ -143,7 +143,7 @@ impl PasswordManagementPlugin {
     async fn handle_request_password_reset(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body: RequestPasswordResetRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -156,7 +156,7 @@ impl PasswordManagementPlugin {
     async fn handle_reset_password(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let mut body: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -172,7 +172,7 @@ impl PasswordManagementPlugin {
     async fn handle_change_password(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body: ChangePasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -205,7 +205,7 @@ impl PasswordManagementPlugin {
         &self,
         token: &str,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let query = ResetPasswordTokenQuery {
             callback_url: req.query.get("callbackURL").cloned(),
@@ -227,7 +227,7 @@ impl PasswordManagementPlugin {
     async fn get_current_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<Option<better_auth_core::User>> {
         let session_manager = ctx.session_manager();
 
@@ -243,7 +243,11 @@ impl PasswordManagementPlugin {
 
 #[cfg(test)]
 impl PasswordManagementPlugin {
-    fn validate_password(&self, password: &str, ctx: &AuthContext) -> AuthResult<()> {
+    fn validate_password(
+        &self,
+        password: &str,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<()> {
         better_auth_core::utils::password::validate_password(
             password,
             ctx.config.password.min_length,

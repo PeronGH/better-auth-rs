@@ -3,12 +3,13 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, Query
 use uuid::Uuid;
 
 use crate::error::AuthResult;
+use crate::schema::AuthSchema;
 use crate::types::{CreateTwoFactor, TwoFactor};
 
 use super::entities::two_factor::{ActiveModel, Column, Entity};
 use super::{AuthStore, map_db_err};
 
-impl AuthStore {
+impl<S: AuthSchema> AuthStore<S> {
     pub async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<TwoFactor> {
         let now = Utc::now();
         ActiveModel {

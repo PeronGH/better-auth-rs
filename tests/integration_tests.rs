@@ -2272,10 +2272,11 @@ async fn test_api_key_get_nonexistent() {
 #[tokio::test]
 async fn test_get_user_by_username_adapter() {
     use better_auth::prelude::CreateUser;
+    use better_auth::store::BundledSchema;
 
     let database = Database::connect("sqlite::memory:").await.unwrap();
     run_migrations(&database).await.unwrap();
-    let db = AuthStore::new(
+    let db = AuthStore::<BundledSchema>::new(
         Arc::new(better_auth::AuthConfig::new(
             "test-secret-key-that-is-at-least-32-characters-long",
         )),

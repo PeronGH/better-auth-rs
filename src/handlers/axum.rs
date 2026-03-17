@@ -13,33 +13,42 @@ use std::sync::Arc;
 #[cfg(feature = "axum")]
 use crate::BetterAuth;
 #[cfg(feature = "axum")]
-use better_auth_core::entity::AuthSession as AuthSessionTrait;
-use better_auth_core::{AuthError, AuthRequest, AuthResponse, HttpMethod, OkResponse, core_paths};
+use better_auth_core::AuthSession;
+use better_auth_core::{
+    AuthError, AuthRequest, AuthResponse, AuthSchema, HttpMethod, OkResponse, core_paths,
+};
+
+#[cfg(feature = "axum")]
+type AxumAuthHandlerFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send>>;
 
 /// Integration trait for Axum web framework
 #[cfg(feature = "axum")]
 pub trait AxumIntegration {
+    type Schema: AuthSchema;
+
     /// Create an Axum router with all authentication routes
-    fn axum_router(self) -> Router<Arc<BetterAuth>>;
+    fn axum_router(self) -> Router<Arc<BetterAuth<Self::Schema>>>;
 
     /// Create an Axum router that can be nested into an application using a
     /// custom state type.
     fn axum_router_with_state<S>(self) -> Router<S>
     where
         Self: Sized,
-        Arc<BetterAuth>: FromRef<S>,
+        Arc<BetterAuth<Self::Schema>>: FromRef<S>,
         S: Clone + Send + Sync + 'static;
 }
 
 #[cfg(feature = "axum")]
-impl AxumIntegration for Arc<BetterAuth> {
-    fn axum_router(self) -> Router<Arc<BetterAuth>> {
-        self.axum_router_with_state::<Arc<BetterAuth>>()
+impl<T: AuthSchema> AxumIntegration for Arc<BetterAuth<T>> {
+    type Schema = T;
+
+    fn axum_router(self) -> Router<Arc<BetterAuth<T>>> {
+        self.axum_router_with_state::<Arc<BetterAuth<T>>>()
     }
 
     fn axum_router_with_state<S>(self) -> Router<S>
     where
-        Arc<BetterAuth>: FromRef<S>,
+        Arc<BetterAuth<T>>: FromRef<S>,
         S: Clone + Send + Sync + 'static,
     {
         // NOTE: disabled_paths is checked here at route-registration time so
@@ -61,12 +70,12 @@ impl AxumIntegration for Arc<BetterAuth> {
 
         // Add OpenAPI spec endpoint
         if !disabled_paths.contains(&core_paths::OPENAPI_SPEC.to_string()) {
-            router = router.route(core_paths::OPENAPI_SPEC, get(create_plugin_handler()));
+            router = router.route(core_paths::OPENAPI_SPEC, get(create_plugin_handler::<T>()));
         }
 
         // Add core user management routes
         if !disabled_paths.contains(&core_paths::UPDATE_USER.to_string()) {
-            router = router.route(core_paths::UPDATE_USER, post(create_plugin_handler()));
+            router = router.route(core_paths::UPDATE_USER, post(create_plugin_handler::<T>()));
         }
         // Register plugin routes
         for plugin in self.plugins() {
@@ -76,7 +85,7 @@ impl AxumIntegration for Arc<BetterAuth> {
                     continue;
                 }
 
-                let handler_fn = create_plugin_handler();
+                let handler_fn = create_plugin_handler::<T>();
                 match route.method {
                     HttpMethod::Get => {
                         router = router.route(&route.path, get(handler_fn.clone()));
@@ -122,13 +131,9 @@ async fn error_check(
 }
 
 #[cfg(feature = "axum")]
-fn create_plugin_handler() -> impl Fn(
-    State<Arc<BetterAuth>>,
-    Request,
-) -> std::pin::Pin<
-    Box<dyn std::future::Future<Output = Response> + Send>,
-> + Clone {
-    |State(auth): State<Arc<BetterAuth>>, req: Request| {
+fn create_plugin_handler<T: AuthSchema>()
+-> impl Fn(State<Arc<BetterAuth<T>>>, Request) -> AxumAuthHandlerFuture + Clone {
+    |State(auth): State<Arc<BetterAuth<T>>>, req: Request| {
         Box::pin(async move {
             match convert_axum_request(req).await {
                 Ok(auth_req) => match auth.handle_request(auth_req).await {
@@ -249,9 +254,9 @@ fn convert_auth_response(auth_response: AuthResponse) -> Response {
 /// ```
 #[cfg(feature = "axum")]
 #[derive(Debug, Clone)]
-pub struct CurrentSession {
-    pub user: better_auth_core::User,
-    pub session: better_auth_core::Session,
+pub struct CurrentSession<T: AuthSchema> {
+    pub user: T::User,
+    pub session: T::Session,
 }
 
 /// Optional authenticated session extractor.
@@ -273,7 +278,7 @@ pub struct CurrentSession {
 /// ```
 #[cfg(feature = "axum")]
 #[derive(Debug, Clone)]
-pub struct OptionalSession(pub Option<CurrentSession>);
+pub struct OptionalSession<T: AuthSchema>(pub Option<CurrentSession<T>>);
 
 /// Extract a session token from the request parts.
 ///
@@ -307,29 +312,30 @@ fn extract_token_from_parts(parts: &Parts, cookie_name: &str) -> Option<String> 
 }
 
 #[cfg(feature = "axum")]
-impl<S> FromRequestParts<S> for CurrentSession
+impl<S, T> FromRequestParts<S> for CurrentSession<T>
 where
-    Arc<BetterAuth>: FromRef<S>,
+    T: AuthSchema,
+    Arc<BetterAuth<T>>: FromRef<S>,
     S: Send + Sync,
 {
     type Rejection = Response;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let auth = Arc::<BetterAuth>::from_ref(state);
+        let auth = Arc::<BetterAuth<T>>::from_ref(state);
         let cookie_name = &auth.config().session.cookie_name;
         let token = extract_token_from_parts(parts, cookie_name)
             .ok_or_else(|| AuthError::Unauthenticated.into_response())?;
 
         let session = auth
-            .session_manager()
-            .get_session(&token)
+            .database()
+            .get_session_model(&token)
             .await
             .map_err(IntoResponse::into_response)?
             .ok_or_else(|| AuthError::SessionNotFound.into_response())?;
 
         let user = auth
             .database()
-            .get_user_by_id(session.user_id())
+            .get_user_model_by_id(session.user_id())
             .await
             .map_err(IntoResponse::into_response)?
             .ok_or_else(|| AuthError::UserNotFound.into_response())?;
@@ -339,17 +345,18 @@ where
 }
 
 #[cfg(feature = "axum")]
-impl<S> FromRequestParts<S> for OptionalSession
+impl<S, T> FromRequestParts<S> for OptionalSession<T>
 where
-    Arc<BetterAuth>: FromRef<S>,
+    T: AuthSchema,
+    Arc<BetterAuth<T>>: FromRef<S>,
     S: Send + Sync,
 {
     type Rejection = Response;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        match CurrentSession::from_request_parts(parts, state).await {
-            Ok(session) => Ok(OptionalSession(Some(session))),
-            Err(_) => Ok(OptionalSession(None)),
+        match CurrentSession::<T>::from_request_parts(parts, state).await {
+            Ok(session) => Ok(OptionalSession::<T>(Some(session))),
+            Err(_) => Ok(OptionalSession::<T>(None)),
         }
     }
 }

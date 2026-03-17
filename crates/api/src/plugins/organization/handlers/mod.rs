@@ -18,7 +18,7 @@ use super::types::{HasPermissionRequest, HasPermissionResponse};
 /// Helper function to require authenticated session
 pub(crate) async fn require_session(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(better_auth_core::User, better_auth_core::Session)> {
     let session_manager = ctx.session_manager();
 
@@ -37,7 +37,7 @@ pub(crate) async fn resolve_organization_id(
     org_id: Option<&str>,
     org_slug: Option<&str>,
     session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<String> {
     if let Some(id) = org_id {
         return Ok(id.to_string());
@@ -66,7 +66,7 @@ pub(crate) async fn has_permission_core(
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
     config: &OrganizationConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<HasPermissionResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
@@ -125,7 +125,7 @@ pub(crate) async fn has_permission_core(
 /// Handle has-permission request
 pub async fn handle_has_permission(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;

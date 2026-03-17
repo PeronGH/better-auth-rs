@@ -2,6 +2,7 @@
 
 mod accounts;
 mod api_keys;
+pub mod bundled_schema;
 mod conversions;
 pub mod entities;
 mod invitations;
@@ -15,6 +16,7 @@ mod users;
 mod verifications;
 
 use std::future::Future;
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -24,20 +26,23 @@ use sea_orm::{DatabaseConnection, DatabaseTransaction, DbErr, SqlErr, Transactio
 use crate::config::AuthConfig;
 use crate::error::{AuthError, DatabaseError};
 use crate::hooks::{DatabaseHookContext, DatabaseHooks, current_request_hook_context};
+use crate::schema::AuthSchema;
 
 #[derive(Clone)]
-pub struct AuthStore {
+pub struct AuthStore<S: AuthSchema = bundled_schema::BundledSchema> {
     config: Arc<AuthConfig>,
     db: DatabaseConnection,
     hooks: Vec<Arc<dyn DatabaseHooks>>,
+    _schema: PhantomData<S>,
 }
 
-impl AuthStore {
+impl<S: AuthSchema> AuthStore<S> {
     pub fn new(config: Arc<AuthConfig>, db: DatabaseConnection) -> Self {
         Self {
             config,
             db,
             hooks: Vec::new(),
+            _schema: PhantomData,
         }
     }
 

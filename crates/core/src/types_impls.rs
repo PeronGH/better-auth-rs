@@ -81,6 +81,25 @@ impl AuthUser for User {
     }
 }
 
+/// Blanket conversion from any [`AuthSession`] implementor to the concrete [`Session`] type.
+impl<T: AuthSession> From<&T> for Session {
+    fn from(session: &T) -> Self {
+        Self {
+            id: session.id().to_owned(),
+            expires_at: session.expires_at(),
+            token: session.token().to_owned(),
+            created_at: session.created_at(),
+            updated_at: session.updated_at(),
+            ip_address: session.ip_address().map(str::to_owned),
+            user_agent: session.user_agent().map(str::to_owned),
+            user_id: session.user_id().to_owned(),
+            impersonated_by: session.impersonated_by().map(str::to_owned),
+            active_organization_id: session.active_organization_id().map(str::to_owned),
+            active: session.active(),
+        }
+    }
+}
+
 impl AuthSession for Session {
     fn id(&self) -> &str {
         &self.id
@@ -114,6 +133,27 @@ impl AuthSession for Session {
     }
     fn active(&self) -> bool {
         self.active
+    }
+}
+
+/// Blanket conversion from any [`AuthAccount`] implementor to the concrete [`Account`] type.
+impl<T: AuthAccount> From<&T> for Account {
+    fn from(account: &T) -> Self {
+        Self {
+            id: account.id().to_owned(),
+            account_id: account.account_id().to_owned(),
+            provider_id: account.provider_id().to_owned(),
+            user_id: account.user_id().to_owned(),
+            access_token: account.access_token().map(str::to_owned),
+            refresh_token: account.refresh_token().map(str::to_owned),
+            id_token: account.id_token().map(str::to_owned),
+            access_token_expires_at: account.access_token_expires_at(),
+            refresh_token_expires_at: account.refresh_token_expires_at(),
+            scope: account.scope().map(str::to_owned),
+            password: account.password().map(str::to_owned),
+            created_at: account.created_at(),
+            updated_at: account.updated_at(),
+        }
     }
 }
 
@@ -156,6 +196,20 @@ impl AuthAccount for Account {
     }
     fn updated_at(&self) -> DateTime<Utc> {
         self.updated_at
+    }
+}
+
+/// Blanket conversion from any [`AuthVerification`] implementor to the concrete [`Verification`] type.
+impl<T: AuthVerification> From<&T> for Verification {
+    fn from(verification: &T) -> Self {
+        Self {
+            id: verification.id().to_owned(),
+            identifier: verification.identifier().to_owned(),
+            value: verification.value().to_owned(),
+            expires_at: verification.expires_at(),
+            created_at: verification.created_at(),
+            updated_at: verification.updated_at(),
+        }
     }
 }
 

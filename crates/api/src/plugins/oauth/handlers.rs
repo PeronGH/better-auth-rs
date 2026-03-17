@@ -33,7 +33,7 @@ use super::types::{
 /// Authenticate the current request and return the validated session.
 async fn require_session(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> Result<better_auth_core::Session, AuthError> {
     let session_manager = ctx.session_manager();
     let token = session_manager
@@ -376,7 +376,7 @@ async fn persist_refreshed_cookie_account(
     cookie_account: Option<&AccountCookiePayload>,
     provider_id: &str,
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     update: UpdateAccount,
 ) -> AuthResult<Option<AccountCookiePayload>> {
     let Some(account) = cookie_account else {
@@ -439,7 +439,7 @@ fn attach_cookie_state_payload(
 
 fn validate_redirect_target(
     target: &str,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     error_message: &str,
 ) -> AuthResult<()> {
     if !target.starts_with("//") && url::Url::parse(target).is_err() {
@@ -478,7 +478,7 @@ fn build_redirect_url(
     Ok(url.to_string())
 }
 
-fn auth_base_url(ctx: &AuthContext) -> String {
+fn auth_base_url(ctx: &AuthContext<impl better_auth_core::AuthSchema>) -> String {
     format!(
         "{}{}",
         ctx.config.base_url.trim_end_matches('/'),
@@ -530,7 +530,7 @@ async fn process_oauth_sign_in(
     tokens: &OAuthTokenSet,
     disable_sign_up: bool,
     meta: &better_auth_core::RequestMeta,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> Result<ProcessOAuthUserResult, String> {
     if user_info.email.is_empty() {
         return Err("email not found".to_string());
@@ -820,7 +820,7 @@ async fn complete_link_social(
     user_info: &OAuthUserInfo,
     tokens: &OAuthTokenSet,
     link: &OAuthStateLink,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> Result<(), String> {
     let linking = &ctx.config.account.account_linking;
     let trusted_provider = linking
@@ -907,7 +907,7 @@ async fn sign_in_with_id_token_core(
     id_token: &OAuthIdTokenRequest,
     provider: &OAuthProvider,
     meta: &better_auth_core::RequestMeta,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SocialSignInResponse> {
     let verifier = provider
         .verify_id_token
@@ -970,7 +970,7 @@ async fn link_with_id_token_core(
     id_token: &OAuthIdTokenRequest,
     provider: &OAuthProvider,
     session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SocialSignInResponse> {
     let verifier = provider
         .verify_id_token
@@ -1097,7 +1097,7 @@ async fn link_with_id_token_core(
 async fn social_sign_in_core(
     body: &SocialSignInRequest,
     config: &OAuthConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<InitiatedOAuthFlow> {
     let provider = config
         .providers
@@ -1139,7 +1139,7 @@ async fn link_social_core(
     body: &LinkSocialRequest,
     session: &better_auth_core::Session,
     config: &OAuthConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<InitiatedOAuthFlow> {
     let provider = config
         .providers
@@ -1191,7 +1191,7 @@ pub(crate) async fn get_access_token_core(
     config: &OAuthConfig,
     req: &AuthRequest,
     session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AccessTokenCoreResult> {
     let _ = body.user_id.as_deref();
     let provider = config.providers.get(&body.provider_id).ok_or_else(|| {
@@ -1384,7 +1384,7 @@ pub(crate) async fn refresh_token_core(
     req: &AuthRequest,
     session: &better_auth_core::Session,
     config: &OAuthConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<RefreshTokenCoreResult> {
     let _ = body.user_id.as_deref();
     let provider_name = &body.provider_id;
@@ -1520,7 +1520,7 @@ pub(crate) async fn refresh_token_core(
 /// authorization URL, and return a redirect response. The only difference
 /// is `link_user_id` (None for sign-in, Some for linking).
 async fn initiate_oauth_flow_core(
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     request: FlowStartRequest<'_>,
 ) -> AuthResult<InitiatedOAuthFlow> {
     let (code_verifier, code_challenge) = generate_pkce();
@@ -1579,7 +1579,7 @@ async fn initiate_oauth_flow_core(
 pub(crate) async fn handle_social_sign_in(
     config: &OAuthConfig,
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let body: SocialSignInRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
@@ -1643,7 +1643,7 @@ pub(crate) async fn handle_callback(
     config: &OAuthConfig,
     provider_name: &str,
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let provider = config
         .providers
@@ -1910,7 +1910,7 @@ pub(crate) async fn handle_callback(
 pub(crate) async fn handle_link_social(
     config: &OAuthConfig,
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let session = require_session(req, ctx).await?;
     let body: LinkSocialRequest = match better_auth_core::validate_request_body(req) {
@@ -1952,7 +1952,7 @@ pub(crate) async fn handle_link_social(
 pub(crate) async fn handle_get_access_token(
     config: &OAuthConfig,
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let session = require_session(req, ctx).await?;
     let body: GetAccessTokenRequest = match better_auth_core::validate_request_body(req) {
@@ -1973,7 +1973,7 @@ pub(crate) async fn handle_get_access_token(
 pub(crate) async fn handle_refresh_token(
     config: &OAuthConfig,
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let session = require_session(req, ctx).await?;
     let body: RefreshTokenRequest = match better_auth_core::validate_request_body(req) {

@@ -380,7 +380,10 @@ impl ApiKeyPlugin {
     }
 
     /// Throttled cleanup -- at most once per 10 seconds.
-    pub(super) async fn maybe_delete_expired(&self, ctx: &AuthContext) {
+    pub(super) async fn maybe_delete_expired(
+        &self,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) {
         let should_run = {
             let mut last = self
                 .last_expired_check
@@ -481,7 +484,7 @@ impl ApiKeyPlugin {
     async fn handle_create(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: CreateKeyRequest = match better_auth_core::validate_request_body(req) {
@@ -492,7 +495,11 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_get(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_get(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let id = req
             .query
@@ -502,7 +509,11 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_list(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_list(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let response = list_keys_core(user.id(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
@@ -511,7 +522,7 @@ impl ApiKeyPlugin {
     async fn handle_update(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: UpdateKeyRequest = match better_auth_core::validate_request_body(req) {
@@ -525,7 +536,7 @@ impl ApiKeyPlugin {
     async fn handle_delete(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: DeleteKeyRequest = match better_auth_core::validate_request_body(req) {
@@ -543,7 +554,7 @@ impl ApiKeyPlugin {
     async fn handle_verify(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let verify_req: VerifyKeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -562,7 +573,7 @@ impl ApiKeyPlugin {
     /// a structured error code (no fragile string matching needed).
     async fn validate_api_key(
         &self,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         raw_key: &str,
         required_permissions: Option<&serde_json::Value>,
     ) -> Result<ApiKeyView, ApiKeyValidationError> {
@@ -755,7 +766,7 @@ impl ApiKeyPlugin {
     async fn handle_delete_all_expired(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let response = delete_all_expired_core(user.id(), self, ctx).await?;
@@ -782,7 +793,7 @@ better_auth_core::impl_auth_plugin! {
         async fn before_request(
             &self,
             req: &AuthRequest,
-            ctx: &AuthContext,
+            ctx: &AuthContext<S>,
         ) -> AuthResult<Option<BeforeRequestAction>> {
             if !self.config.enable_session_for_api_keys {
                 return Ok(None);

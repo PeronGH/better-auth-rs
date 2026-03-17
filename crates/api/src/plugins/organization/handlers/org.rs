@@ -22,7 +22,7 @@ pub(crate) async fn create_organization_core(
     body: &CreateOrganizationRequest,
     user: &better_auth_core::User,
     config: &OrganizationConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<CreateOrganizationResponse<better_auth_core::Organization, MemberResponse>> {
     if !config.allow_user_to_create_organization {
         return Err(AuthError::forbidden("Organization creation is not allowed"));
@@ -77,7 +77,7 @@ pub(crate) async fn update_organization_core(
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
     config: &OrganizationConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<better_auth_core::Organization> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
@@ -125,7 +125,7 @@ pub(crate) async fn delete_organization_core(
     body: &DeleteOrganizationRequest,
     user: &better_auth_core::User,
     config: &OrganizationConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     if config.disable_organization_deletion {
         return Err(AuthError::forbidden("Organization deletion is disabled"));
@@ -157,7 +157,7 @@ pub(crate) async fn delete_organization_core(
 
 pub(crate) async fn list_organizations_core(
     user: &better_auth_core::User,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<better_auth_core::Organization>> {
     let organizations = ctx.database.list_user_organizations(user.id()).await?;
     Ok(organizations)
@@ -167,7 +167,7 @@ pub(crate) async fn get_full_organization_core(
     query: &GetFullOrganizationQuery,
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<
     FullOrganizationResponse<better_auth_core::Organization, better_auth_core::Invitation>,
 > {
@@ -211,7 +211,7 @@ pub(crate) async fn get_full_organization_core(
 
 pub(crate) async fn check_slug_core(
     body: &CheckSlugRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<CheckSlugResponse> {
     let exists = ctx
         .database
@@ -226,7 +226,7 @@ pub(crate) async fn set_active_organization_core(
     body: &SetActiveOrganizationRequest,
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<better_auth_core::Session> {
     let org_id = if body.organization_id.is_some() || body.organization_slug.is_some() {
         Some(
@@ -262,7 +262,7 @@ pub(crate) async fn leave_organization_core(
     body: &LeaveOrganizationRequest,
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     let member = ctx
         .database
@@ -306,7 +306,7 @@ pub(crate) async fn leave_organization_core(
 /// Handle create organization request
 pub async fn handle_create_organization(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
@@ -321,7 +321,7 @@ pub async fn handle_create_organization(
 /// Handle update organization request
 pub async fn handle_update_organization(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -336,7 +336,7 @@ pub async fn handle_update_organization(
 /// Handle delete organization request
 pub async fn handle_delete_organization(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
@@ -351,7 +351,7 @@ pub async fn handle_delete_organization(
 /// Handle list organizations request
 pub async fn handle_list_organizations(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
     let organizations = list_organizations_core(&user, ctx).await?;
@@ -361,7 +361,7 @@ pub async fn handle_list_organizations(
 /// Handle get full organization request
 pub async fn handle_get_full_organization(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let query = parse_query::<GetFullOrganizationQuery>(&req.query);
@@ -370,7 +370,10 @@ pub async fn handle_get_full_organization(
 }
 
 /// Handle check slug request
-pub async fn handle_check_slug(req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+pub async fn handle_check_slug(
+    req: &AuthRequest,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<AuthResponse> {
     let _session = require_session(req, ctx).await?;
     let body: CheckSlugRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
@@ -383,7 +386,7 @@ pub async fn handle_check_slug(req: &AuthRequest, ctx: &AuthContext) -> AuthResu
 /// Handle set active organization request
 pub async fn handle_set_active_organization(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let body: SetActiveOrganizationRequest = match better_auth_core::validate_request_body(req) {
@@ -397,7 +400,7 @@ pub async fn handle_set_active_organization(
 /// Handle leave organization request
 pub async fn handle_leave_organization(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let body: LeaveOrganizationRequest = match better_auth_core::validate_request_body(req) {

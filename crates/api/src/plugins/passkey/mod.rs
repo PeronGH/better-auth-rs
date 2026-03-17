@@ -55,7 +55,7 @@ impl PasskeyPlugin {
     async fn handle_generate_register_options(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let authenticator_attachment = req.query.get("authenticatorAttachment").map(|s| s.as_str());
@@ -69,7 +69,7 @@ impl PasskeyPlugin {
     async fn handle_verify_registration(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: VerifyRegistrationRequest = match better_auth_core::validate_request_body(req) {
@@ -84,7 +84,7 @@ impl PasskeyPlugin {
     async fn handle_generate_authenticate_options(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let maybe_user = ctx.require_session(req).await.ok().map(|(u, _)| u);
         let result =
@@ -96,7 +96,7 @@ impl PasskeyPlugin {
     async fn handle_verify_authentication(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body: VerifyAuthenticationRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -114,7 +114,7 @@ impl PasskeyPlugin {
     async fn handle_list_user_passkeys(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let result = list_user_passkeys_core(&user, ctx).await?;
@@ -125,7 +125,7 @@ impl PasskeyPlugin {
     async fn handle_delete_passkey(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: DeletePasskeyRequest = match better_auth_core::validate_request_body(req) {
@@ -140,7 +140,7 @@ impl PasskeyPlugin {
     async fn handle_update_passkey(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: UpdatePasskeyRequest = match better_auth_core::validate_request_body(req) {

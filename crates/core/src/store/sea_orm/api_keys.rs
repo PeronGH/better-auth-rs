@@ -5,12 +5,13 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::error::{AuthError, AuthResult};
+use crate::schema::AuthSchema;
 use crate::types::{ApiKey, CreateApiKey, UpdateApiKey};
 
 use super::entities::api_key::{ActiveModel, Column, Entity};
 use super::{AuthStore, map_db_err, parse_optional_rfc3339, to_i32, to_optional_i32};
 
-impl AuthStore {
+impl<S: AuthSchema> AuthStore<S> {
     pub async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey> {
         let now = Utc::now();
         ActiveModel {

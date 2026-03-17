@@ -1,17 +1,17 @@
 use chrono::{DateTime, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, ExprTrait,
-    IntoActiveModel, QueryFilter, QueryOrder, Set,
+    IntoActiveModel, QueryFilter, QueryOrder,
 };
 use uuid::Uuid;
 
 use crate::error::{AuthError, AuthResult};
+use crate::schema::{AuthSchema, AuthSessionModel};
 use crate::types::{CreateSession, Session};
 
-use super::entities::session::{Column, Entity};
 use super::{AuthStore, cancelled_by_hook, map_db_err};
 
-impl AuthStore {
+impl<S: AuthSchema> AuthStore<S> {
     fn normalize_session_client_field(value: Option<String>) -> Option<String> {
         match value {
             Some(value) => Some(value),
@@ -39,27 +39,18 @@ impl AuthStore {
             }
         }
         let now = Utc::now();
-        let session = super::entities::session::ActiveModel {
-            id: Set(Uuid::new_v4().to_string()),
-            user_id: Set(create_session.user_id),
-            token: Set(format!("session_{}", Uuid::new_v4())),
-            expires_at: Set(create_session.expires_at),
-            created_at: Set(now),
-            updated_at: Set(now),
-            ip_address: Set(Self::normalize_session_client_field(
-                create_session.ip_address,
-            )),
-            user_agent: Set(Self::normalize_session_client_field(
-                create_session.user_agent,
-            )),
-            impersonated_by: Set(create_session.impersonated_by),
-            active_organization_id: Set(create_session.active_organization_id),
-            active: Set(true),
-        }
+        create_session.ip_address = Self::normalize_session_client_field(create_session.ip_address);
+        create_session.user_agent = Self::normalize_session_client_field(create_session.user_agent);
+        let session_model = S::Session::new_active(
+            Uuid::new_v4().to_string(),
+            format!("session_{}", Uuid::new_v4()),
+            create_session,
+            now,
+        )
         .insert(db)
         .await
-        .map(Session::from)
         .map_err(map_db_err)?;
+        let session = Session::from(&session_model);
         for hook in self.hooks() {
             hook.after_create_session(&session, &hook_context).await?;
         }
@@ -83,23 +74,32 @@ impl AuthStore {
     }
 
     pub async fn get_session(&self, token: &str) -> AuthResult<Option<Session>> {
-        Entity::find()
-            .filter(Column::Token.eq(token))
-            .filter(Column::Active.eq(true))
+        <S::Session as AuthSessionModel>::Entity::find()
+            .filter(<S::Session as AuthSessionModel>::token_column().eq(token))
+            .filter(<S::Session as AuthSessionModel>::active_column().eq(true))
             .one(self.connection())
             .await
-            .map(|model| model.map(Session::from))
+            .map(|model| model.map(|model| Session::from(&model)))
+            .map_err(map_db_err)
+    }
+
+    pub async fn get_session_model(&self, token: &str) -> AuthResult<Option<S::Session>> {
+        <S::Session as AuthSessionModel>::Entity::find()
+            .filter(<S::Session as AuthSessionModel>::token_column().eq(token))
+            .filter(<S::Session as AuthSessionModel>::active_column().eq(true))
+            .one(self.connection())
+            .await
             .map_err(map_db_err)
     }
 
     pub async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Session>> {
-        Entity::find()
-            .filter(Column::UserId.eq(user_id))
-            .filter(Column::Active.eq(true))
-            .order_by_desc(Column::CreatedAt)
+        <S::Session as AuthSessionModel>::Entity::find()
+            .filter(<S::Session as AuthSessionModel>::user_id_column().eq(user_id))
+            .filter(<S::Session as AuthSessionModel>::active_column().eq(true))
+            .order_by_desc(<S::Session as AuthSessionModel>::created_at_column())
             .all(self.connection())
             .await
-            .map(|models| models.into_iter().map(Session::from).collect())
+            .map(|models| models.iter().map(Session::from).collect())
             .map_err(map_db_err)
     }
 
@@ -108,9 +108,9 @@ impl AuthStore {
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> AuthResult<()> {
-        let Some(model) = Entity::find()
-            .filter(Column::Token.eq(token))
-            .filter(Column::Active.eq(true))
+        let Some(model) = <S::Session as AuthSessionModel>::Entity::find()
+            .filter(<S::Session as AuthSessionModel>::token_column().eq(token))
+            .filter(<S::Session as AuthSessionModel>::active_column().eq(true))
             .one(self.connection())
             .await
             .map_err(map_db_err)?
@@ -119,8 +119,8 @@ impl AuthStore {
         };
 
         let mut active = model.into_active_model();
-        active.expires_at = Set(expires_at);
-        active.updated_at = Set(Utc::now());
+        S::Session::set_expires_at(&mut active, expires_at);
+        S::Session::set_updated_at(&mut active, Utc::now());
         active
             .update(self.connection())
             .await
@@ -142,8 +142,8 @@ impl AuthStore {
                 }
             }
         }
-        let _ = Entity::delete_many()
-            .filter(Column::Token.eq(token))
+        let _ = <S::Session as AuthSessionModel>::Entity::delete_many()
+            .filter(<S::Session as AuthSessionModel>::token_column().eq(token))
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -156,8 +156,8 @@ impl AuthStore {
     }
 
     pub async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        Entity::delete_many()
-            .filter(Column::UserId.eq(user_id))
+        <S::Session as AuthSessionModel>::Entity::delete_many()
+            .filter(<S::Session as AuthSessionModel>::user_id_column().eq(user_id))
             .exec(self.connection())
             .await
             .map(|_| ())
@@ -165,11 +165,11 @@ impl AuthStore {
     }
 
     pub async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-        Entity::delete_many()
+        <S::Session as AuthSessionModel>::Entity::delete_many()
             .filter(
-                Column::ExpiresAt
+                <S::Session as AuthSessionModel>::expires_at_column()
                     .lt(Utc::now())
-                    .or(Column::Active.eq(false)),
+                    .or(<S::Session as AuthSessionModel>::active_column().eq(false)),
             )
             .exec(self.connection())
             .await
@@ -182,9 +182,9 @@ impl AuthStore {
         token: &str,
         organization_id: Option<&str>,
     ) -> AuthResult<Session> {
-        let Some(model) = Entity::find()
-            .filter(Column::Token.eq(token))
-            .filter(Column::Active.eq(true))
+        let Some(model) = <S::Session as AuthSessionModel>::Entity::find()
+            .filter(<S::Session as AuthSessionModel>::token_column().eq(token))
+            .filter(<S::Session as AuthSessionModel>::active_column().eq(true))
             .one(self.connection())
             .await
             .map_err(map_db_err)?
@@ -193,12 +193,12 @@ impl AuthStore {
         };
 
         let mut active = model.into_active_model();
-        active.active_organization_id = Set(organization_id.map(str::to_owned));
-        active.updated_at = Set(Utc::now());
+        S::Session::set_active_organization_id(&mut active, organization_id.map(str::to_owned));
+        S::Session::set_updated_at(&mut active, Utc::now());
         active
             .update(self.connection())
             .await
-            .map(Session::from)
+            .map(|model| Session::from(&model))
             .map_err(map_db_err)
     }
 }

@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
+use serde::Serialize;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[derive(crate::AuthEntity, Clone, Debug, PartialEq, Serialize, DeriveEntityModel)]
+#[auth(role = "verification")]
 #[sea_orm(table_name = "verifications")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]

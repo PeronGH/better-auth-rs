@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse,
-    AuthResult, AuthStore, BeforeRequestAction, DatabaseHooks, EmailProvider, HttpMethod,
-    OkResponse, OpenApiBuilder, OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest,
-    core_paths,
+    AuthResult, AuthSchema, AuthStore, BeforeRequestAction, DatabaseHooks, EmailProvider,
+    HttpMethod, OkResponse, OpenApiBuilder, OpenApiSpec, SessionManager, UpdateUser,
+    UpdateUserRequest, core_paths,
     entity::{AuthSession, AuthUser},
     hooks::{RequestHookContext, with_request_hook_context_value},
     middleware::{
@@ -14,21 +14,25 @@ use better_auth_core::{
     sea_orm::DatabaseConnection,
 };
 
-pub struct BetterAuth {
+pub struct BetterAuth<
+    S: AuthSchema = better_auth_core::store::sea_orm::bundled_schema::BundledSchema,
+> {
     config: Arc<AuthConfig>,
-    plugins: Vec<Box<dyn AuthPlugin>>,
+    plugins: Vec<Box<dyn AuthPlugin<S>>>,
     middlewares: Vec<Box<dyn Middleware>>,
-    database: Arc<AuthStore>,
-    session_manager: SessionManager,
-    context: AuthContext,
+    database: Arc<AuthStore<S>>,
+    session_manager: SessionManager<S>,
+    context: AuthContext<S>,
 }
 
 /// Initial builder for configuring BetterAuth.
-pub struct AuthBuilder {
+pub struct AuthBuilder<
+    S: AuthSchema = better_auth_core::store::sea_orm::bundled_schema::BundledSchema,
+> {
     config: AuthConfig,
     database: Option<DatabaseConnection>,
     database_hooks: Vec<Arc<dyn DatabaseHooks>>,
-    plugins: Vec<Box<dyn AuthPlugin>>,
+    plugins: Vec<Box<dyn AuthPlugin<S>>>,
     csrf_config: Option<CsrfConfig>,
     rate_limit_config: Option<RateLimitConfig>,
     cors_config: Option<CorsConfig>,
@@ -36,7 +40,7 @@ pub struct AuthBuilder {
     custom_middlewares: Vec<Box<dyn Middleware>>,
 }
 
-impl AuthBuilder {
+impl<S: AuthSchema> AuthBuilder<S> {
     pub fn new(config: AuthConfig) -> Self {
         Self {
             config,
@@ -61,7 +65,7 @@ impl AuthBuilder {
     }
 
     /// Add a plugin to the authentication system.
-    pub fn plugin<P: AuthPlugin + 'static>(mut self, plugin: P) -> Self {
+    pub fn plugin<P: AuthPlugin<S> + 'static>(mut self, plugin: P) -> Self {
         self.plugins.push(Box::new(plugin));
         self
     }
@@ -123,7 +127,7 @@ impl AuthBuilder {
     }
 
     /// Build the BetterAuth instance.
-    pub async fn build(self) -> AuthResult<BetterAuth> {
+    pub async fn build(self) -> AuthResult<BetterAuth<S>> {
         // Validate configuration
         self.config.validate()?;
 
@@ -181,18 +185,18 @@ impl AuthBuilder {
     }
 }
 
-impl BetterAuth {
+impl<S: AuthSchema> BetterAuth<S> {
     /// Create a new BetterAuth builder.
     #[expect(
         clippy::new_ret_no_self,
         reason = "returns AuthBuilder by design — builder pattern entry point"
     )]
-    pub fn new(config: AuthConfig) -> AuthBuilder {
+    pub fn new(config: AuthConfig) -> AuthBuilder<S> {
         AuthBuilder::new(config)
     }
 }
 
-impl BetterAuth {
+impl<S: AuthSchema> BetterAuth<S> {
     /// Handle an authentication request.
     ///
     /// Errors from plugins and core handlers are automatically converted
@@ -304,17 +308,17 @@ impl BetterAuth {
     }
 
     #[doc(hidden)]
-    pub fn database(&self) -> &Arc<AuthStore> {
+    pub fn database(&self) -> &Arc<AuthStore<S>> {
         &self.database
     }
 
     /// Get the session manager.
-    pub fn session_manager(&self) -> &SessionManager {
+    pub fn session_manager(&self) -> &SessionManager<S> {
         &self.session_manager
     }
 
     /// Get all routes from plugins.
-    pub fn routes(&self) -> Vec<(String, &dyn AuthPlugin)> {
+    pub fn routes(&self) -> Vec<(String, &dyn AuthPlugin<S>)> {
         let mut routes = Vec::new();
         for plugin in &self.plugins {
             for route in plugin.routes() {
@@ -325,12 +329,12 @@ impl BetterAuth {
     }
 
     /// Get all plugins.
-    pub fn plugins(&self) -> &[Box<dyn AuthPlugin>] {
+    pub fn plugins(&self) -> &[Box<dyn AuthPlugin<S>>] {
         &self.plugins
     }
 
     /// Get plugin by name.
-    pub fn get_plugin(&self, name: &str) -> Option<&dyn AuthPlugin> {
+    pub fn get_plugin(&self, name: &str) -> Option<&dyn AuthPlugin<S>> {
         self.plugins
             .iter()
             .find(|p| p.name() == name)

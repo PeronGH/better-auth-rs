@@ -14,7 +14,7 @@ use better_auth::{AuthBuilder, AuthConfig, AuthResult, BetterAuth, run_migration
 struct RouteTestPlugin;
 
 #[async_trait]
-impl AuthPlugin for RouteTestPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for RouteTestPlugin {
     fn name(&self) -> &'static str {
         "route-test"
     }
@@ -29,7 +29,7 @@ impl AuthPlugin for RouteTestPlugin {
     async fn on_request(
         &self,
         _req: &AuthRequest,
-        _ctx: &AuthContext,
+        _ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<Option<AuthResponse>> {
         Ok(None)
     }

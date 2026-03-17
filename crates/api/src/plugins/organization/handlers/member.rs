@@ -18,7 +18,7 @@ use crate::plugins::organization::types::{
 pub(crate) async fn get_active_member_core(
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<MemberResponse> {
     let org_id = session
         .active_organization_id()
@@ -37,7 +37,7 @@ pub(crate) async fn list_members_core(
     query: &ListMembersQuery,
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ListMembersResponse> {
     let org_id = resolve_organization_id(
         query.organization_id.as_deref(),
@@ -76,7 +76,7 @@ pub(crate) async fn remove_member_core(
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
     config: &OrganizationConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<RemovedMemberResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
@@ -176,7 +176,7 @@ pub(crate) async fn update_member_role_core(
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
     config: &OrganizationConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<MemberWrappedResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
@@ -245,7 +245,7 @@ pub(crate) async fn update_member_role_core(
 /// Handle get active member request
 pub async fn handle_get_active_member(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let response = get_active_member_core(&user, &session, ctx).await?;
@@ -253,7 +253,10 @@ pub async fn handle_get_active_member(
 }
 
 /// Handle list members request
-pub async fn handle_list_members(req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+pub async fn handle_list_members(
+    req: &AuthRequest,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let query = parse_query::<ListMembersQuery>(&req.query);
     let response = list_members_core(&query, &user, &session, ctx).await?;
@@ -263,7 +266,7 @@ pub async fn handle_list_members(req: &AuthRequest, ctx: &AuthContext) -> AuthRe
 /// Handle remove member request
 pub async fn handle_remove_member(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -278,7 +281,7 @@ pub async fn handle_remove_member(
 /// Handle update member role request
 pub async fn handle_update_member_role(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;

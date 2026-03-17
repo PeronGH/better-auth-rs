@@ -281,7 +281,7 @@ impl UserManagementPlugin {
     async fn handle_change_email(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: ChangeEmailRequest = match better_auth_core::validate_request_body(req) {
@@ -296,7 +296,7 @@ impl UserManagementPlugin {
     async fn handle_delete_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, session) = ctx.require_session(req).await?;
         let body: DeleteUserRequest = match better_auth_core::validate_request_body(req) {
@@ -313,7 +313,7 @@ impl UserManagementPlugin {
     async fn handle_delete_user_callback(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx
             .require_session(req)
@@ -348,7 +348,7 @@ impl UserManagementPlugin {
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl AuthPlugin for UserManagementPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for UserManagementPlugin {
     fn name(&self) -> &'static str {
         "user-management"
     }
@@ -371,7 +371,7 @@ impl AuthPlugin for UserManagementPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             // -- change email --

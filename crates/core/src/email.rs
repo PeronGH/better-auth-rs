@@ -100,6 +100,7 @@ mod tests {
         use crate::config::AuthConfig;
         use crate::plugin::AuthContext;
         use crate::sea_orm::Database;
+        use crate::store::sea_orm::bundled_schema::BundledSchema;
         use crate::store::{AuthStore, run_migrations};
 
         let config = Arc::new(AuthConfig::new("test-secret-key-at-least-32-chars-long"));
@@ -109,7 +110,7 @@ mod tests {
         run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        let database = Arc::new(AuthStore::new(config.clone(), database));
+        let database = Arc::new(AuthStore::<BundledSchema>::new(config.clone(), database));
         let ctx = AuthContext::new(config, database);
 
         let result = ctx.email_provider();

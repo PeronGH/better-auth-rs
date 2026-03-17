@@ -163,7 +163,7 @@ fn build_totp(
 }
 
 async fn verify_user_password(
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     user: &better_auth_core::User,
     password: &str,
 ) -> AuthResult<()> {
@@ -180,7 +180,7 @@ async fn enable_core(
     body: &EnableRequest,
     user: &better_auth_core::User,
     config: &TwoFactorConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<EnableResponse> {
     verify_user_password(ctx, user, &body.password).await?;
 
@@ -232,7 +232,7 @@ async fn enable_core(
 async fn disable_core(
     body: &DisableRequest,
     user: &better_auth_core::User,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     verify_user_password(ctx, user, &body.password).await?;
 
@@ -256,7 +256,7 @@ async fn get_totp_uri_core(
     body: &GetTotpUriRequest,
     user: &better_auth_core::User,
     config: &TwoFactorConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<TotpUriResponse> {
     verify_user_password(ctx, user, &body.password).await?;
 
@@ -283,7 +283,7 @@ async fn generate_backup_codes_core(
     body: &GenerateBackupCodesRequest,
     user: &better_auth_core::User,
     config: &TwoFactorConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<BackupCodesResponse> {
     verify_user_password(ctx, user, &body.password).await?;
 
@@ -307,7 +307,7 @@ async fn generate_backup_codes_core(
 /// Extract the user_id from a `2fa_xxx` pending verification token.
 async fn get_pending_2fa_user(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(better_auth_core::User, String)> {
     let token = req
         .headers
@@ -348,7 +348,7 @@ async fn verify_totp_core(
     user: &better_auth_core::User,
     verification_id: &str,
     config: &TwoFactorConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(VerifyTotpResponse<better_auth_core::User>, String)> {
     let two_factor = ctx
         .database
@@ -391,7 +391,7 @@ async fn verify_totp_core(
 
 async fn send_otp_core(
     user: &better_auth_core::User,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     // Generate 6-digit OTP
     use rand::Rng;
@@ -426,7 +426,7 @@ async fn verify_otp_core(
     body: &VerifyOtpRequest,
     user: &better_auth_core::User,
     verification_id: &str,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(VerifyTotpResponse<better_auth_core::User>, String)> {
     // Look up the OTP verification
     let otp_identifier = format!("2fa_otp:{}", user.id());
@@ -470,7 +470,7 @@ async fn verify_backup_code_core(
     body: &VerifyBackupCodeRequest,
     user: &better_auth_core::User,
     verification_id: &str,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
     VerifyBackupCodeResponse<better_auth_core::User, better_auth_core::Session>,
     String,
@@ -538,7 +538,7 @@ impl TwoFactorPlugin {
     async fn handle_enable(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: EnableRequest = match better_auth_core::validate_request_body(req) {
@@ -552,7 +552,7 @@ impl TwoFactorPlugin {
     async fn handle_disable(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: DisableRequest = match better_auth_core::validate_request_body(req) {
@@ -566,7 +566,7 @@ impl TwoFactorPlugin {
     async fn handle_get_totp_uri(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: GetTotpUriRequest = match better_auth_core::validate_request_body(req) {
@@ -580,7 +580,7 @@ impl TwoFactorPlugin {
     async fn handle_verify_totp(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, verification_id) = get_pending_2fa_user(req, ctx).await?;
         let body: VerifyTotpRequest = match better_auth_core::validate_request_body(req) {
@@ -596,7 +596,7 @@ impl TwoFactorPlugin {
     async fn handle_send_otp(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _verification_id) = get_pending_2fa_user(req, ctx).await?;
         let response = send_otp_core(&user, ctx).await?;
@@ -606,7 +606,7 @@ impl TwoFactorPlugin {
     async fn handle_verify_otp(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, verification_id) = get_pending_2fa_user(req, ctx).await?;
         let body: VerifyOtpRequest = match better_auth_core::validate_request_body(req) {
@@ -621,7 +621,7 @@ impl TwoFactorPlugin {
     async fn handle_generate_backup_codes(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: GenerateBackupCodesRequest = match better_auth_core::validate_request_body(req) {
@@ -635,7 +635,7 @@ impl TwoFactorPlugin {
     async fn handle_verify_backup_code(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, verification_id) = get_pending_2fa_user(req, ctx).await?;
         let body: VerifyBackupCodeRequest = match better_auth_core::validate_request_body(req) {

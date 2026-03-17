@@ -7,6 +7,7 @@ use crate::email::EmailProvider;
 use crate::entity::AuthSession;
 use crate::error::{AuthError, AuthResult};
 use crate::hooks::DatabaseHooks;
+use crate::schema::AuthSchema;
 use crate::session::SessionManager;
 use crate::store::AuthStore;
 use crate::types::{AuthRequest, AuthResponse, HttpMethod, Session, User};
@@ -35,7 +36,9 @@ pub enum BeforeRequestAction {
 /// Plugin trait that all authentication plugins must implement.
 ///
 #[async_trait]
-pub trait AuthPlugin: Send + Sync {
+pub trait AuthPlugin<S: AuthSchema = crate::store::sea_orm::bundled_schema::BundledSchema>:
+    Send + Sync
+{
     /// Plugin name - should be unique
     fn name(&self) -> &'static str;
 
@@ -43,7 +46,7 @@ pub trait AuthPlugin: Send + Sync {
     fn routes(&self) -> Vec<AuthRoute>;
 
     /// Called when the plugin is initialized
-    async fn on_init(&self, ctx: &mut AuthInitContext) -> AuthResult<()> {
+    async fn on_init(&self, ctx: &mut AuthInitContext<S>) -> AuthResult<()> {
         let _ = ctx;
         Ok(())
     }
@@ -57,7 +60,7 @@ pub trait AuthPlugin: Send + Sync {
     async fn before_request(
         &self,
         _req: &AuthRequest,
-        _ctx: &AuthContext,
+        _ctx: &AuthContext<S>,
     ) -> AuthResult<Option<BeforeRequestAction>> {
         Ok(None)
     }
@@ -66,29 +69,33 @@ pub trait AuthPlugin: Send + Sync {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>>;
 
     /// Called after a user is created
-    async fn on_user_created(&self, user: &User, ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_user_created(&self, user: &User, ctx: &AuthContext<S>) -> AuthResult<()> {
         let _ = (user, ctx);
         Ok(())
     }
 
     /// Called after a session is created
-    async fn on_session_created(&self, session: &Session, ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_session_created(&self, session: &Session, ctx: &AuthContext<S>) -> AuthResult<()> {
         let _ = (session, ctx);
         Ok(())
     }
 
     /// Called before a user is deleted
-    async fn on_user_deleted(&self, user_id: &str, ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_user_deleted(&self, user_id: &str, ctx: &AuthContext<S>) -> AuthResult<()> {
         let _ = (user_id, ctx);
         Ok(())
     }
 
     /// Called before a session is deleted
-    async fn on_session_deleted(&self, session_token: &str, ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_session_deleted(
+        &self,
+        session_token: &str,
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<()> {
         let _ = (session_token, ctx);
         Ok(())
     }
@@ -128,7 +135,7 @@ macro_rules! impl_auth_plugin {
         $( extra { $($extra:tt)* } )?
     ) => {
         #[::async_trait::async_trait]
-        impl $crate::AuthPlugin for $plugin {
+        impl<S: $crate::AuthSchema> $crate::AuthPlugin<S> for $plugin {
             fn name(&self) -> &'static str { $name }
 
             fn routes(&self) -> Vec<$crate::AuthRoute> {
@@ -140,7 +147,7 @@ macro_rules! impl_auth_plugin {
             async fn on_request(
                 &self,
                 req: &$crate::AuthRequest,
-                ctx: &$crate::AuthContext,
+                ctx: &$crate::AuthContext<S>,
             ) -> $crate::AuthResult<Option<$crate::AuthResponse>> {
                 match (req.method(), req.path()) {
                     $(
@@ -167,18 +174,18 @@ pub struct AuthRoute {
 }
 
 /// Initialization context passed to plugin setup.
-pub struct AuthInitContext {
+pub struct AuthInitContext<S: AuthSchema = crate::store::sea_orm::bundled_schema::BundledSchema> {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<AuthStore>,
+    pub database: Arc<AuthStore<S>>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
     pub metadata: MetadataMap,
     database_hooks: DatabaseHookList,
 }
 
 /// Context passed to plugin methods.
-pub struct AuthContext {
+pub struct AuthContext<S: AuthSchema = crate::store::sea_orm::bundled_schema::BundledSchema> {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<AuthStore>,
+    pub database: Arc<AuthStore<S>>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
     pub metadata: MetadataMap,
 }
@@ -213,8 +220,8 @@ impl AuthRoute {
     }
 }
 
-impl AuthInitContext {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthStore>) -> Self {
+impl<S: AuthSchema> AuthInitContext<S> {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthStore<S>>) -> Self {
         let email_provider = config.email_provider.clone();
         Self {
             config,
@@ -246,8 +253,8 @@ impl AuthInitContext {
     }
 }
 
-impl AuthContext {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthStore>) -> Self {
+impl<S: AuthSchema> AuthContext<S> {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthStore<S>>) -> Self {
         let email_provider = config.email_provider.clone();
         Self {
             config,
@@ -259,7 +266,7 @@ impl AuthContext {
 
     pub fn with_metadata(
         config: Arc<AuthConfig>,
-        database: Arc<AuthStore>,
+        database: Arc<AuthStore<S>>,
         metadata: MetadataMap,
     ) -> Self {
         let email_provider = config.email_provider.clone();
@@ -287,7 +294,7 @@ impl AuthContext {
     }
 
     /// Create a `SessionManager` from this context's config and database.
-    pub fn session_manager(&self) -> crate::session::SessionManager {
+    pub fn session_manager(&self) -> crate::session::SessionManager<S> {
         crate::session::SessionManager::new(self.config.clone(), self.database.clone())
     }
 
@@ -314,15 +321,15 @@ impl AuthContext {
 ///
 /// All fields are behind `Arc` so `AuthState` is cheap to clone and can
 /// be used directly as axum `State`.
-pub struct AuthState {
+pub struct AuthState<S: AuthSchema = crate::store::sea_orm::bundled_schema::BundledSchema> {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<AuthStore>,
-    pub session_manager: SessionManager,
+    pub database: Arc<AuthStore<S>>,
+    pub session_manager: SessionManager<S>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
-impl Clone for AuthState {
+impl<S: AuthSchema> Clone for AuthState<S> {
     fn clone(&self) -> Self {
         Self {
             config: self.config.clone(),
@@ -334,9 +341,9 @@ impl Clone for AuthState {
     }
 }
 
-impl AuthState {
+impl<S: AuthSchema> AuthState<S> {
     /// Create a new `AuthState` from an `AuthContext` and `SessionManager`.
-    pub fn new(ctx: &AuthContext, session_manager: SessionManager) -> Self {
+    pub fn new(ctx: &AuthContext<S>, session_manager: SessionManager<S>) -> Self {
         Self {
             config: ctx.config.clone(),
             database: ctx.database.clone(),
@@ -347,7 +354,7 @@ impl AuthState {
     }
 
     /// Create an `AuthContext` for use with existing plugin handler methods.
-    pub fn to_context(&self) -> AuthContext {
+    pub fn to_context(&self) -> AuthContext<S> {
         let mut ctx = AuthContext::with_metadata(
             self.config.clone(),
             self.database.clone(),
@@ -373,16 +380,17 @@ mod tests {
     use super::*;
     use crate::entity::AuthUser;
     use crate::sea_orm::Database;
+    use crate::store::sea_orm::bundled_schema::BundledSchema;
     use crate::store::{AuthStore, run_migrations};
 
-    async fn test_database() -> Arc<AuthStore> {
+    async fn test_database() -> Arc<AuthStore<BundledSchema>> {
         let database = Database::connect("sqlite::memory:")
             .await
             .expect("sqlite test database should connect");
         run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        Arc::new(AuthStore::new(
+        Arc::new(AuthStore::<BundledSchema>::new(
             Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567")),
             database,
         ))

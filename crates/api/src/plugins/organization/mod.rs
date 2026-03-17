@@ -56,7 +56,7 @@ pub struct OrganizationPlugin {
 }
 
 #[async_trait]
-impl AuthPlugin for OrganizationPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
     fn name(&self) -> &'static str {
         "organization"
     }
@@ -99,7 +99,7 @@ impl AuthPlugin for OrganizationPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             // Organization CRUD

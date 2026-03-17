@@ -84,7 +84,7 @@ impl AdminPlugin {
     async fn require_admin(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<(better_auth_core::User, better_auth_core::Session)> {
         let (user, session) = ctx.require_session(req).await?;
 
@@ -101,7 +101,7 @@ impl AdminPlugin {
     async fn handle_set_role(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: SetRoleRequest = match better_auth_core::validate_request_body(req) {
@@ -115,7 +115,7 @@ impl AdminPlugin {
     async fn handle_create_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: CreateUserRequest = match better_auth_core::validate_request_body(req) {
@@ -129,7 +129,7 @@ impl AdminPlugin {
     async fn handle_list_users(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let query = ListUsersQueryParams {
@@ -151,7 +151,7 @@ impl AdminPlugin {
     async fn handle_list_user_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
@@ -165,7 +165,7 @@ impl AdminPlugin {
     async fn handle_ban_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: BanUserRequest = match better_auth_core::validate_request_body(req) {
@@ -179,7 +179,7 @@ impl AdminPlugin {
     async fn handle_unban_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
@@ -193,7 +193,7 @@ impl AdminPlugin {
     async fn handle_impersonate_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
@@ -215,7 +215,7 @@ impl AdminPlugin {
     async fn handle_stop_impersonating(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let session_manager = ctx.session_manager();
         let token = session_manager
@@ -240,7 +240,7 @@ impl AdminPlugin {
     async fn handle_revoke_user_session(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: RevokeSessionRequest = match better_auth_core::validate_request_body(req) {
@@ -254,7 +254,7 @@ impl AdminPlugin {
     async fn handle_revoke_user_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
@@ -268,7 +268,7 @@ impl AdminPlugin {
     async fn handle_remove_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
@@ -282,7 +282,7 @@ impl AdminPlugin {
     async fn handle_set_user_password(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: SetUserPasswordRequest = match better_auth_core::validate_request_body(req) {
@@ -296,7 +296,7 @@ impl AdminPlugin {
     async fn handle_has_permission(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: HasPermissionRequest = match better_auth_core::validate_request_body(req) {

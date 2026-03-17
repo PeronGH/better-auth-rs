@@ -4,6 +4,8 @@
 pub use better_auth_core::sea_orm::{Database, DatabaseConnection};
 #[cfg(feature = "redis-cache")]
 pub use better_auth_core::store::RedisAdapter;
+#[doc(hidden)]
+pub use better_auth_core::store::sea_orm::bundled_schema::BundledSchema;
 pub use better_auth_core::store::{AuthMigrator, CacheAdapter, MemoryCacheAdapter};
 
 /// Advanced SeaORM re-exports for applications that need lower-level traits

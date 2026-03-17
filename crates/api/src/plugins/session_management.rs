@@ -42,7 +42,7 @@ struct GetSessionResponse<S: Serialize, U: Serialize> {
 }
 
 #[async_trait]
-impl AuthPlugin for SessionManagementPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin {
     fn name(&self) -> &'static str {
         "session-management"
     }
@@ -61,7 +61,7 @@ impl AuthPlugin for SessionManagementPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Get, "/get-session") => Ok(Some(self.handle_get_session(req, ctx).await?)),
@@ -91,7 +91,7 @@ impl AuthPlugin for SessionManagementPlugin {
 
 pub(crate) async fn sign_out_core(
     session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     ctx.database.delete_session(session.token()).await?;
     Ok(SuccessResponse { success: true })
@@ -99,7 +99,7 @@ pub(crate) async fn sign_out_core(
 
 pub(crate) async fn list_sessions_core(
     user_id: &str,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<better_auth_core::Session>> {
     ctx.session_manager().list_user_sessions(user_id).await
 }
@@ -107,7 +107,7 @@ pub(crate) async fn list_sessions_core(
 pub(crate) async fn revoke_session_core(
     user: &better_auth_core::User,
     token: &str,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     let session_manager = ctx.session_manager();
     if let Some(session_to_revoke) = session_manager.get_session(token).await?
@@ -120,7 +120,7 @@ pub(crate) async fn revoke_session_core(
 
 pub(crate) async fn revoke_sessions_core(
     user_id: &str,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     ctx.database.delete_user_sessions(user_id).await?;
     Ok(StatusResponse { status: true })
@@ -129,7 +129,7 @@ pub(crate) async fn revoke_sessions_core(
 pub(crate) async fn revoke_other_sessions_core(
     user_id: &str,
     current_session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     let all_sessions: Vec<better_auth_core::Session> =
         ctx.session_manager().list_user_sessions(user_id).await?;
@@ -149,7 +149,7 @@ impl SessionManagementPlugin {
     async fn handle_get_session(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         // Returns 200 with null body when unauthenticated (never an error status).
         match ctx.require_session(req).await {
@@ -164,7 +164,7 @@ impl SessionManagementPlugin {
     async fn handle_sign_out(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         if let Ok((_user, session)) = ctx.require_session(req).await {
             let _ = sign_out_core(&session, ctx).await;
@@ -180,7 +180,7 @@ impl SessionManagementPlugin {
     async fn handle_list_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
         let sessions = list_sessions_core(user.id(), ctx).await?;
@@ -190,7 +190,7 @@ impl SessionManagementPlugin {
     async fn handle_revoke_session(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
 
@@ -206,7 +206,7 @@ impl SessionManagementPlugin {
     async fn handle_revoke_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
         let response = revoke_sessions_core(user.id(), ctx).await?;
@@ -216,7 +216,7 @@ impl SessionManagementPlugin {
     async fn handle_revoke_other_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, current_session) = ctx.require_session(req).await?;
         let response = revoke_other_sessions_core(user.id(), &current_session, ctx).await?;
@@ -704,7 +704,10 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_routes() {
         let plugin = SessionManagementPlugin::new();
-        let routes = AuthPlugin::routes(&plugin);
+        let routes =
+            AuthPlugin::<better_auth_core::store::sea_orm::bundled_schema::BundledSchema>::routes(
+                &plugin,
+            );
 
         assert_eq!(routes.len(), 6);
         assert!(

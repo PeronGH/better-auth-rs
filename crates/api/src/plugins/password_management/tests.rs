@@ -66,7 +66,10 @@ async fn create_test_context_with_user() -> (AuthContext, User, Session) {
 
 /// Helper: create a reset-password verification token for the given user
 /// and store it in the database. Returns the token string.
-async fn create_reset_token(ctx: &AuthContext, user_id: &str) -> String {
+async fn create_reset_token(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    user_id: &str,
+) -> String {
     let reset_token = uuid::Uuid::new_v4().simple().to_string();
     let create_verification = CreateVerification {
         identifier: format!("reset-password:{}", reset_token),
@@ -617,7 +620,10 @@ async fn test_password_hashing_and_verification() {
 #[tokio::test]
 async fn test_plugin_routes() {
     let plugin = PasswordManagementPlugin::new();
-    let routes = AuthPlugin::routes(&plugin);
+    let routes =
+        AuthPlugin::<better_auth_core::store::sea_orm::bundled_schema::BundledSchema>::routes(
+            &plugin,
+        );
 
     assert_eq!(routes.len(), 4);
     assert!(

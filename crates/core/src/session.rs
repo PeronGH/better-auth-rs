@@ -4,16 +4,17 @@ use std::sync::Arc;
 use crate::config::AuthConfig;
 use crate::entity::{AuthSession, AuthUser};
 use crate::error::AuthResult;
+use crate::schema::AuthSchema;
 use crate::store::AuthStore;
 use crate::types::{CreateSession, Session};
 
 /// Session manager handles session creation, validation, and cleanup
-pub struct SessionManager {
+pub struct SessionManager<S: AuthSchema = crate::store::sea_orm::bundled_schema::BundledSchema> {
     config: Arc<AuthConfig>,
-    database: Arc<AuthStore>,
+    database: Arc<AuthStore<S>>,
 }
 
-impl Clone for SessionManager {
+impl<S: AuthSchema> Clone for SessionManager<S> {
     fn clone(&self) -> Self {
         Self {
             config: self.config.clone(),
@@ -22,8 +23,8 @@ impl Clone for SessionManager {
     }
 }
 
-impl SessionManager {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthStore>) -> Self {
+impl<S: AuthSchema> SessionManager<S> {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthStore<S>>) -> Self {
         Self { config, database }
     }
 
@@ -212,6 +213,7 @@ mod tests {
     use super::*;
     use crate::entity::AuthSession;
     use crate::sea_orm::Database;
+    use crate::store::sea_orm::bundled_schema::BundledSchema;
     use crate::store::{AuthStore, run_migrations};
     use crate::types::AuthRequest;
     use crate::types::HttpMethod;
@@ -221,17 +223,17 @@ mod tests {
         Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"))
     }
 
-    async fn test_database() -> Arc<AuthStore> {
+    async fn test_database() -> Arc<AuthStore<BundledSchema>> {
         let database = Database::connect("sqlite::memory:")
             .await
             .expect("sqlite test database should connect");
         run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        Arc::new(AuthStore::new(test_config(), database))
+        Arc::new(AuthStore::<BundledSchema>::new(test_config(), database))
     }
 
-    fn test_manager() -> SessionManager {
+    fn test_manager() -> SessionManager<BundledSchema> {
         let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
         SessionManager::new(test_config(), runtime.block_on(test_database()))
     }

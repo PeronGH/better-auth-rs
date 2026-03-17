@@ -94,7 +94,7 @@ better_auth_core::impl_auth_plugin! {
         get "/verify-email" => handle_verify_email, "verify_email";
     }
     extra {
-        async fn on_user_created(&self, user: &better_auth_core::User, ctx: &AuthContext) -> AuthResult<()> {
+        async fn on_user_created(&self, user: &better_auth_core::User, ctx: &AuthContext<S>) -> AuthResult<()> {
             // Send verification email for new users if configured.
             // Also fire when a custom sender is set, even if send_email_notifications is false.
             if (self.config.send_email_notifications || self.config.send_verification_email.is_some())
@@ -123,7 +123,7 @@ impl EmailVerificationPlugin {
     async fn handle_send_verification_email(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body: SendVerificationEmailRequest = match better_auth_core::validate_request_body(req)
         {
@@ -139,7 +139,7 @@ impl EmailVerificationPlugin {
     async fn handle_verify_email(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let token = req
             .query
@@ -203,7 +203,7 @@ impl EmailVerificationPlugin {
         user: &better_auth_core::User,
         email: &str,
         callback_url: Option<&str>,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<()> {
         let verification_token = token::create_email_verification_token(
             &ctx.config.secret,
@@ -260,7 +260,7 @@ impl EmailVerificationPlugin {
         &self,
         user: &better_auth_core::User,
         callback_url: Option<&str>,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<()> {
         if !self.config.send_on_sign_in {
             return Ok(());

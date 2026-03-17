@@ -6,12 +6,13 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::error::AuthResult;
+use crate::schema::AuthSchema;
 use crate::types_org::{CreateMember, Member};
 
 use super::entities::member::{ActiveModel, Column, Entity};
 use super::{AuthStore, map_db_err};
 
-impl AuthStore {
+impl<S: AuthSchema> AuthStore<S> {
     pub async fn create_member(&self, member: CreateMember) -> AuthResult<Member> {
         ActiveModel {
             id: Set(Uuid::new_v4().to_string()),

@@ -11,7 +11,7 @@ use better_auth_core::SuccessMessageResponse;
 
 /// Send an email using the configured email provider, logging on failure.
 pub(super) async fn send_email_or_log(
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     to: &str,
     subject: &str,
     html: &str,
@@ -42,7 +42,7 @@ pub(crate) async fn change_email_core(
     body: &ChangeEmailRequest,
     user: &better_auth_core::User,
     config: &UserManagementConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     let new_email = body.new_email.to_lowercase();
 
@@ -119,7 +119,7 @@ pub(crate) async fn delete_user_core(
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
     config: &UserManagementConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessMessageResponse> {
     if let Some(password) = body.password.as_deref() {
         let account = ctx
@@ -205,7 +205,7 @@ pub(crate) async fn delete_user_callback_core(
     token: &str,
     current_user: &better_auth_core::User,
     config: &UserManagementConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessMessageResponse> {
     if let Some(verification) = ctx
         .database
@@ -232,7 +232,7 @@ pub(crate) async fn delete_user_callback_core(
 async fn perform_user_deletion(
     user: &better_auth_core::User,
     config: &UserManagementConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<()> {
     let user_info = UserInfo::from_auth_user(user);
 

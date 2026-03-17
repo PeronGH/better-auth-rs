@@ -16,7 +16,10 @@ mod axum_impl {
     use crate::entity::{AuthSession, AuthUser, AuthVerification};
     use crate::error::AuthError;
     use crate::plugin::AuthState;
+    use crate::store::sea_orm::bundled_schema::BundledSchema;
     use crate::types::{Session, User};
+
+    type BundledAuthState = AuthState<BundledSchema>;
 
     // -----------------------------------------------------------------------
     // CurrentSession — extract and validate the current user + session
@@ -69,12 +72,12 @@ mod axum_impl {
         None
     }
 
-    impl FromRequestParts<AuthState> for CurrentSession {
+    impl FromRequestParts<BundledAuthState> for CurrentSession {
         type Rejection = AuthError;
 
         async fn from_request_parts(
             parts: &mut Parts,
-            state: &AuthState,
+            state: &BundledAuthState,
         ) -> Result<Self, Self::Rejection> {
             let cookie_name = &state.config.session.cookie_name;
             let token =
@@ -96,12 +99,12 @@ mod axum_impl {
         }
     }
 
-    impl FromRequestParts<AuthState> for OptionalSession {
+    impl FromRequestParts<BundledAuthState> for OptionalSession {
         type Rejection = AuthError;
 
         async fn from_request_parts(
             parts: &mut Parts,
-            state: &AuthState,
+            state: &BundledAuthState,
         ) -> Result<Self, Self::Rejection> {
             match CurrentSession::from_request_parts(parts, state).await {
                 Ok(session) => Ok(OptionalSession(Some(session))),
@@ -260,12 +263,12 @@ mod axum_impl {
     #[derive(Clone)]
     pub struct AdminRole(pub String);
 
-    impl FromRequestParts<AuthState> for AdminSession {
+    impl FromRequestParts<BundledAuthState> for AdminSession {
         type Rejection = AuthError;
 
         async fn from_request_parts(
             parts: &mut Parts,
-            state: &AuthState,
+            state: &BundledAuthState,
         ) -> Result<Self, Self::Rejection> {
             let current = CurrentSession::from_request_parts(parts, state).await?;
 
@@ -304,12 +307,12 @@ mod axum_impl {
         pub verification_id: String,
     }
 
-    impl FromRequestParts<AuthState> for Pending2faToken {
+    impl FromRequestParts<BundledAuthState> for Pending2faToken {
         type Rejection = AuthError;
 
         async fn from_request_parts(
             parts: &mut Parts,
-            state: &AuthState,
+            state: &BundledAuthState,
         ) -> Result<Self, Self::Rejection> {
             let token = parts
                 .headers

@@ -13,6 +13,7 @@ use serde::Serialize;
 
 use crate::error::{AuthError, AuthResult};
 use crate::plugin::AuthContext;
+use crate::schema::AuthSchema;
 use crate::types::UpdateUser;
 
 // ---------------------------------------------------------------------------
@@ -95,7 +96,7 @@ pub fn validate_password(
     password: &str,
     min_length: usize,
     max_length: usize,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<()> {
     let config = &ctx.config.password;
 

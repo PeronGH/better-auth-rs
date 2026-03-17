@@ -160,7 +160,7 @@ fn make_test_user(email: &str, verified: bool) -> User {
 }
 
 fn jwt_token(
-    ctx: &better_auth_core::AuthContext,
+    ctx: &better_auth_core::AuthContext<impl better_auth_core::AuthSchema>,
     email: &str,
     update_to: Option<&str>,
     request_type: Option<&str>,
@@ -264,14 +264,22 @@ fn test_to_user_preserves_fields() {
 #[test]
 fn test_plugin_name() {
     let plugin = EmailVerificationPlugin::new();
-    assert_eq!(AuthPlugin::name(&plugin), "email-verification");
+    assert_eq!(
+        AuthPlugin::<better_auth_core::store::sea_orm::bundled_schema::BundledSchema>::name(
+            &plugin,
+        ),
+        "email-verification"
+    );
 }
 
 // Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[test]
 fn test_plugin_routes() {
     let plugin = EmailVerificationPlugin::new();
-    let routes = AuthPlugin::routes(&plugin);
+    let routes =
+        AuthPlugin::<better_auth_core::store::sea_orm::bundled_schema::BundledSchema>::routes(
+            &plugin,
+        );
     assert_eq!(routes.len(), 2);
     assert!(
         routes

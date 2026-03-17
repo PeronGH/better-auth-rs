@@ -25,7 +25,7 @@ pub(crate) async fn invite_member_core(
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
     config: &OrganizationConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<better_auth_core::Invitation> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
@@ -105,7 +105,7 @@ pub(crate) async fn invite_member_core(
 
 pub(crate) async fn get_invitation_core(
     query: &GetInvitationQuery,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<GetInvitationResponse<better_auth_core::Invitation>> {
     if query.id.is_empty() {
         return Err(AuthError::bad_request("Missing invitation id"));
@@ -142,7 +142,7 @@ pub(crate) async fn list_invitations_core(
     query: &ListInvitationsQuery,
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<better_auth_core::Invitation>> {
     let org_id =
         resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?;
@@ -160,7 +160,7 @@ pub(crate) async fn list_invitations_core(
 
 pub(crate) async fn list_user_invitations_core(
     user: &better_auth_core::User,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<better_auth_core::Invitation>> {
     let user_email = user
         .email()
@@ -181,7 +181,7 @@ pub(crate) async fn accept_invitation_core(
     user: &better_auth_core::User,
     session: &better_auth_core::Session,
     config: &OrganizationConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AcceptInvitationResponse<better_auth_core::Invitation>> {
     let invitation = ctx
         .database
@@ -264,7 +264,7 @@ pub(crate) async fn accept_invitation_core(
 pub(crate) async fn reject_invitation_core(
     body: &RejectInvitationRequest,
     user: &better_auth_core::User,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     let invitation = ctx
         .database
@@ -299,7 +299,7 @@ pub(crate) async fn cancel_invitation_core(
     body: &CancelInvitationRequest,
     user: &better_auth_core::User,
     config: &OrganizationConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     let invitation = ctx
         .database
@@ -346,7 +346,7 @@ pub(crate) async fn cancel_invitation_core(
 /// Handle invite member request
 pub async fn handle_invite_member(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -361,7 +361,7 @@ pub async fn handle_invite_member(
 /// Handle get invitation request
 pub async fn handle_get_invitation(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let query = parse_query::<GetInvitationQuery>(&req.query);
     let response = get_invitation_core(&query, ctx).await?;
@@ -371,7 +371,7 @@ pub async fn handle_get_invitation(
 /// Handle list invitations request
 pub async fn handle_list_invitations(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let query = parse_query::<ListInvitationsQuery>(&req.query);
@@ -382,7 +382,7 @@ pub async fn handle_list_invitations(
 /// Handle list user invitations request
 pub async fn handle_list_user_invitations(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
     let pending = list_user_invitations_core(&user, ctx).await?;
@@ -392,7 +392,7 @@ pub async fn handle_list_user_invitations(
 /// Handle accept invitation request
 pub async fn handle_accept_invitation(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -407,7 +407,7 @@ pub async fn handle_accept_invitation(
 /// Handle reject invitation request
 pub async fn handle_reject_invitation(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
     let body: RejectInvitationRequest = match better_auth_core::validate_request_body(req) {
@@ -421,7 +421,7 @@ pub async fn handle_reject_invitation(
 /// Handle cancel invitation request
 pub async fn handle_cancel_invitation(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;

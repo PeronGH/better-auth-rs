@@ -29,7 +29,7 @@ pub fn expires_in_to_at(expires_in_ms: Option<i64>) -> AuthResult<Option<String>
 /// another user.  This pattern was duplicated in `handle_get`, `handle_update`,
 /// and `handle_delete`.
 pub async fn get_owned_api_key(
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     key_id: &str,
     user_id: &str,
 ) -> AuthResult<better_auth_core::ApiKey> {
@@ -48,7 +48,7 @@ pub async fn get_owned_api_key(
 
 /// Fetch the user's credential account, if present.
 pub async fn get_credential_account(
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     user_id: &str,
 ) -> AuthResult<Option<better_auth_core::Account>> {
     Ok(ctx
@@ -61,7 +61,7 @@ pub async fn get_credential_account(
 
 /// Resolve the user's stored password hash from the credential account.
 pub async fn get_credential_password_hash(
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     user: &better_auth_core::User,
 ) -> AuthResult<Option<String>> {
     Ok(get_credential_account(ctx, user.id())
@@ -71,7 +71,7 @@ pub async fn get_credential_password_hash(
 
 /// Whether the user currently has a password set.
 pub async fn user_has_password(
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     user: &better_auth_core::User,
 ) -> AuthResult<bool> {
     Ok(get_credential_password_hash(ctx, user).await?.is_some())

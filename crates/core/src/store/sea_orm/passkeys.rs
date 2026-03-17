@@ -5,12 +5,13 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::error::{AuthError, AuthResult};
+use crate::schema::AuthSchema;
 use crate::types::{CreatePasskey, Passkey};
 
 use super::entities::passkey::{ActiveModel, Column, Entity};
 use super::{AuthStore, map_db_err};
 
-impl AuthStore {
+impl<S: AuthSchema> AuthStore<S> {
     pub async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
         let counter = i64::try_from(input.counter)
             .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;

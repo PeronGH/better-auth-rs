@@ -4,8 +4,8 @@
 //!
 //! ## Quick Start
 //!
-//! ```rust,no_run
-//! use better_auth::{run_migrations, AuthConfig, BetterAuth};
+//! ```rust,ignore
+//! use better_auth::{AuthConfig, AuthSchema, BetterAuth};
 //! use better_auth::plugins::EmailPasswordPlugin;
 //! use better_auth::store::Database;
 //!
@@ -13,9 +13,8 @@
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = AuthConfig::new("your-secret-key-that-is-at-least-32-chars");
 //!     let database = Database::connect("sqlite::memory:").await?;
-//!     run_migrations(&database).await?;
 //!
-//!     let auth = BetterAuth::new(config)
+//!     let auth = BetterAuth::<AppAuthSchema>::new(config)
 //!         .database(database)
 //!         .plugin(EmailPasswordPlugin::new())
 //!         .build()
@@ -34,6 +33,8 @@
     )
 )]
 
+extern crate self as better_auth;
+
 mod core;
 #[cfg(feature = "axum")]
 mod handlers;
@@ -47,8 +48,15 @@ pub mod middleware;
 pub mod plugin;
 pub mod plugins;
 pub mod prelude;
+pub mod schema;
 pub mod store;
 
 pub use better_auth_core::store::run_migrations;
-pub use better_auth_core::{AuthConfig, AuthError, AuthResult};
+pub use better_auth_core::{
+    AuthAccountModel, AuthConfig, AuthEntity, AuthError, AuthResult, AuthSchema, AuthSessionModel,
+    AuthUserModel, AuthVerificationModel,
+};
 pub use core::{AuthBuilder, BetterAuth};
+
+#[doc(hidden)]
+pub use better_auth_core as __private_core;

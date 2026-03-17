@@ -183,7 +183,7 @@ impl EmailPasswordPlugin {
     async fn handle_sign_up(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let signup_req: SignUpRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -204,7 +204,7 @@ impl EmailPasswordPlugin {
     async fn handle_sign_in(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         if let Ok(raw_body) = req.body_as_json::<serde_json::Value>()
             && let Some(email) = raw_body.get("email").and_then(|value| value.as_str())
@@ -241,7 +241,7 @@ impl EmailPasswordPlugin {
     async fn handle_sign_in_username(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let signin_req: SignInUsernameRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -281,7 +281,7 @@ pub(crate) async fn sign_up_core(
     body: &SignUpRequest,
     config: &EmailPasswordConfig,
     meta: &RequestMeta,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(SignUpResponse<better_auth_core::User>, Option<String>)> {
     if !config.enable_signup {
         return Err(AuthError::forbidden("User registration is not enabled"));
@@ -386,7 +386,7 @@ async fn sign_in_with_user_core(
     email_verification: Option<&EmailVerificationPlugin>,
     callback_url: Option<&str>,
     meta: &RequestMeta,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SignInCoreResult<better_auth_core::User>> {
     // Verify password
     let stored_hash = ctx
@@ -453,7 +453,7 @@ pub(crate) async fn sign_in_core(
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
     meta: &RequestMeta,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SignInCoreResult<better_auth_core::User>> {
     let user = ctx
         .database
@@ -479,7 +479,7 @@ pub(crate) async fn sign_in_username_core(
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
     meta: &RequestMeta,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SignInCoreResult<better_auth_core::User>> {
     let user = ctx
         .database
@@ -513,7 +513,7 @@ impl Default for EmailPasswordConfig {
 }
 
 #[async_trait]
-impl AuthPlugin for EmailPasswordPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
     fn name(&self) -> &'static str {
         "email-password"
     }
@@ -534,7 +534,7 @@ impl AuthPlugin for EmailPasswordPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/sign-up/email") if self.config.enable_signup => {
@@ -551,7 +551,7 @@ impl AuthPlugin for EmailPasswordPlugin {
     async fn on_user_created(
         &self,
         user: &better_auth_core::User,
-        _ctx: &AuthContext,
+        _ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
         if self.config.require_email_verification
             && !user.email_verified()

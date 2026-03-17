@@ -60,7 +60,7 @@ better_auth_core::impl_auth_plugin! {
 
 pub(crate) async fn list_accounts_core(
     user: &better_auth_core::User,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<AccountResponse>> {
     let accounts = ctx.database.get_user_accounts(user.id()).await?;
 
@@ -95,7 +95,7 @@ pub(crate) async fn unlink_account_core(
     user: &better_auth_core::User,
     provider_id: &str,
     account_id: Option<&str>,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     let accounts = ctx.database.get_user_accounts(user.id()).await?;
 
@@ -152,7 +152,7 @@ impl AccountManagementPlugin {
     async fn handle_list_accounts(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let filtered = list_accounts_core(&user, ctx).await?;
@@ -162,7 +162,7 @@ impl AccountManagementPlugin {
     async fn handle_unlink_account(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
 

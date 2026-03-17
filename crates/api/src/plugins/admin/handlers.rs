@@ -15,7 +15,7 @@ use super::types::*;
 
 pub(crate) async fn set_role_core(
     body: &SetRoleRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<UserResponse<better_auth_core::User>> {
     let _target = ctx
         .database
@@ -35,7 +35,7 @@ pub(crate) async fn set_role_core(
 pub(crate) async fn create_user_core(
     body: &CreateUserRequest,
     config: &AdminConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<UserResponse<better_auth_core::User>> {
     if ctx.database.get_user_by_email(&body.email).await?.is_some() {
         return Err(AuthError::conflict("A user with this email already exists"));
@@ -102,7 +102,7 @@ pub(crate) async fn create_user_core(
 pub(crate) async fn list_users_core(
     query: &ListUsersQueryParams,
     config: &AdminConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ListUsersResponse<better_auth_core::User>> {
     let limit = query
         .limit
@@ -134,7 +134,7 @@ pub(crate) async fn list_users_core(
 
 pub(crate) async fn list_user_sessions_core(
     body: &UserIdRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ListSessionsResponse<better_auth_core::Session>> {
     let _target = ctx
         .database
@@ -151,7 +151,7 @@ pub(crate) async fn ban_user_core(
     body: &BanUserRequest,
     admin_user_id: &str,
     config: &AdminConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<UserResponse<better_auth_core::User>> {
     if body.user_id == admin_user_id {
         return Err(AuthError::bad_request("You cannot ban yourself"));
@@ -191,7 +191,7 @@ pub(crate) async fn ban_user_core(
 
 pub(crate) async fn unban_user_core(
     body: &UserIdRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<UserResponse<better_auth_core::User>> {
     let _target = ctx
         .database
@@ -215,7 +215,7 @@ pub(crate) async fn impersonate_user_core(
     admin_user_id: &str,
     ip_address: Option<&str>,
     user_agent: Option<&str>,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
     SessionUserResponse<better_auth_core::Session, better_auth_core::User>,
     String,
@@ -255,7 +255,7 @@ pub(crate) async fn stop_impersonating_core(
     session_token: &str,
     ip_address: Option<&str>,
     user_agent: Option<&str>,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
     SessionUserResponse<better_auth_core::Session, better_auth_core::User>,
     String,
@@ -295,7 +295,7 @@ pub(crate) async fn stop_impersonating_core(
 
 pub(crate) async fn revoke_user_session_core(
     body: &RevokeSessionRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     ctx.session_manager()
         .delete_session(&body.session_token)
@@ -305,7 +305,7 @@ pub(crate) async fn revoke_user_session_core(
 
 pub(crate) async fn revoke_user_sessions_core(
     body: &UserIdRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     let _target = ctx
         .database
@@ -324,7 +324,7 @@ pub(crate) async fn revoke_user_sessions_core(
 pub(crate) async fn remove_user_core(
     body: &UserIdRequest,
     admin_user_id: &str,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     if body.user_id == admin_user_id {
         return Err(AuthError::bad_request("You cannot remove yourself"));
@@ -349,7 +349,7 @@ pub(crate) async fn remove_user_core(
 
 pub(crate) async fn set_user_password_core(
     body: &SetUserPasswordRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     if body.new_password.len() < ctx.config.password.min_length {
         return Err(AuthError::bad_request(format!(

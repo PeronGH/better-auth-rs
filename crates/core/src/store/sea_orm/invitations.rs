@@ -5,12 +5,13 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::error::AuthResult;
+use crate::schema::AuthSchema;
 use crate::types_org::{CreateInvitation, Invitation, InvitationStatus};
 
 use super::entities::invitation::{ActiveModel, Column, Entity};
 use super::{AuthStore, map_db_err};
 
-impl AuthStore {
+impl<S: AuthSchema> AuthStore<S> {
     pub async fn create_invitation(&self, invitation: CreateInvitation) -> AuthResult<Invitation> {
         ActiveModel {
             id: Set(Uuid::new_v4().to_string()),

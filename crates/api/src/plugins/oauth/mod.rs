@@ -47,7 +47,7 @@ impl Default for OAuthPlugin {
 }
 
 #[async_trait]
-impl AuthPlugin for OAuthPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
     fn name(&self) -> &'static str {
         "oauth"
     }
@@ -66,7 +66,7 @@ impl AuthPlugin for OAuthPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/sign-in/social") => Ok(Some(

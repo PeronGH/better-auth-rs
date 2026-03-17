@@ -19,7 +19,7 @@ pub(super) async fn send_verification_email_core(
     body: &SendVerificationEmailRequest,
     current_user: Option<&better_auth_core::User>,
     config: &EmailVerificationConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     if config.send_verification_email.is_none() {
         return Err(AuthError::bad_request("Verification email isn't enabled"));
@@ -97,7 +97,7 @@ pub(super) async fn verify_email_core(
     config: &EmailVerificationConfig,
     ip_address: Option<String>,
     user_agent: Option<String>,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<VerifyEmailResult> {
     let claims = match decode_email_verification_token(&ctx.config.secret, &query.token) {
         Ok(claims) => claims,

@@ -3,28 +3,29 @@ title: Database
 description: SeaORM-backed database integration for Better Auth.
 ---
 
-Better Auth uses a SeaORM `DatabaseConnection` for auth persistence.
+Better Auth uses your application's SeaORM entities and `DatabaseConnection`
+for auth persistence.
 
 The supported public path is:
 
-1. Create a `DatabaseConnection`.
-2. Run the built-in auth migrations.
-3. Pass the connection to `BetterAuth::new(config).database(...)`.
+1. Define auth entities in your app with `#[derive(AuthEntity)]`.
+2. Register them in an app schema with `#[derive(AuthSchema)]`.
+3. Manage auth migrations in your own SeaORM migrator.
+4. Pass the shared `DatabaseConnection` to `BetterAuth::<YourSchema>::new(config).database(...)`.
 
 ## Setup
 
-```rust
-use better_auth::{run_migrations, AuthConfig, BetterAuth};
+```rust,ignore
+use better_auth::{AuthConfig, AuthEntity, AuthSchema, BetterAuth};
 use better_auth::store::{Database, DatabaseConnection};
 use better_auth::plugins::EmailPasswordPlugin;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database = Database::connect("sqlite::memory:").await?;
-    run_migrations(&database).await?;
     let auth_database: DatabaseConnection = database.clone();
 
-    let auth = BetterAuth::new(
+    let auth = BetterAuth::<AppAuthSchema>::new(
         AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
             .base_url("http://localhost:3000"),
     )
@@ -39,25 +40,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## PostgreSQL
-
-For production, pass a PostgreSQL connection string to SeaORM and then run the same migrations:
-
-```rust
-use better_auth::{run_migrations};
-use better_auth::store::Database;
-
-let database = Database::connect("postgresql://user:pass@localhost:5432/mydb").await?;
-run_migrations(&database).await?;
-```
-
 ## Testing
 
-Repo-local tests use SQLite through the same `DatabaseConnection` API plus `run_migrations`.
+Repo-local tests use SQLite through the same `DatabaseConnection` API and a bundled internal schema.
 The dual-server and client SDK compatibility checks still validate behavior against the TypeScript
 reference server.
 
 ## Notes
 
-- `run_migrations` records Better Auth schema state in the `better_auth_migrations` table so it can coexist cleanly with your app's own SeaORM migrator history.
+- Better Auth no longer owns a public SeaORM migration path. Auth and app tables should be migrated together by the host application.
 - `MemoryCacheAdapter` is still available for cache/rate-limit use cases. It is separate from database persistence.

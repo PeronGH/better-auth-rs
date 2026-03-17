@@ -25,6 +25,7 @@ pub(crate) mod test_helpers {
     use std::sync::Arc;
 
     use better_auth_core::config::AuthConfig;
+    use better_auth_core::store::sea_orm::bundled_schema::BundledSchema;
     use better_auth_core::{
         AuthContext, AuthRequest, AuthStore, CreateSession, CreateUser, HttpMethod, Session, User,
         run_migrations, sea_orm::Database,
@@ -44,7 +45,10 @@ pub(crate) mod test_helpers {
         run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        Arc::new(AuthStore::new(Arc::new(create_test_config()), database))
+        Arc::new(AuthStore::<BundledSchema>::new(
+            Arc::new(create_test_config()),
+            database,
+        ))
     }
 
     pub async fn create_test_context() -> AuthContext {
@@ -65,12 +69,15 @@ pub(crate) mod test_helpers {
         AuthContext::new(config, database)
     }
 
-    pub async fn create_user(ctx: &AuthContext, create_user: CreateUser) -> User {
+    pub async fn create_user(
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+        create_user: CreateUser,
+    ) -> User {
         ctx.database.create_user(create_user).await.unwrap()
     }
 
     pub async fn create_session(
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         user_id: String,
         expires_in: Duration,
     ) -> Session {
@@ -86,7 +93,7 @@ pub(crate) mod test_helpers {
     }
 
     pub async fn create_user_and_session(
-        ctx: &AuthContext,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         user_data: CreateUser,
         session_expires_in: Duration,
     ) -> (User, Session) {

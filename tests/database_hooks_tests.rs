@@ -103,7 +103,7 @@ struct HookRegistrationPlugin {
 }
 
 #[async_trait]
-impl AuthPlugin for HookRegistrationPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for HookRegistrationPlugin {
     fn name(&self) -> &'static str {
         "hook-registration"
     }
@@ -123,7 +123,7 @@ impl AuthPlugin for HookRegistrationPlugin {
     async fn on_request(
         &self,
         _req: &AuthRequest,
-        _ctx: &AuthContext,
+        _ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<Option<AuthResponse>> {
         Ok(None)
     }

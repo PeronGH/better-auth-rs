@@ -37,7 +37,10 @@ async fn create_test_context_with_user() -> (AuthContext, User, Session) {
     (ctx, user, session)
 }
 
-async fn create_user_with_session(ctx: &AuthContext, email: &str) -> (User, Session) {
+async fn create_user_with_session(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    email: &str,
+) -> (User, Session) {
     let user = ctx
         .database
         .create_user(
@@ -91,7 +94,7 @@ fn json_body(response: &AuthResponse) -> serde_json::Value {
 
 async fn create_key_and_get_id(
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     token: &str,
     name: &str,
 ) -> String {
@@ -110,7 +113,7 @@ async fn create_key_and_get_id(
 /// Helper: create a key and return (id, raw_key)
 async fn create_key_and_get_raw(
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     token: &str,
     body: serde_json::Value,
 ) -> (String, String) {

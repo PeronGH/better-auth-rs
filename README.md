@@ -13,7 +13,7 @@ The most comprehensive authentication framework for Rust. Inspired by [Better Au
 - **Plugin Architecture** — compose only the auth features you need
 - **Type Safety** — leverages Rust's type system for compile-time guarantees
 - **Async First** — built on Tokio with full async/await support
-- **SeaORM Native** — one persistence path backed by SeaORM 2
+- **App-Owned SeaORM Schema** — auth entities live in your SeaORM model graph
 - **Framework Integration** — first-class Axum support with session extractors
 - **OpenAPI** — auto-generated API specification
 - **Middleware** — CSRF, CORS, rate limiting, body size limits
@@ -23,20 +23,49 @@ The most comprehensive authentication framework for Rust. Inspired by [Better Au
 
 ```toml
 [dependencies]
-better-auth = "0.9"
+better-auth = { version = "0.9", features = ["axum"] }
 ```
 
-```rust
-use better_auth::{run_migrations, BetterAuth, AuthConfig};
+```rust,ignore
+use better_auth::{AuthConfig, AuthEntity, AuthSchema, BetterAuth};
 use better_auth::store::Database;
 use better_auth::plugins::EmailPasswordPlugin;
+use sea_orm::entity::prelude::*;
+
+#[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
+#[auth(role = "user")]
+#[sea_orm(table_name = "users")]
+pub struct UserModel {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: String,
+    pub name: Option<String>,
+    pub email: Option<String>,
+    pub email_verified: bool,
+    pub image: Option<String>,
+    pub username: Option<String>,
+    pub display_username: Option<String>,
+    pub two_factor_enabled: bool,
+    pub role: Option<String>,
+    pub banned: bool,
+    pub ban_reason: Option<String>,
+    pub ban_expires: Option<DateTimeUtc>,
+    pub metadata: Json,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
+}
+
+#[derive(AuthSchema)]
+#[auth(user = "crate::UserModel")]
+#[auth(session = "crate::SessionModel")]
+#[auth(account = "crate::AccountModel")]
+#[auth(verification = "crate::VerificationModel")]
+pub struct AppAuthSchema;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database = Database::connect("sqlite::memory:").await?;
-    run_migrations(&database).await?;
 
-    let auth = BetterAuth::new(
+    let auth = BetterAuth::<AppAuthSchema>::new(
             AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
                 .base_url("http://localhost:3000"),
         )
@@ -45,14 +74,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()
         .await?;
 
-    // Mount as an Axum router (requires `axum` feature)
-    // let app = auth.axum_router();
-
     Ok(())
 }
 ```
 
-> See the [Quick Start guide](docs/content/docs/quick-start.mdx) for a complete walkthrough including sign-up, sign-in, and session usage.
+Better Auth no longer owns your SeaORM schema or migrations. Your app defines the auth entities and migrates them alongside the rest of your data model.
 
 ## Plugins
 

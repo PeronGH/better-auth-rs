@@ -99,7 +99,7 @@ pub(crate) async fn create_key_core(
     body: &CreateKeyRequest,
     user_id: &str,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<CreateKeyResponse> {
     // Validations
     plugin.validate_prefix(body.prefix.as_deref())?;
@@ -160,7 +160,7 @@ pub(crate) async fn get_key_core(
     id: &str,
     user_id: &str,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
     let api_key = helpers::get_owned_api_key(ctx, id, user_id).await?;
     plugin.maybe_delete_expired(ctx).await;
@@ -170,7 +170,7 @@ pub(crate) async fn get_key_core(
 pub(crate) async fn list_keys_core(
     user_id: &str,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<ApiKeyView>> {
     let keys = ctx.database.list_api_keys_by_user(user_id).await?;
     let views: Vec<ApiKeyView> = keys.iter().map(ApiKeyView::from_entity).collect();
@@ -182,7 +182,7 @@ pub(crate) async fn update_key_core(
     body: &UpdateKeyRequest,
     user_id: &str,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
     // Validations
     plugin.validate_name(body.name.as_deref(), false)?;
@@ -246,7 +246,7 @@ pub(crate) async fn delete_key_core(
     body: &DeleteKeyRequest,
     user_id: &str,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
     // Ownership check via shared helper
     let _existing = helpers::get_owned_api_key(ctx, &body.id, user_id).await?;
@@ -266,7 +266,7 @@ pub(crate) async fn delete_key_core(
 pub(crate) async fn verify_key_core(
     body: &VerifyKeyRequest,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<VerifyKeyResponse> {
     let result = plugin
         .validate_api_key(ctx, &body.key, body.permissions.as_ref())
@@ -296,7 +296,7 @@ pub(crate) async fn verify_key_core(
 pub(crate) async fn delete_all_expired_core(
     _user_id: &str,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
     let count = ctx.database.delete_expired_api_keys().await?;
 

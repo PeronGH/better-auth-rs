@@ -106,7 +106,7 @@ pub(crate) async fn generate_register_options_core(
     user: &better_auth_core::User,
     authenticator_attachment: Option<&str>,
     config: &PasskeyConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
     let challenge = generate_challenge();
 
@@ -183,7 +183,7 @@ pub(crate) async fn verify_registration_core(
     body: &VerifyRegistrationRequest,
     user: &better_auth_core::User,
     config: &PasskeyConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<PasskeyView> {
     ensure_insecure_verification_enabled(config)?;
 
@@ -273,7 +273,7 @@ pub(crate) async fn verify_registration_core(
 pub(crate) async fn generate_authenticate_options_core(
     maybe_user: Option<&better_auth_core::User>,
     config: &PasskeyConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
     let challenge = generate_challenge();
 
@@ -328,7 +328,7 @@ pub(crate) async fn verify_authentication_core(
     config: &PasskeyConfig,
     ip_address: Option<String>,
     user_agent: Option<String>,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
     SessionUserResponse<better_auth_core::User, better_auth_core::Session>,
     String,
@@ -392,7 +392,7 @@ pub(crate) async fn verify_authentication_core(
 
 pub(crate) async fn list_user_passkeys_core(
     user: &better_auth_core::User,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<PasskeyView>> {
     let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
     Ok(passkeys.iter().map(PasskeyView::from_entity).collect())
@@ -401,7 +401,7 @@ pub(crate) async fn list_user_passkeys_core(
 pub(crate) async fn delete_passkey_core(
     body: &DeletePasskeyRequest,
     user: &better_auth_core::User,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     // Verify ownership
     let passkey = ctx
@@ -422,7 +422,7 @@ pub(crate) async fn delete_passkey_core(
 pub(crate) async fn update_passkey_core(
     body: &UpdatePasskeyRequest,
     user: &better_auth_core::User,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<PasskeyResponse> {
     // Verify ownership
     let passkey = ctx

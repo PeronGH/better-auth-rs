@@ -1,6 +1,9 @@
 //! Common traits and data types used by handlers, tests, hooks, and direct dispatch.
 
-pub use crate::{AuthBuilder, AuthConfig, AuthError, AuthResult, BetterAuth, run_migrations};
+pub use crate::{
+    AuthAccountModel, AuthBuilder, AuthConfig, AuthEntity, AuthError, AuthResult, AuthSchema,
+    AuthSessionModel, AuthUserModel, AuthVerificationModel, BetterAuth, run_migrations,
+};
 pub use better_auth_core::entity::{
     AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
     AuthSession, AuthTwoFactor, AuthUser, AuthVerification, MemberUserView,

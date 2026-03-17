@@ -23,7 +23,7 @@ const PASSWORD_RESET_SUCCESS_MESSAGE: &str =
 pub(crate) async fn request_password_reset_core(
     body: &RequestPasswordResetRequest,
     config: &PasswordManagementConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<RequestPasswordResetResponse> {
     if let Some(redirect_to) = &body.redirect_to {
         validate_redirect_target(redirect_to, ctx, "Invalid redirectURL")?;
@@ -89,7 +89,7 @@ pub(crate) async fn request_password_reset_core(
 pub(crate) async fn reset_password_core(
     body: &ResetPasswordRequest,
     config: &PasswordManagementConfig,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     password_utils::validate_password(
         &body.new_password,
@@ -173,7 +173,7 @@ pub(crate) async fn reset_password_core(
 pub(crate) async fn reset_password_token_core(
     token: &str,
     query: &ResetPasswordTokenQuery,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ResetPasswordTokenResult> {
     if let Some(callback_url) = &query.callback_url {
         validate_redirect_target(callback_url, ctx, "Invalid callbackURL")?;
@@ -216,7 +216,7 @@ pub(crate) async fn change_password_core(
     user: &better_auth_core::User,
     config: &PasswordManagementConfig,
     meta: &RequestMeta,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
     ChangePasswordResponse<better_auth_core::User>,
     Option<String>,
@@ -284,7 +284,7 @@ pub(crate) async fn change_password_core(
 
 fn validate_redirect_target(
     target: &str,
-    ctx: &AuthContext,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     error_message: &str,
 ) -> AuthResult<()> {
     if !target.starts_with("//") && Url::parse(target).is_err() {

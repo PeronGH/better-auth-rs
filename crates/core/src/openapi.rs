@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 
 use crate::plugin::AuthPlugin;
+use crate::schema::AuthSchema;
 use crate::types::HttpMethod;
 
 /// Minimal OpenAPI 3.1.0 spec builder that collects routes from plugins.
@@ -98,7 +99,7 @@ impl OpenApiBuilder {
     }
 
     /// Register all routes from a plugin.
-    pub fn plugin(mut self, plugin: &dyn AuthPlugin) -> Self {
+    pub fn plugin<S: AuthSchema>(mut self, plugin: &dyn AuthPlugin<S>) -> Self {
         let tag = plugin.name();
         for route in plugin.routes() {
             self = self.route(&route.method, &route.path, &route.operation_id, tag);

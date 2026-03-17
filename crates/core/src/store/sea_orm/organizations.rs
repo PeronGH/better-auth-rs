@@ -5,13 +5,14 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::error::AuthResult;
+use crate::schema::AuthSchema;
 use crate::types_org::{CreateOrganization, Organization, UpdateOrganization};
 
 use super::entities;
 use super::entities::organization::{ActiveModel, Column, Entity};
 use super::{AuthStore, map_db_err};
 
-impl AuthStore {
+impl<S: AuthSchema> AuthStore<S> {
     pub async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization> {
         let now = Utc::now();
         ActiveModel {

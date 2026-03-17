@@ -12,6 +12,8 @@
     )
 )]
 
+extern crate self as better_auth;
+
 pub mod config;
 pub mod email;
 pub mod entity;
@@ -21,6 +23,7 @@ pub mod hooks;
 pub mod middleware;
 pub mod openapi;
 pub mod plugin;
+pub mod schema;
 pub mod session;
 pub mod store;
 pub mod types;
@@ -29,7 +32,7 @@ pub mod types_org;
 pub mod utils;
 
 // Re-export commonly used items
-pub use better_auth_macros::PluginConfig;
+pub use better_auth_macros::{AuthEntity, AuthSchema, PluginConfig};
 pub use config::{
     AccountConfig, AccountLinkingConfig, AdvancedConfig, AdvancedDatabaseConfig, Argon2Config,
     AuthConfig, CookieAttributes, CookieCacheConfig, CookieCacheStrategy, CookieOverride,
@@ -63,6 +66,9 @@ pub use plugin::AxumPlugin;
 pub use plugin::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRoute, AuthState, BeforeRequestAction,
 };
+pub use schema::{
+    AuthAccountModel, AuthSchema, AuthSessionModel, AuthUserModel, AuthVerificationModel,
+};
 pub use sea_orm;
 pub use session::SessionManager;
 pub use store::{AuthMigrator, AuthStore, CacheAdapter, MemoryCacheAdapter, run_migrations};
@@ -77,3 +83,6 @@ pub use types::{
     UpdateUser, UpdateUserRequest, UpdateUserResponse, User, ValidationErrorResponse, Verification,
 };
 pub use utils::password::{PasswordHasher, hash_password, verify_password};
+
+#[doc(hidden)]
+pub use crate as __private_core;
