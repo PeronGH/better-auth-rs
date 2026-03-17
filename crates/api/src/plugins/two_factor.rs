@@ -164,7 +164,7 @@ fn build_totp(
 
 async fn verify_user_password(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    user: &better_auth_core::User,
+    user: &impl AuthUser,
     password: &str,
 ) -> AuthResult<()> {
     let stored_hash = get_credential_password_hash(ctx, user)
@@ -178,7 +178,7 @@ async fn verify_user_password(
 
 async fn enable_core(
     body: &EnableRequest,
-    user: &better_auth_core::User,
+    user: &impl AuthUser,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<EnableResponse> {
@@ -231,7 +231,7 @@ async fn enable_core(
 
 async fn disable_core(
     body: &DisableRequest,
-    user: &better_auth_core::User,
+    user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     verify_user_password(ctx, user, &body.password).await?;
@@ -254,7 +254,7 @@ async fn disable_core(
 
 async fn get_totp_uri_core(
     body: &GetTotpUriRequest,
-    user: &better_auth_core::User,
+    user: &impl AuthUser,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<TotpUriResponse> {
@@ -281,7 +281,7 @@ async fn get_totp_uri_core(
 
 async fn generate_backup_codes_core(
     body: &GenerateBackupCodesRequest,
-    user: &better_auth_core::User,
+    user: &impl AuthUser,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<BackupCodesResponse> {
@@ -348,7 +348,7 @@ async fn get_pending_2fa_user(
 /// Returns `(VerifyTotpResponse<better_auth_core::User>, session_token)`.
 async fn verify_totp_core(
     body: &VerifyTotpRequest,
-    user: &better_auth_core::User,
+    user: &impl AuthUser,
     verification_id: &str,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -387,13 +387,13 @@ async fn verify_totp_core(
     let response = VerifyTotpResponse {
         status: true,
         token: token.clone(),
-        user: user.clone(),
+        user: better_auth_core::User::from(user),
     };
     Ok((response, token))
 }
 
 async fn send_otp_core(
-    user: &better_auth_core::User,
+    user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     // Generate 6-digit OTP
@@ -427,7 +427,7 @@ async fn send_otp_core(
 /// Returns `(VerifyTotpResponse<better_auth_core::User>, session_token)`.
 async fn verify_otp_core(
     body: &VerifyOtpRequest,
-    user: &better_auth_core::User,
+    user: &impl AuthUser,
     verification_id: &str,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(VerifyTotpResponse<better_auth_core::User>, String)> {
@@ -463,7 +463,7 @@ async fn verify_otp_core(
     let response = VerifyTotpResponse {
         status: true,
         token: token.clone(),
-        user: user.clone(),
+        user: better_auth_core::User::from(user),
     };
     Ok((response, token))
 }
@@ -471,7 +471,7 @@ async fn verify_otp_core(
 /// Returns `(VerifyBackupCodeResponse<better_auth_core::User, better_auth_core::Session>, session_token)`.
 async fn verify_backup_code_core(
     body: &VerifyBackupCodeRequest,
-    user: &better_auth_core::User,
+    user: &impl AuthUser,
     verification_id: &str,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
@@ -529,7 +529,7 @@ async fn verify_backup_code_core(
 
     let token = session.token().to_string();
     let response = VerifyBackupCodeResponse {
-        user: user.clone(),
+        user: better_auth_core::User::from(user),
         session: better_auth_core::Session::from(&session),
     };
     Ok((response, token))
@@ -544,7 +544,6 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let user = better_auth_core::User::from(&user);
         let body: EnableRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -559,7 +558,6 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let user = better_auth_core::User::from(&user);
         let body: DisableRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -574,7 +572,6 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let user = better_auth_core::User::from(&user);
         let body: GetTotpUriRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -630,7 +627,6 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let user = better_auth_core::User::from(&user);
         let body: GenerateBackupCodesRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
