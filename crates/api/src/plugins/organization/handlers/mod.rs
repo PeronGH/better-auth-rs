@@ -10,27 +10,17 @@ use better_auth_core::entity::{AuthMember, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::types::{AuthRequest, AuthResponse};
-use better_auth_core::{Session, User};
 
 use super::OrganizationConfig;
 use super::rbac::{Action, Resource, has_permission_any};
 use super::types::{HasPermissionRequest, HasPermissionResponse};
 
 /// Helper function to require authenticated session
-pub(crate) async fn require_session(
+pub(crate) async fn require_session<S: better_auth_core::AuthSchema>(
     req: &AuthRequest,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(better_auth_core::User, better_auth_core::Session)> {
-    let session_manager = ctx.session_manager();
-
-    if let Some(token) = session_manager.extract_session_token(req)
-        && let Some(session) = session_manager.get_session(&token).await?
-        && let Some(user) = ctx.database.get_user_by_id(session.user_id()).await?
-    {
-        return Ok((User::from(&user), Session::from(&session)));
-    }
-
-    Err(AuthError::Unauthenticated)
+    ctx: &AuthContext<S>,
+) -> AuthResult<(S::User, S::Session)> {
+    ctx.require_session(req).await
 }
 
 /// Helper function to get organization ID from request or session
@@ -64,8 +54,8 @@ pub(crate) async fn resolve_organization_id(
 
 pub(crate) async fn has_permission_core(
     body: &HasPermissionRequest,
-    user: &better_auth_core::User,
-    session: &better_auth_core::Session,
+    user: &impl AuthUser,
+    session: &impl AuthSession,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<HasPermissionResponse> {
