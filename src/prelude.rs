@@ -2,7 +2,7 @@
 
 pub use crate::{
     AuthAccountModel, AuthBuilder, AuthConfig, AuthEntity, AuthError, AuthResult, AuthSchema,
-    AuthSessionModel, AuthUserModel, AuthVerificationModel, BetterAuth, run_migrations,
+    AuthSessionModel, AuthUserModel, AuthVerificationModel, BetterAuth,
 };
 pub use better_auth_core::entity::{
     AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,

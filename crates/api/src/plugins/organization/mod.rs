@@ -9,6 +9,7 @@ use better_auth_core::error::AuthResult;
 use better_auth_core::plugin::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::types::{AuthRequest, AuthResponse, HttpMethod};
 
+#[cfg(any())]
 #[cfg(feature = "axum")]
 use better_auth_core::plugin::{AuthState, AxumPlugin};
 
@@ -175,6 +176,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
 // Axum-native routing (feature-gated)
 // ---------------------------------------------------------------------------
 
+#[cfg(any())]
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;

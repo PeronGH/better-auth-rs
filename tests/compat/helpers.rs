@@ -17,12 +17,12 @@ use better_auth::{
         password_management::SendResetPassword,
     },
     prelude::{AuthRequest, HttpMethod},
-    run_migrations,
     store::sea_orm::{Database, DatabaseConnection},
 };
 use serde_json::Value;
 
-type TestAuth = BetterAuth;
+type TestSchema = better_auth::__private_core::store::sea_orm::bundled_schema::BundledSchema;
+type TestAuth = BetterAuth<TestSchema>;
 
 static LOCAL_PROXY_BYPASS: Once = Once::new();
 
@@ -156,7 +156,7 @@ async fn test_database() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:")
         .await
         .unwrap_or_else(|e| panic!("sqlite test database should connect: {e}"));
-    run_migrations(&database)
+    better_auth::__private_core::store::sea_orm::migrator::run_migrations(&database)
         .await
         .unwrap_or_else(|e| panic!("sqlite test migrations should run: {e}"));
     database
@@ -167,7 +167,7 @@ pub async fn create_test_auth() -> TestAuth {
 }
 
 pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth {
-    AuthBuilder::new(test_config())
+    AuthBuilder::<TestSchema>::new(test_config())
         .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
@@ -395,7 +395,7 @@ impl TestHarness {
         let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
             .base_url("http://localhost:3000")
             .password_min_length(6);
-        let auth = AuthBuilder::new(config)
+        let auth = AuthBuilder::<TestSchema>::new(config)
             .database(test_database().await)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())

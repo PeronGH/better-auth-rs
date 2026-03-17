@@ -51,7 +51,6 @@ pub mod prelude;
 pub mod schema;
 pub mod store;
 
-pub use better_auth_core::store::run_migrations;
 pub use better_auth_core::{
     AuthAccountModel, AuthConfig, AuthEntity, AuthError, AuthResult, AuthSchema, AuthSessionModel,
     AuthUserModel, AuthVerificationModel,

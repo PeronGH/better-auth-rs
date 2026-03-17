@@ -9,7 +9,7 @@ use crate::store::AuthStore;
 use crate::types::{CreateSession, Session};
 
 /// Session manager handles session creation, validation, and cleanup
-pub struct SessionManager<S: AuthSchema = crate::store::sea_orm::bundled_schema::BundledSchema> {
+pub struct SessionManager<S: AuthSchema> {
     config: Arc<AuthConfig>,
     database: Arc<AuthStore<S>>,
 }
@@ -213,8 +213,8 @@ mod tests {
     use super::*;
     use crate::entity::AuthSession;
     use crate::sea_orm::Database;
+    use crate::store::AuthStore;
     use crate::store::sea_orm::bundled_schema::BundledSchema;
-    use crate::store::{AuthStore, run_migrations};
     use crate::types::AuthRequest;
     use crate::types::HttpMethod;
     use chrono::Duration;
@@ -227,7 +227,7 @@ mod tests {
         let database = Database::connect("sqlite::memory:")
             .await
             .expect("sqlite test database should connect");
-        run_migrations(&database)
+        crate::store::sea_orm::migrator::run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
         Arc::new(AuthStore::<BundledSchema>::new(test_config(), database))

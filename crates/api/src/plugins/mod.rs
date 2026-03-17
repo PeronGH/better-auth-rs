@@ -28,11 +28,11 @@ pub(crate) mod test_helpers {
     use better_auth_core::store::sea_orm::bundled_schema::BundledSchema;
     use better_auth_core::{
         AuthContext, AuthRequest, AuthStore, CreateSession, CreateUser, HttpMethod, Session, User,
-        run_migrations, sea_orm::Database,
+        sea_orm::Database,
     };
     use chrono::{Duration, Utc};
 
-    pub type TestDatabase = AuthStore;
+    pub type TestDatabase = AuthStore<BundledSchema>;
 
     pub fn create_test_config() -> AuthConfig {
         AuthConfig::new("test-secret-key-at-least-32-chars-long")
@@ -42,7 +42,7 @@ pub(crate) mod test_helpers {
         let database = Database::connect("sqlite::memory:")
             .await
             .expect("sqlite test database should connect");
-        run_migrations(&database)
+        better_auth_core::store::sea_orm::migrator::run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
         Arc::new(AuthStore::<BundledSchema>::new(
@@ -51,11 +51,11 @@ pub(crate) mod test_helpers {
         ))
     }
 
-    pub async fn create_test_context() -> AuthContext {
+    pub async fn create_test_context() -> AuthContext<BundledSchema> {
         create_test_context_with_config(create_test_config()).await
     }
 
-    pub fn create_test_context_blocking() -> AuthContext {
+    pub fn create_test_context_blocking() -> AuthContext<BundledSchema> {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -63,7 +63,7 @@ pub(crate) mod test_helpers {
             .block_on(create_test_context())
     }
 
-    pub async fn create_test_context_with_config(config: AuthConfig) -> AuthContext {
+    pub async fn create_test_context_with_config(config: AuthConfig) -> AuthContext<BundledSchema> {
         let config = Arc::new(config);
         let database = create_test_database().await;
         AuthContext::new(config, database)
@@ -105,7 +105,7 @@ pub(crate) mod test_helpers {
     pub async fn create_test_context_with_user(
         create_user: CreateUser,
         session_expires_in: Duration,
-    ) -> (AuthContext, User, Session) {
+    ) -> (AuthContext<BundledSchema>, User, Session) {
         let ctx = create_test_context().await;
         let (user, session) = create_user_and_session(&ctx, create_user, session_expires_in).await;
         (ctx, user, session)

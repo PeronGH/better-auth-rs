@@ -169,6 +169,7 @@ better_auth_core::impl_auth_plugin! {
 // Axum integration
 // ---------------------------------------------------------------------------
 
+#[cfg(any())]
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;

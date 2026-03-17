@@ -12,19 +12,21 @@
 
 mod compat;
 
+use better_auth::BetterAuth;
 use better_auth::store::sea_orm::Database;
-use better_auth::{BetterAuth, run_migrations};
 use better_auth_core::AuthStore;
 use compat::helpers::*;
 use std::sync::Arc;
 
+type TestSchema = better_auth::__private_core::store::sea_orm::bundled_schema::BundledSchema;
+
 /// Helper to create test BetterAuth instance with memory database
-async fn create_test_auth_memory() -> Arc<BetterAuth> {
+async fn create_test_auth_memory() -> Arc<BetterAuth<TestSchema>> {
     TestHarness::minimal().await.into_arc()
 }
 
 /// Helper to create user and get session token
-async fn create_test_user_and_session(auth: Arc<BetterAuth>) -> (String, String) {
+async fn create_test_user_and_session(auth: Arc<BetterAuth<TestSchema>>) -> (String, String) {
     let req = post_json(
         "/sign-up/email",
         serde_json::json!({
@@ -41,7 +43,7 @@ async fn create_test_user_and_session(auth: Arc<BetterAuth>) -> (String, String)
     (user_id, session_token)
 }
 
-async fn user_id_from_email(auth: &Arc<BetterAuth>, email: &str) -> String {
+async fn user_id_from_email(auth: &Arc<BetterAuth<TestSchema>>, email: &str) -> String {
     auth.database()
         .get_user_by_email(email)
         .await
@@ -1299,20 +1301,22 @@ async fn test_axum_duplicate_email() {
 
 mod postgres_tests {
     use super::*;
-    use better_auth::{run_migrations, store::sea_orm::Database};
+    use better_auth::store::sea_orm::Database;
     use std::env;
 
     /// Helper to create test BetterAuth instance with PostgreSQL
-    async fn create_test_auth_postgres() -> Option<Arc<BetterAuth>> {
+    async fn create_test_auth_postgres() -> Option<Arc<BetterAuth<TestSchema>>> {
         let database_url = env::var("TEST_DATABASE_URL").ok()?;
         let database = Database::connect(&database_url).await.ok()?;
-        run_migrations(&database).await.ok()?;
+        better_auth::__private_core::store::sea_orm::migrator::run_migrations(&database)
+            .await
+            .ok()?;
 
         let config = AuthConfig::new("postgres-test-secret-key-32-chars-long")
             .base_url("http://localhost:3000")
             .password_min_length(6);
 
-        let auth = BetterAuth::new(config)
+        let auth = BetterAuth::<TestSchema>::new(config)
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .build()
@@ -1722,7 +1726,7 @@ async fn test_sign_in_username_nonexistent() {
 // ---------------------------------------------------------------------------
 
 /// Helper: create auth with ApiKeyPlugin and return auth + session token
-async fn create_auth_with_apikey() -> (Arc<BetterAuth>, String, String) {
+async fn create_auth_with_apikey() -> (Arc<BetterAuth<TestSchema>>, String, String) {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
     (auth, user_id, session_token)
@@ -1730,7 +1734,7 @@ async fn create_auth_with_apikey() -> (Arc<BetterAuth>, String, String) {
 
 /// Create an API key and return (raw_key, key_id)
 async fn create_api_key(
-    auth: &BetterAuth,
+    auth: &BetterAuth<TestSchema>,
     token: &str,
     body: serde_json::Value,
 ) -> (String, String) {
@@ -2272,11 +2276,11 @@ async fn test_api_key_get_nonexistent() {
 #[tokio::test]
 async fn test_get_user_by_username_adapter() {
     use better_auth::prelude::CreateUser;
-    use better_auth::store::BundledSchema;
-
     let database = Database::connect("sqlite::memory:").await.unwrap();
-    run_migrations(&database).await.unwrap();
-    let db = AuthStore::<BundledSchema>::new(
+    better_auth::__private_core::store::sea_orm::migrator::run_migrations(&database)
+        .await
+        .unwrap();
+    let db = AuthStore::<TestSchema>::new(
         Arc::new(better_auth::AuthConfig::new(
             "test-secret-key-that-is-at-least-32-characters-long",
         )),

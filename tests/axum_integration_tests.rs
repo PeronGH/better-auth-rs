@@ -12,7 +12,7 @@ use better_auth::plugins::{
 };
 use better_auth::prelude::AuthUser;
 use better_auth::store::sea_orm::{Database, DatabaseConnection};
-use better_auth::{AuthBuilder, AuthConfig, BetterAuth, run_migrations};
+use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tower::ServiceExt; // for oneshot
@@ -20,24 +20,28 @@ use tower_http::cors::CorsLayer;
 
 #[derive(Clone)]
 struct AppState {
-    auth: Arc<BetterAuth>,
+    auth: Arc<BetterAuth<TestSchema>>,
     app_name: &'static str,
 }
 
-impl FromRef<AppState> for Arc<BetterAuth> {
+impl FromRef<AppState> for Arc<BetterAuth<TestSchema>> {
     fn from_ref(state: &AppState) -> Self {
         state.auth.clone()
     }
 }
 
+type TestSchema = better_auth::__private_core::store::sea_orm::bundled_schema::BundledSchema;
+
 /// Helper to create test BetterAuth instance with all plugins
 async fn test_database() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:").await.unwrap();
-    run_migrations(&database).await.unwrap();
+    better_auth::__private_core::store::sea_orm::migrator::run_migrations(&database)
+        .await
+        .unwrap();
     database
 }
 
-async fn create_test_auth() -> Arc<BetterAuth> {
+async fn create_test_auth() -> Arc<BetterAuth<TestSchema>> {
     create_test_auth_with_config(
         AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
             .base_url("http://localhost:3000")
@@ -46,7 +50,7 @@ async fn create_test_auth() -> Arc<BetterAuth> {
     .await
 }
 
-async fn create_test_auth_with_config(config: AuthConfig) -> Arc<BetterAuth> {
+async fn create_test_auth_with_config(config: AuthConfig) -> Arc<BetterAuth<TestSchema>> {
     struct NoopResetSender;
 
     #[async_trait::async_trait]
@@ -62,7 +66,7 @@ async fn create_test_auth_with_config(config: AuthConfig) -> Arc<BetterAuth> {
     }
 
     Arc::new(
-        AuthBuilder::new(config)
+        AuthBuilder::<TestSchema>::new(config)
             .database(test_database().await)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
@@ -81,7 +85,7 @@ async fn create_test_auth_with_config(config: AuthConfig) -> Arc<BetterAuth> {
 }
 
 /// Helper to create the complete Axum router (mimics the example server)
-fn create_test_router(auth: Arc<BetterAuth>) -> axum::Router {
+fn create_test_router(auth: Arc<BetterAuth<TestSchema>>) -> axum::Router {
     use axum::Router;
 
     // Create auth router using the BetterAuth AxumIntegration
@@ -96,17 +100,17 @@ fn create_test_router(auth: Arc<BetterAuth>) -> axum::Router {
         .with_state(auth)
 }
 
-fn create_extractor_test_router(auth: Arc<BetterAuth>) -> axum::Router {
+fn create_extractor_test_router(auth: Arc<BetterAuth<TestSchema>>) -> axum::Router {
     use axum::{Json, Router, routing::get};
 
-    async fn current_session_route(session: CurrentSession) -> Json<Value> {
+    async fn current_session_route(session: CurrentSession<TestSchema>) -> Json<Value> {
         Json(json!({
             "authenticated": true,
             "userId": session.user.id,
         }))
     }
 
-    async fn optional_session_route(session: OptionalSession) -> Json<Value> {
+    async fn optional_session_route(session: OptionalSession<TestSchema>) -> Json<Value> {
         Json(json!({
             "authenticated": session.0.is_some(),
         }))
@@ -120,12 +124,12 @@ fn create_extractor_test_router(auth: Arc<BetterAuth>) -> axum::Router {
         .with_state(auth)
 }
 
-fn create_app_state_test_router(auth: Arc<BetterAuth>) -> axum::Router {
+fn create_app_state_test_router(auth: Arc<BetterAuth<TestSchema>>) -> axum::Router {
     use axum::{Json, Router, routing::get};
 
     async fn current_session_route(
         State(state): State<AppState>,
-        session: CurrentSession,
+        session: CurrentSession<TestSchema>,
     ) -> Json<Value> {
         Json(json!({
             "app": state.app_name,
@@ -136,7 +140,7 @@ fn create_app_state_test_router(auth: Arc<BetterAuth>) -> axum::Router {
 
     async fn optional_session_route(
         State(state): State<AppState>,
-        session: OptionalSession,
+        session: OptionalSession<TestSchema>,
     ) -> Json<Value> {
         Json(json!({
             "app": state.app_name,

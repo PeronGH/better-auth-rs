@@ -6,6 +6,8 @@ use chrono::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+type TestSchema = better_auth_core::store::sea_orm::bundled_schema::BundledSchema;
+
 // -- change email tests ────────────────────────────────────────────
 
 // Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
@@ -452,17 +454,17 @@ async fn test_delete_user_before_hook_abort() {
 async fn test_plugin_routes_conditional() {
     // All disabled
     let plugin = UserManagementPlugin::new();
-    assert!(<UserManagementPlugin as AuthPlugin>::routes(&plugin).is_empty());
+    assert!(<UserManagementPlugin as AuthPlugin<TestSchema>>::routes(&plugin).is_empty());
 
     // Only change-email enabled
     let plugin = UserManagementPlugin::new().change_email_enabled(true);
-    let routes = <UserManagementPlugin as AuthPlugin>::routes(&plugin);
+    let routes = <UserManagementPlugin as AuthPlugin<TestSchema>>::routes(&plugin);
     assert_eq!(routes.len(), 1);
     assert!(routes.iter().any(|r| r.path == "/change-email"));
 
     // Only delete-user enabled
     let plugin = UserManagementPlugin::new().delete_user_enabled(true);
-    let routes = <UserManagementPlugin as AuthPlugin>::routes(&plugin);
+    let routes = <UserManagementPlugin as AuthPlugin<TestSchema>>::routes(&plugin);
     assert_eq!(routes.len(), 2);
     assert!(routes.iter().any(|r| r.path == "/delete-user"));
     assert!(routes.iter().any(|r| r.path == "/delete-user/callback"));
@@ -472,7 +474,7 @@ async fn test_plugin_routes_conditional() {
         .change_email_enabled(true)
         .delete_user_enabled(true);
     assert_eq!(
-        <UserManagementPlugin as AuthPlugin>::routes(&plugin).len(),
+        <UserManagementPlugin as AuthPlugin<TestSchema>>::routes(&plugin).len(),
         3
     );
 }

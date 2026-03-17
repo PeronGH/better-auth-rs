@@ -256,6 +256,7 @@ fn sign_out_cookies(config: &AuthConfig) -> Vec<String> {
     cookies
 }
 
+#[cfg(any())]
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;

@@ -15,7 +15,9 @@ use better_auth::plugins::EmailPasswordPlugin;
 use better_auth::prelude::{AuthRequest, AuthResponse, CreateUser, HttpMethod, User};
 use better_auth::store::sea_orm::sea_query::{Alias, ColumnDef, Expr, ExprTrait, Query, Table};
 use better_auth::store::sea_orm::{ConnectionTrait, Database, DatabaseConnection};
-use better_auth::{AuthBuilder, AuthConfig, run_migrations};
+use better_auth::{AuthBuilder, AuthConfig};
+
+type TestSchema = better_auth::__private_core::store::sea_orm::bundled_schema::BundledSchema;
 
 fn test_config() -> AuthConfig {
     AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
@@ -26,7 +28,7 @@ async fn test_database() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:")
         .await
         .expect("sqlite test database should connect");
-    run_migrations(&database)
+    better_auth::__private_core::store::sea_orm::migrator::run_migrations(&database)
         .await
         .expect("sqlite test migrations should run");
     database
@@ -112,7 +114,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for HookRegistrationPlugin {
         Vec::new()
     }
 
-    async fn on_init(&self, ctx: &mut AuthInitContext) -> AuthResult<()> {
+    async fn on_init(&self, ctx: &mut AuthInitContext<S>) -> AuthResult<()> {
         ctx.register_database_hook(OrderingHook {
             label: "plugin",
             events: self.events.clone(),
@@ -234,7 +236,7 @@ impl DatabaseHooks for DeleteCaptureHook {
 #[tokio::test]
 async fn plugin_database_hooks_run_before_builder_hooks() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let auth = AuthBuilder::new(test_config())
+    let auth = AuthBuilder::<TestSchema>::new(test_config())
         .database(test_database().await)
         .plugin(HookRegistrationPlugin {
             events: events.clone(),
@@ -267,7 +269,7 @@ async fn plugin_database_hooks_run_before_builder_hooks() {
 #[tokio::test]
 async fn request_context_is_present_for_requests_and_absent_for_direct_store_calls() {
     let seen = Arc::new(Mutex::new(Vec::new()));
-    let auth = AuthBuilder::new(test_config())
+    let auth = AuthBuilder::<TestSchema>::new(test_config())
         .database(test_database().await)
         .database_hook(RequestContextHook { seen: seen.clone() })
         .plugin(EmailPasswordPlugin::new())
@@ -307,7 +309,7 @@ async fn onboarding_hook_can_provision_app_data_with_the_shared_transaction() {
     create_app_workspace_table(&database).await;
 
     let tx_seen = Arc::new(AtomicBool::new(false));
-    let auth = AuthBuilder::new(test_config())
+    let auth = AuthBuilder::<TestSchema>::new(test_config())
         .database(database.clone())
         .database_hook(OnboardingHook {
             service: ProvisioningService {
@@ -340,7 +342,7 @@ async fn onboarding_hook_can_provision_app_data_with_the_shared_transaction() {
 #[tokio::test]
 async fn delete_hooks_receive_the_loaded_user_entity() {
     let emails = Arc::new(Mutex::new(Vec::new()));
-    let auth = AuthBuilder::new(test_config())
+    let auth = AuthBuilder::<TestSchema>::new(test_config())
         .database(test_database().await)
         .database_hook(DeleteCaptureHook {
             emails: emails.clone(),

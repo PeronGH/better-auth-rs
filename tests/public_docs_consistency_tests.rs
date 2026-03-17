@@ -75,6 +75,6 @@ fn axum_docs_show_generic_app_state_integration() {
     let axum = read_repo_file("docs/content/docs/integrations/axum.mdx");
 
     assert!(axum.contains("axum_router_with_state::<AppState>()"));
-    assert!(axum.contains("impl FromRef<AppState> for Arc<BetterAuth>"));
+    assert!(axum.contains("impl FromRef<AppState> for Arc<BetterAuth<AppAuthSchema>>"));
     assert!(axum.contains("better_auth::integrations::axum"));
 }

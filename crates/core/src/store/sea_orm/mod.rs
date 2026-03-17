@@ -29,7 +29,7 @@ use crate::hooks::{DatabaseHookContext, DatabaseHooks, current_request_hook_cont
 use crate::schema::AuthSchema;
 
 #[derive(Clone)]
-pub struct AuthStore<S: AuthSchema = bundled_schema::BundledSchema> {
+pub struct AuthStore<S: AuthSchema> {
     config: Arc<AuthConfig>,
     db: DatabaseConnection,
     hooks: Vec<Arc<dyn DatabaseHooks>>,

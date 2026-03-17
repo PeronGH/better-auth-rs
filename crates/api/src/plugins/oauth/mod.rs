@@ -4,6 +4,7 @@ use better_auth_core::AuthResult;
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
+#[cfg(any())]
 #[cfg(feature = "axum")]
 use better_auth_core::plugin::{AuthState, AxumPlugin};
 
@@ -108,6 +109,7 @@ fn extract_provider_from_callback(path: &str) -> String {
 // Axum-native routing (feature-gated)
 // ---------------------------------------------------------------------------
 
+#[cfg(any())]
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;

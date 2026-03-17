@@ -19,10 +19,11 @@ use better_auth::{
     AuthBuilder, AuthConfig, BetterAuth,
     plugins::EmailPasswordPlugin,
     prelude::{AuthRequest, HttpMethod},
-    run_migrations,
     store::sea_orm::{Database, DatabaseConnection},
 };
 use serde_json::Value;
+
+type TestSchema = better_auth::__private_core::store::sea_orm::bundled_schema::BundledSchema;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -121,16 +122,18 @@ fn completed_phase_reference_surface(
 /// Create a test auth instance with all currently implemented plugins.
 async fn test_database() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:").await.unwrap();
-    run_migrations(&database).await.unwrap();
+    better_auth::__private_core::store::sea_orm::migrator::run_migrations(&database)
+        .await
+        .unwrap();
     database
 }
 
-async fn create_full_auth() -> BetterAuth {
+async fn create_full_auth() -> BetterAuth<TestSchema> {
     let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
         .base_url("http://localhost:3000")
         .password_min_length(8);
 
-    AuthBuilder::new(config)
+    AuthBuilder::<TestSchema>::new(config)
         .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(better_auth::plugins::SessionManagementPlugin::new())
@@ -152,7 +155,7 @@ async fn create_full_auth() -> BetterAuth {
 }
 
 /// Collect all routes our implementation exposes (core + plugin).
-fn collect_implemented_routes(auth: &BetterAuth) -> BTreeMap<String, HashSet<String>> {
+fn collect_implemented_routes(auth: &BetterAuth<TestSchema>) -> BTreeMap<String, HashSet<String>> {
     let mut routes: BTreeMap<String, HashSet<String>> = BTreeMap::new();
 
     // Core routes (from handle_core_request)
@@ -425,7 +428,7 @@ async fn test_generated_openapi_metadata() {
 
 /// Helper to send a request and parse the JSON response body.
 async fn send_json_request(
-    auth: &BetterAuth,
+    auth: &BetterAuth<TestSchema>,
     method: HttpMethod,
     path: &str,
     body: Option<Value>,

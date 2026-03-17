@@ -9,7 +9,9 @@ use better_auth::plugin::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth::plugins::EmailPasswordPlugin;
 use better_auth::prelude::{AuthRequest, AuthResponse, HttpMethod};
 use better_auth::store::sea_orm::{Database, DatabaseConnection};
-use better_auth::{AuthBuilder, AuthConfig, AuthResult, BetterAuth, run_migrations};
+use better_auth::{AuthBuilder, AuthConfig, AuthResult, BetterAuth};
+
+type TestSchema = better_auth::__private_core::store::sea_orm::bundled_schema::BundledSchema;
 
 struct RouteTestPlugin;
 
@@ -45,14 +47,14 @@ async fn test_database() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:")
         .await
         .expect("sqlite test database should connect");
-    run_migrations(&database)
+    better_auth::__private_core::store::sea_orm::migrator::run_migrations(&database)
         .await
         .expect("sqlite test migrations should run");
     database
 }
 
-async fn build_auth_with_route_plugin() -> BetterAuth {
-    AuthBuilder::new(test_config())
+async fn build_auth_with_route_plugin() -> BetterAuth<TestSchema> {
+    AuthBuilder::<TestSchema>::new(test_config())
         .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(RouteTestPlugin)
@@ -65,7 +67,7 @@ async fn build_auth_with_route_plugin() -> BetterAuth {
 // validates configuration before producing a `BetterAuth` instance.
 #[tokio::test]
 async fn test_builder_rejects_invalid_config() {
-    let result = BetterAuth::new(AuthConfig::default())
+    let result = BetterAuth::<TestSchema>::new(AuthConfig::default())
         .database(test_database().await)
         .build()
         .await;
@@ -100,7 +102,7 @@ async fn test_routes_lists_plugin_routes_only() {
 // callers, not only framework integrations.
 #[tokio::test]
 async fn test_disabled_path_blocks_direct_dispatch() {
-    let auth = BetterAuth::new(test_config().disabled_path("/ok"))
+    let auth = BetterAuth::<TestSchema>::new(test_config().disabled_path("/ok"))
         .database(test_database().await)
         .build()
         .await

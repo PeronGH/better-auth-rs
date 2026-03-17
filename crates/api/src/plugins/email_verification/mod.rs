@@ -298,6 +298,7 @@ impl EmailVerificationPlugin {
 // Axum plugin
 // ---------------------------------------------------------------------------
 
+#[cfg(any())]
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;

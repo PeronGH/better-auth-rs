@@ -7,8 +7,8 @@ This guide walks through a minimal working example: configure auth, sign up a us
 
 ## Setup
 
-```rust
-use better_auth::{run_migrations, BetterAuth, AuthConfig};
+```rust,ignore
+use better_auth::{AuthConfig, BetterAuth};
 use better_auth::store::Database;
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
 use better_auth::prelude::{AuthRequest, HttpMethod};
@@ -21,10 +21,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .base_url("http://localhost:3000")
         .password_min_length(8);
     let database = Database::connect("sqlite::memory:").await?;
-    run_migrations(&database).await?;
 
     // 2. Build
-    let auth = BetterAuth::new(config)
+    let auth = BetterAuth::<AppAuthSchema>::new(config)
         .database(database)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())

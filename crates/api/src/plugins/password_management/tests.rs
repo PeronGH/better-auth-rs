@@ -1,10 +1,13 @@
 use super::*;
 use crate::plugins::test_helpers;
+use better_auth_core::AuthContext;
 use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
 use better_auth_core::{CreateAccount, CreateUser, CreateVerification, Session, User};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
+
+type TestSchema = better_auth_core::store::sea_orm::bundled_schema::BundledSchema;
 
 const PASSWORD_RESET_SUCCESS_MESSAGE: &str =
     "If this email exists in our system, check your email for the reset link";
@@ -22,7 +25,7 @@ fn plugin_with_reset_sender() -> PasswordManagementPlugin {
     PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender))
 }
 
-async fn create_test_context_with_user() -> (AuthContext, User, Session) {
+async fn create_test_context_with_user() -> (AuthContext<TestSchema>, User, Session) {
     let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
     config.password = PasswordConfig {
         min_length: 8,

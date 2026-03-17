@@ -563,6 +563,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
     }
 }
 
+#[cfg(any())]
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;
@@ -692,7 +693,9 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    async fn create_test_context() -> AuthContext {
+    type TestSchema = better_auth_core::store::sea_orm::bundled_schema::BundledSchema;
+
+    async fn create_test_context() -> AuthContext<TestSchema> {
         let config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
         let config = Arc::new(config);
         let database = crate::plugins::test_helpers::create_test_database().await;

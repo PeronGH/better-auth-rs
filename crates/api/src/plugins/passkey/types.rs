@@ -4,7 +4,7 @@ use validator::Validate;
 
 // -- Request types --
 
-#[cfg(feature = "axum")]
+#[cfg(any())]
 #[derive(Debug, Deserialize)]
 pub(crate) struct RegisterOptionsQuery {
     #[serde(rename = "authenticatorAttachment")]

@@ -12,8 +12,7 @@ use better_auth_core::AuthStore;
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{
     AccountConfig, AccountLinkingConfig, AuthConfig, AuthContext, AuthPlugin, AuthRequest,
-    CreateAccount, CreateUser, CreateVerification, HttpMethod, SessionManager, run_migrations,
-    sea_orm::Database,
+    CreateAccount, CreateUser, CreateVerification, HttpMethod, SessionManager, sea_orm::Database,
 };
 
 use better_auth_api::AccountManagementPlugin;
@@ -152,10 +151,15 @@ async fn setup_user_with_account(
     (user_id, token)
 }
 
-async fn create_test_database() -> Arc<AuthStore> {
+async fn create_test_database() -> Arc<AuthStore<TestSchema>> {
     let database = Database::connect("sqlite::memory:").await.unwrap();
-    run_migrations(&database).await.unwrap();
-    Arc::new(AuthStore::new(Arc::new(test_config()), database))
+    better_auth_core::store::sea_orm::migrator::run_migrations(&database)
+        .await
+        .unwrap();
+    Arc::new(AuthStore::<TestSchema>::new(
+        Arc::new(test_config()),
+        database,
+    ))
 }
 
 #[derive(Debug, Clone)]
@@ -1160,3 +1164,4 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
         Ok(None) => panic!("Expected a response"),
     }
 }
+type TestSchema = better_auth_core::store::sea_orm::bundled_schema::BundledSchema;

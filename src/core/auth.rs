@@ -14,9 +14,7 @@ use better_auth_core::{
     sea_orm::DatabaseConnection,
 };
 
-pub struct BetterAuth<
-    S: AuthSchema = better_auth_core::store::sea_orm::bundled_schema::BundledSchema,
-> {
+pub struct BetterAuth<S: AuthSchema> {
     config: Arc<AuthConfig>,
     plugins: Vec<Box<dyn AuthPlugin<S>>>,
     middlewares: Vec<Box<dyn Middleware>>,
@@ -26,9 +24,7 @@ pub struct BetterAuth<
 }
 
 /// Initial builder for configuring BetterAuth.
-pub struct AuthBuilder<
-    S: AuthSchema = better_auth_core::store::sea_orm::bundled_schema::BundledSchema,
-> {
+pub struct AuthBuilder<S: AuthSchema> {
     config: AuthConfig,
     database: Option<DatabaseConnection>,
     database_hooks: Vec<Arc<dyn DatabaseHooks>>,

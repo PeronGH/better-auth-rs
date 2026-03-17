@@ -20,10 +20,7 @@ pub(crate) struct ResetPasswordRequest {
 }
 
 /// Query parameters for `POST /reset-password`.
-#[cfg_attr(
-    not(feature = "axum"),
-    expect(dead_code, reason = "used by the axum handler query extractor")
-)]
+#[cfg(any())]
 #[derive(Debug, Deserialize)]
 pub(crate) struct ResetPasswordQuery {
     pub(crate) token: Option<String>,

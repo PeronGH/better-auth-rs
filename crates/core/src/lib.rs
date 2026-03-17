@@ -18,6 +18,7 @@ pub mod config;
 pub mod email;
 pub mod entity;
 pub mod error;
+#[cfg(any())]
 pub mod extractors;
 pub mod hooks;
 pub mod middleware;
@@ -47,11 +48,6 @@ pub use entity::{
 pub use error::{
     AuthError, AuthResult, DatabaseError, validate_request_body, validation_error_response,
 };
-#[cfg(feature = "axum")]
-pub use extractors::{
-    AdminRole, AdminSession, AuthRequestExt, AxumAuthResponse, CurrentSession, OptionalSession,
-    Pending2faToken, ValidatedJson,
-};
 pub use hooks::{
     DatabaseHookContext, DatabaseHooks, HookControl, RequestHookContext, with_request_hook_context,
     with_request_hook_context_value,
@@ -61,17 +57,13 @@ pub use middleware::{
     EndpointRateLimit, Middleware, RateLimitConfig, RateLimitMiddleware,
 };
 pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse, OpenApiSpec};
-#[cfg(feature = "axum")]
-pub use plugin::AxumPlugin;
-pub use plugin::{
-    AuthContext, AuthInitContext, AuthPlugin, AuthRoute, AuthState, BeforeRequestAction,
-};
+pub use plugin::{AuthContext, AuthInitContext, AuthPlugin, AuthRoute, BeforeRequestAction};
 pub use schema::{
     AuthAccountModel, AuthSchema, AuthSessionModel, AuthUserModel, AuthVerificationModel,
 };
 pub use sea_orm;
 pub use session::SessionManager;
-pub use store::{AuthMigrator, AuthStore, CacheAdapter, MemoryCacheAdapter, run_migrations};
+pub use store::{AuthStore, CacheAdapter, MemoryCacheAdapter};
 pub use types::{
     Account, ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
     CreateInvitation, CreateMember, CreateOrganization, CreatePasskey, CreateSession,

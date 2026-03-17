@@ -6,7 +6,9 @@ use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-async fn create_test_context_with_user() -> (AuthContext, User, Session) {
+type TestSchema = better_auth_core::store::sea_orm::bundled_schema::BundledSchema;
+
+async fn create_test_context_with_user() -> (AuthContext<TestSchema>, User, Session) {
     let config = Arc::new(better_auth_core::AuthConfig::new(
         "test-secret-key-at-least-32-chars-long",
     ));

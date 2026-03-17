@@ -7,7 +7,9 @@ use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-async fn create_admin_context() -> (AuthContext, User, Session, User, Session) {
+type TestSchema = better_auth_core::store::sea_orm::bundled_schema::BundledSchema;
+
+async fn create_admin_context() -> (AuthContext<TestSchema>, User, Session, User, Session) {
     let ctx = test_helpers::create_test_context().await;
 
     // Create admin user
@@ -1286,13 +1288,16 @@ async fn test_set_role_persists_in_database() {
 #[tokio::test]
 async fn test_plugin_name() {
     let plugin = AdminPlugin::new();
-    assert_eq!(<AdminPlugin as AuthPlugin>::name(&plugin), "admin");
+    assert_eq!(
+        <AdminPlugin as AuthPlugin<TestSchema>>::name(&plugin),
+        "admin"
+    );
 }
 
 // Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_plugin_routes_count() {
     let plugin = AdminPlugin::new();
-    let routes = <AdminPlugin as AuthPlugin>::routes(&plugin);
+    let routes = <AdminPlugin as AuthPlugin<TestSchema>>::routes(&plugin);
     assert_eq!(routes.len(), 13, "admin plugin should register 13 routes");
 }

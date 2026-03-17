@@ -4,7 +4,7 @@ use better_auth_core::{AuthRequest, AuthResponse};
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
-#[cfg(feature = "axum")]
+#[cfg(any())]
 use super::StatusResponse;
 
 pub(super) mod handlers;
@@ -312,6 +312,7 @@ impl AdminPlugin {
 // Axum integration
 // ---------------------------------------------------------------------------
 
+#[cfg(any())]
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;
