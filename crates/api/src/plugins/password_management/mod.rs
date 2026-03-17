@@ -28,9 +28,9 @@ pub type OnPasswordResetCallback =
 
 /// Trait for sending password reset emails.
 ///
-/// When set in `PasswordManagementConfig`, this overrides the default
-/// `EmailProvider`-based reset email sending. The user is provided as a
-/// serialized `serde_json::Value` since `AuthUser` is not object-safe.
+/// This callback powers `POST /request-password-reset` and is required to
+/// enable that route. The user is provided as a serialized `serde_json::Value`
+/// since `AuthUser` is not object-safe.
 #[async_trait]
 pub trait SendResetPassword: Send + Sync {
     /// Send a password reset notification.
@@ -58,7 +58,8 @@ pub struct PasswordManagementConfig {
     /// When true, all existing sessions are revoked on password reset (default: false).
     #[config(default = false)]
     pub revoke_sessions_on_password_reset: bool,
-    /// Custom password reset email sender. When set, overrides the default `EmailProvider`.
+    /// Password reset email sender for `POST /request-password-reset`.
+    /// This route is disabled when no sender is configured.
     #[config(default = None)]
     pub send_reset_password: Option<Arc<dyn SendResetPassword>>,
     /// Callback invoked after a password is successfully reset.
