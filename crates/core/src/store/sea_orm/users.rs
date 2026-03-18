@@ -44,9 +44,8 @@ impl<S: AuthSchema> AuthStore<S> {
         );
 
         let user = model.insert(db).await.map_err(map_db_err)?;
-        let hook_user = User::from(&user);
         for hook in self.hooks() {
-            hook.after_create_user(&hook_user, &hook_context).await?;
+            hook.after_create_user(&user, &hook_context).await?;
         }
         Ok(user)
     }
@@ -117,9 +116,8 @@ impl<S: AuthSchema> AuthStore<S> {
         S::User::apply_update(&mut active, update, Utc::now());
 
         let user = active.update(self.connection()).await.map_err(map_db_err)?;
-        let hook_user = User::from(&user);
         for hook in self.hooks() {
-            hook.after_update_user(&hook_user, &hook_context).await?;
+            hook.after_update_user(&user, &hook_context).await?;
         }
         Ok(user)
     }
@@ -128,11 +126,10 @@ impl<S: AuthSchema> AuthStore<S> {
         let Some(user) = self.get_user_by_id(id).await? else {
             return Err(AuthError::UserNotFound);
         };
-        let hook_user = User::from(&user);
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
             if hook
-                .before_delete_user(&hook_user, &hook_context)
+                .before_delete_user(&user, &hook_context)
                 .await?
                 .is_cancelled()
             {
@@ -145,7 +142,7 @@ impl<S: AuthSchema> AuthStore<S> {
             .await
             .map_err(map_db_err)?;
         for hook in self.hooks() {
-            hook.after_delete_user(&hook_user, &hook_context).await?;
+            hook.after_delete_user(&user, &hook_context).await?;
         }
         Ok(())
     }

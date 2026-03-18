@@ -32,15 +32,14 @@ impl<S: AuthSchema> AuthStore<S> {
             }
         }
         let now = Utc::now();
-        let account_model = S::Account::new_active(Uuid::new_v4().to_string(), create_account, now)
+        let account = S::Account::new_active(Uuid::new_v4().to_string(), create_account, now)
             .insert(db)
             .await
             .map_err(map_db_err)?;
-        let account = Account::from(&account_model);
         for hook in self.hooks() {
             hook.after_create_account(&account, &hook_context).await?;
         }
-        Ok(account)
+        Ok(Account::from(&account))
     }
 
     pub async fn create_account(&self, create_account: CreateAccount) -> AuthResult<Account> {
@@ -106,12 +105,11 @@ impl<S: AuthSchema> AuthStore<S> {
         let mut active = model.into_active_model();
         S::Account::apply_update(&mut active, update, Utc::now());
 
-        let account_model = active.update(self.connection()).await.map_err(map_db_err)?;
-        let account = Account::from(&account_model);
+        let account = active.update(self.connection()).await.map_err(map_db_err)?;
         for hook in self.hooks() {
             hook.after_update_account(&account, &hook_context).await?;
         }
-        Ok(account)
+        Ok(Account::from(&account))
     }
 
     pub async fn delete_account(&self, id: &str) -> AuthResult<()> {
@@ -123,11 +121,10 @@ impl<S: AuthSchema> AuthStore<S> {
         else {
             return Err(crate::error::AuthError::not_found("Account not found"));
         };
-        let account = Account::from(&account_model);
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
             if hook
-                .before_delete_account(&account, &hook_context)
+                .before_delete_account(&account_model, &hook_context)
                 .await?
                 .is_cancelled()
             {
@@ -140,7 +137,7 @@ impl<S: AuthSchema> AuthStore<S> {
             .await
             .map_err(map_db_err)?;
         for hook in self.hooks() {
-            hook.after_delete_account(&account, &hook_context).await?;
+            hook.after_delete_account(&account_model, &hook_context).await?;
         }
         Ok(())
     }

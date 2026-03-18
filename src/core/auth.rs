@@ -27,7 +27,7 @@ pub struct BetterAuth<S: AuthSchema> {
 pub struct AuthBuilder<S: AuthSchema> {
     config: AuthConfig,
     database: Option<DatabaseConnection>,
-    database_hooks: Vec<Arc<dyn DatabaseHooks>>,
+    database_hooks: Vec<Arc<dyn DatabaseHooks<S>>>,
     plugins: Vec<Box<dyn AuthPlugin<S>>>,
     csrf_config: Option<CsrfConfig>,
     rate_limit_config: Option<RateLimitConfig>,
@@ -103,7 +103,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
     }
 
     /// Add a database lifecycle hook for the built-in auth store.
-    pub fn database_hook<H: DatabaseHooks + 'static>(mut self, hook: H) -> Self {
+    pub fn database_hook<H: DatabaseHooks<S> + 'static>(mut self, hook: H) -> Self {
         self.database_hooks.push(Arc::new(hook));
         self
     }
@@ -112,12 +112,12 @@ impl<S: AuthSchema> AuthBuilder<S> {
     pub fn database_hooks<I, H>(mut self, hooks: I) -> Self
     where
         I: IntoIterator<Item = H>,
-        H: DatabaseHooks + 'static,
+        H: DatabaseHooks<S> + 'static,
     {
         self.database_hooks.extend(
             hooks
                 .into_iter()
-                .map(|hook| Arc::new(hook) as Arc<dyn DatabaseHooks>),
+                .map(|hook| Arc::new(hook) as Arc<dyn DatabaseHooks<S>>),
         );
         self
     }

@@ -25,17 +25,16 @@ impl<S: AuthSchema> AuthStore<S> {
             }
         }
         let now = Utc::now();
-        let verification_model =
+        let verification =
             S::Verification::new_active(Uuid::new_v4().to_string(), verification, now)
                 .insert(self.connection())
                 .await
                 .map_err(map_db_err)?;
-        let verification = Verification::from(&verification_model);
         for hook in self.hooks() {
             hook.after_create_verification(&verification, &hook_context)
                 .await?;
         }
-        Ok(verification)
+        Ok(Verification::from(&verification))
     }
 
     pub async fn get_verification(
@@ -108,7 +107,7 @@ impl<S: AuthSchema> AuthStore<S> {
             .one(self.connection())
             .await
             .map_err(map_db_err)?
-            .map(|model| Verification::from(&model));
+            ;
         let hook_context = self.hook_context(None);
         if let Some(verification) = &verification {
             for hook in self.hooks() {

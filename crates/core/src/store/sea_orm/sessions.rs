@@ -50,10 +50,8 @@ impl<S: AuthSchema> AuthStore<S> {
         .insert(db)
         .await
         .map_err(map_db_err)?;
-        let hook_session = Session::from(&session);
         for hook in self.hooks() {
-            hook.after_create_session(&hook_session, &hook_context)
-                .await?;
+            hook.after_create_session(&session, &hook_context).await?;
         }
         Ok(session)
     }
@@ -122,10 +120,9 @@ impl<S: AuthSchema> AuthStore<S> {
         let session = self.get_session(token).await?;
         let hook_context = self.hook_context(None);
         if let Some(session) = &session {
-            let hook_session = Session::from(session);
             for hook in self.hooks() {
                 if hook
-                    .before_delete_session(&hook_session, &hook_context)
+                    .before_delete_session(session, &hook_context)
                     .await?
                     .is_cancelled()
                 {
@@ -139,10 +136,8 @@ impl<S: AuthSchema> AuthStore<S> {
             .await
             .map_err(map_db_err)?;
         if let Some(session) = &session {
-            let hook_session = Session::from(session);
             for hook in self.hooks() {
-                hook.after_delete_session(&hook_session, &hook_context)
-                    .await?;
+                hook.after_delete_session(session, &hook_context).await?;
             }
         }
         Ok(())

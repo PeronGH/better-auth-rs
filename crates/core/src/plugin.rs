@@ -14,11 +14,11 @@ use crate::store::AuthStore;
 use crate::types::{AuthRequest, AuthResponse, HttpMethod};
 
 type MetadataMap = HashMap<String, serde_json::Value>;
-type DatabaseHookList = Vec<Arc<dyn DatabaseHooks>>;
+type DatabaseHookList<S> = Vec<Arc<dyn DatabaseHooks<S>>>;
 
-pub struct AuthInitParts {
+pub struct AuthInitParts<S: AuthSchema> {
     pub metadata: MetadataMap,
-    pub database_hooks: DatabaseHookList,
+    pub database_hooks: DatabaseHookList<S>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
 }
 
@@ -182,7 +182,7 @@ pub struct AuthInitContext<S: AuthSchema> {
     pub database: Arc<AuthStore<S>>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
     pub metadata: MetadataMap,
-    database_hooks: DatabaseHookList,
+    database_hooks: DatabaseHookList<S>,
 }
 
 /// Context passed to plugin methods.
@@ -243,11 +243,11 @@ impl<S: AuthSchema> AuthInitContext<S> {
         self.metadata.get(key)
     }
 
-    pub fn register_database_hook<H: DatabaseHooks + 'static>(&mut self, hook: H) {
+    pub fn register_database_hook<H: DatabaseHooks<S> + 'static>(&mut self, hook: H) {
         self.database_hooks.push(Arc::new(hook));
     }
 
-    pub fn into_parts(self) -> AuthInitParts {
+    pub fn into_parts(self) -> AuthInitParts<S> {
         AuthInitParts {
             metadata: self.metadata,
             database_hooks: self.database_hooks,

@@ -3,9 +3,10 @@ use sea_orm::{DatabaseConnection, DatabaseTransaction};
 
 use crate::config::AuthConfig;
 use crate::error::AuthResult;
+use crate::schema::AuthSchema;
 use crate::types::{
-    Account, AuthRequest, CreateAccount, CreateSession, CreateUser, CreateVerification, HttpMethod,
-    RequestMeta, Session, UpdateAccount, UpdateUser, User, Verification,
+    AuthRequest, CreateAccount, CreateSession, CreateUser, CreateVerification, HttpMethod,
+    RequestMeta, UpdateAccount, UpdateUser,
 };
 
 /// Control flow returned by database `before_*` hooks.
@@ -85,7 +86,7 @@ pub(crate) fn current_request_hook_context() -> Option<RequestHookContext> {
 /// from a `before_*` hook aborts that write without running the main query or
 /// the corresponding `after_*` hooks.
 #[async_trait]
-pub trait DatabaseHooks: Send + Sync {
+pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     async fn before_create_user(
         &self,
         user: &mut CreateUser,
@@ -97,7 +98,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn after_create_user(
         &self,
-        user: &User,
+        user: &S::User,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<()> {
         let _ = (user, ctx);
@@ -116,7 +117,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn after_update_user(
         &self,
-        user: &User,
+        user: &S::User,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<()> {
         let _ = (user, ctx);
@@ -125,7 +126,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn before_delete_user(
         &self,
-        user: &User,
+        user: &S::User,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<HookControl> {
         let _ = (user, ctx);
@@ -134,7 +135,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn after_delete_user(
         &self,
-        user: &User,
+        user: &S::User,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<()> {
         let _ = (user, ctx);
@@ -152,7 +153,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn after_create_session(
         &self,
-        session: &Session,
+        session: &S::Session,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<()> {
         let _ = (session, ctx);
@@ -161,7 +162,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn before_delete_session(
         &self,
-        session: &Session,
+        session: &S::Session,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<HookControl> {
         let _ = (session, ctx);
@@ -170,7 +171,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn after_delete_session(
         &self,
-        session: &Session,
+        session: &S::Session,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<()> {
         let _ = (session, ctx);
@@ -188,7 +189,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn after_create_account(
         &self,
-        account: &Account,
+        account: &S::Account,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<()> {
         let _ = (account, ctx);
@@ -207,7 +208,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn after_update_account(
         &self,
-        account: &Account,
+        account: &S::Account,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<()> {
         let _ = (account, ctx);
@@ -216,7 +217,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn before_delete_account(
         &self,
-        account: &Account,
+        account: &S::Account,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<HookControl> {
         let _ = (account, ctx);
@@ -225,7 +226,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn after_delete_account(
         &self,
-        account: &Account,
+        account: &S::Account,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<()> {
         let _ = (account, ctx);
@@ -243,7 +244,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn after_create_verification(
         &self,
-        verification: &Verification,
+        verification: &S::Verification,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<()> {
         let _ = (verification, ctx);
@@ -252,7 +253,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn before_delete_verification(
         &self,
-        verification: &Verification,
+        verification: &S::Verification,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<HookControl> {
         let _ = (verification, ctx);
@@ -261,7 +262,7 @@ pub trait DatabaseHooks: Send + Sync {
 
     async fn after_delete_verification(
         &self,
-        verification: &Verification,
+        verification: &S::Verification,
         ctx: &DatabaseHookContext<'_>,
     ) -> AuthResult<()> {
         let _ = (verification, ctx);

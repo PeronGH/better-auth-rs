@@ -42,7 +42,7 @@ use crate::schema::AuthSchema;
 pub struct AuthStore<S: AuthSchema> {
     config: Arc<AuthConfig>,
     db: DatabaseConnection,
-    hooks: Vec<Arc<dyn DatabaseHooks>>,
+    hooks: Vec<Arc<dyn DatabaseHooks<S>>>,
     _schema: PhantomData<S>,
 }
 
@@ -56,7 +56,7 @@ impl<S: AuthSchema> AuthStore<S> {
         }
     }
 
-    pub fn with_hooks(mut self, hooks: Vec<Arc<dyn DatabaseHooks>>) -> Self {
+    pub fn with_hooks(mut self, hooks: Vec<Arc<dyn DatabaseHooks<S>>>) -> Self {
         self.hooks = hooks;
         self
     }
@@ -69,7 +69,7 @@ impl<S: AuthSchema> AuthStore<S> {
         &self.config
     }
 
-    pub(crate) fn hooks(&self) -> &[Arc<dyn DatabaseHooks>] {
+    pub(crate) fn hooks(&self) -> &[Arc<dyn DatabaseHooks<S>>] {
         &self.hooks
     }
 
