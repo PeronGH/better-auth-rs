@@ -1,6 +1,7 @@
 use chrono::{Duration, Utc};
 
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
+use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthContext, AuthError, AuthResult, ListUsersParams, PASSWORD_HASH_KEY};
 use better_auth_core::{CreateAccount, CreateSession, UpdateUser};
 
@@ -16,7 +17,7 @@ use super::types::*;
 pub(crate) async fn set_role_core(
     body: &SetRoleRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<UserResponse<better_auth_core::User>> {
+) -> AuthResult<UserResponse<UserView>> {
     let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
@@ -30,7 +31,7 @@ pub(crate) async fn set_role_core(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
     Ok(UserResponse {
-        user: better_auth_core::User::from(&updated_user),
+        user: UserView::from(&updated_user),
     })
 }
 
@@ -38,7 +39,7 @@ pub(crate) async fn create_user_core(
     body: &CreateUserRequest,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<UserResponse<better_auth_core::User>> {
+) -> AuthResult<UserResponse<UserView>> {
     if ctx.database.get_user_by_email(&body.email).await?.is_some() {
         return Err(AuthError::conflict("A user with this email already exists"));
     }
@@ -99,7 +100,7 @@ pub(crate) async fn create_user_core(
         .await?;
 
     Ok(UserResponse {
-        user: better_auth_core::User::from(&user),
+        user: UserView::from(&user),
     })
 }
 
@@ -107,7 +108,7 @@ pub(crate) async fn list_users_core(
     query: &ListUsersQueryParams,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<ListUsersResponse<better_auth_core::User>> {
+) -> AuthResult<ListUsersResponse<UserView>> {
     let limit = query
         .limit
         .unwrap_or(config.default_page_limit)
@@ -129,7 +130,7 @@ pub(crate) async fn list_users_core(
 
     let (users, total) = ctx.database.list_users(params).await?;
     Ok(ListUsersResponse {
-        users: users.iter().map(better_auth_core::User::from).collect(),
+        users: users.iter().map(UserView::from).collect(),
         total,
         limit,
         offset,
@@ -139,7 +140,7 @@ pub(crate) async fn list_users_core(
 pub(crate) async fn list_user_sessions_core(
     body: &UserIdRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<ListSessionsResponse<better_auth_core::Session>> {
+) -> AuthResult<ListSessionsResponse<SessionView>> {
     let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
@@ -149,10 +150,7 @@ pub(crate) async fn list_user_sessions_core(
     let session_manager = ctx.session_manager();
     let sessions = session_manager.list_user_sessions(&body.user_id).await?;
     Ok(ListSessionsResponse {
-        sessions: sessions
-            .iter()
-            .map(better_auth_core::Session::from)
-            .collect(),
+        sessions: sessions.iter().map(SessionView::from).collect(),
     })
 }
 
@@ -161,7 +159,7 @@ pub(crate) async fn ban_user_core(
     admin_user_id: &str,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<UserResponse<better_auth_core::User>> {
+) -> AuthResult<UserResponse<UserView>> {
     if body.user_id == admin_user_id {
         return Err(AuthError::bad_request("You cannot ban yourself"));
     }
@@ -196,14 +194,14 @@ pub(crate) async fn ban_user_core(
         .await?;
 
     Ok(UserResponse {
-        user: better_auth_core::User::from(&updated_user),
+        user: UserView::from(&updated_user),
     })
 }
 
 pub(crate) async fn unban_user_core(
     body: &UserIdRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<UserResponse<better_auth_core::User>> {
+) -> AuthResult<UserResponse<UserView>> {
     let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
@@ -219,7 +217,7 @@ pub(crate) async fn unban_user_core(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
     Ok(UserResponse {
-        user: better_auth_core::User::from(&updated_user),
+        user: UserView::from(&updated_user),
     })
 }
 
@@ -230,7 +228,7 @@ pub(crate) async fn impersonate_user_core(
     user_agent: Option<&str>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
-    SessionUserResponse<better_auth_core::Session, better_auth_core::User>,
+    SessionUserResponse<SessionView, UserView>,
     String,
 )> {
     if body.user_id == admin_user_id {
@@ -256,8 +254,8 @@ pub(crate) async fn impersonate_user_core(
     let session = ctx.database.create_session(create_session).await?;
     let token = session.token().to_string();
     let response = SessionUserResponse {
-        session: better_auth_core::Session::from(&session),
-        user: better_auth_core::User::from(&target),
+        session: SessionView::from(&session),
+        user: UserView::from(&target),
     };
 
     Ok((response, token))
@@ -270,7 +268,7 @@ pub(crate) async fn stop_impersonating_core(
     user_agent: Option<&str>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
-    SessionUserResponse<better_auth_core::Session, better_auth_core::User>,
+    SessionUserResponse<SessionView, UserView>,
     String,
 )> {
     let admin_id = session
@@ -299,8 +297,8 @@ pub(crate) async fn stop_impersonating_core(
     let admin_session = ctx.database.create_session(create_session).await?;
     let token = admin_session.token().to_string();
     let response = SessionUserResponse {
-        session: better_auth_core::Session::from(&admin_session),
-        user: better_auth_core::User::from(&admin_user),
+        session: SessionView::from(&admin_session),
+        user: UserView::from(&admin_user),
     };
 
     Ok((response, token))
