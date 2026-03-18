@@ -227,7 +227,7 @@ where
                 return Ok(VerifyEmailResult::Json {
                     body: serde_json::json!({
                         "status": true,
-                        "user": better_auth_core::User::from(&updated_user),
+                        "user": UserView::from(&updated_user),
                     }),
                     session_token: Some(session.token().to_string()),
                 });

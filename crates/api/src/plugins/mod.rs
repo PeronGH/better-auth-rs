@@ -26,9 +26,9 @@ pub(crate) mod test_helpers {
 
     use better_auth_core::config::AuthConfig;
     use better_auth_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+    use better_auth_core::wire::{SessionView, UserView};
     use better_auth_core::{
-        AuthContext, AuthRequest, AuthStore, CreateSession, CreateUser, HttpMethod, Session, User,
-        sea_orm::Database,
+        AuthContext, AuthRequest, AuthStore, CreateSession, CreateUser, HttpMethod, sea_orm::Database,
     };
     use chrono::{Duration, Utc};
 
@@ -74,16 +74,16 @@ pub(crate) mod test_helpers {
     pub async fn create_user(
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         create_user: CreateUser,
-    ) -> User {
+    ) -> UserView {
         let user = ctx.database.create_user(create_user).await.unwrap();
-        User::from(&user)
+        UserView::from(&user)
     }
 
     pub async fn create_session(
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         user_id: String,
         expires_in: Duration,
-    ) -> Session {
+    ) -> SessionView {
         let create_session = CreateSession {
             user_id,
             expires_at: Utc::now() + expires_in,
@@ -93,14 +93,14 @@ pub(crate) mod test_helpers {
             active_organization_id: None,
         };
         let session = ctx.database.create_session(create_session).await.unwrap();
-        Session::from(&session)
+        SessionView::from(&session)
     }
 
     pub async fn create_user_and_session(
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         user_data: CreateUser,
         session_expires_in: Duration,
-    ) -> (User, Session) {
+    ) -> (UserView, SessionView) {
         let user = create_user(ctx, user_data).await;
         let session = create_session(ctx, user.id.clone(), session_expires_in).await;
         (user, session)
@@ -109,7 +109,7 @@ pub(crate) mod test_helpers {
     pub async fn create_test_context_with_user(
         create_user: CreateUser,
         session_expires_in: Duration,
-    ) -> (AuthContext<BundledSchema>, User, Session) {
+    ) -> (AuthContext<BundledSchema>, UserView, SessionView) {
         let ctx = create_test_context().await;
         let (user, session) = create_user_and_session(&ctx, create_user, session_expires_in).await;
         (ctx, user, session)

@@ -3,6 +3,7 @@
 //! Extracted to avoid duplicating common patterns across plugins (DRY).
 
 use better_auth_core::entity::{AuthAccount, AuthApiKey, AuthUser};
+use better_auth_core::types::Account;
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 
 /// Convert an `expiresIn` value (milliseconds from now) into an RFC 3339
@@ -50,7 +51,7 @@ pub async fn get_owned_api_key(
 pub async fn get_credential_account(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     user_id: &str,
-) -> AuthResult<Option<better_auth_core::Account>> {
+) -> AuthResult<Option<Account>> {
     Ok(ctx
         .database
         .get_user_accounts(user_id)

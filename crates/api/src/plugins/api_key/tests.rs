@@ -1,7 +1,6 @@
 use super::*;
-use better_auth_core::{
-    AuthContext, AuthPlugin, CreateSession, CreateUser, HttpMethod, Session, User,
-};
+use better_auth_core::wire::{SessionView, UserView};
+use better_auth_core::{AuthContext, AuthPlugin, CreateSession, CreateUser, HttpMethod};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,7 +8,7 @@ use std::sync::Arc;
 type TestSchema =
     better_auth_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
 
-async fn create_test_context_with_user() -> (AuthContext<TestSchema>, User, Session) {
+async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, SessionView) {
     let config = Arc::new(better_auth_core::AuthConfig::new(
         "test-secret-key-at-least-32-chars-long",
     ));
@@ -24,7 +23,7 @@ async fn create_test_context_with_user() -> (AuthContext<TestSchema>, User, Sess
         )
         .await
         .unwrap();
-    let wire_user = User::from(&user);
+    let wire_user = UserView::from(&user);
 
     let session = database
         .create_session(CreateSession {
@@ -37,7 +36,7 @@ async fn create_test_context_with_user() -> (AuthContext<TestSchema>, User, Sess
         })
         .await
         .unwrap();
-    let wire_session = Session::from(&session);
+    let wire_session = SessionView::from(&session);
 
     (ctx, wire_user, wire_session)
 }
@@ -45,7 +44,7 @@ async fn create_test_context_with_user() -> (AuthContext<TestSchema>, User, Sess
 async fn create_user_with_session(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     email: &str,
-) -> (User, Session) {
+) -> (UserView, SessionView) {
     let user = ctx
         .database
         .create_user(
@@ -55,7 +54,7 @@ async fn create_user_with_session(
         )
         .await
         .unwrap();
-    let wire_user = User::from(&user);
+    let wire_user = UserView::from(&user);
 
     let session = ctx
         .database
@@ -69,7 +68,7 @@ async fn create_user_with_session(
         })
         .await
         .unwrap();
-    let wire_session = Session::from(&session);
+    let wire_session = SessionView::from(&session);
 
     (wire_user, wire_session)
 }
