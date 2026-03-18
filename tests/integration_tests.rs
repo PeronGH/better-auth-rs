@@ -14,7 +14,7 @@ mod compat;
 
 use better_auth::BetterAuth;
 use better_auth::store::sea_orm::Database;
-use better_auth_core::AuthStore;
+use better_auth_core::{AuthStore, entity::AuthUser};
 use compat::helpers::*;
 use std::sync::Arc;
 
@@ -2296,15 +2296,14 @@ async fn test_get_user_by_username_adapter() {
         .with_name("DB Test")
         .with_username("db_user");
 
-    let user: better_auth_core::User = db.create_user(create).await.unwrap();
+    let user = db.create_user(create).await.unwrap();
 
     // Lookup by username
-    let found: Option<better_auth_core::User> = db.get_user_by_username("db_user").await.unwrap();
+    let found = db.get_user_by_username("db_user").await.unwrap();
     assert!(found.is_some());
-    assert_eq!(found.unwrap().id, user.id);
+    assert_eq!(found.unwrap().id(), user.id());
 
     // Lookup nonexistent
-    let not_found: Option<better_auth_core::User> =
-        db.get_user_by_username("no_user").await.unwrap();
+    let not_found = db.get_user_by_username("no_user").await.unwrap();
     assert!(not_found.is_none());
 }

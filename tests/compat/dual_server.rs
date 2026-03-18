@@ -17,6 +17,10 @@ use super::helpers::{
     get_with_auth, post_json, take_reset_password_token, unique_email,
 };
 
+type TestSchema =
+    better_auth::__private_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+type TestAuth = BetterAuth<TestSchema>;
+
 pub const REFERENCE_PORT: u16 = 3100;
 pub const REFERENCE_BASE: &str = "http://localhost:3100/api/auth";
 
@@ -437,11 +441,11 @@ async fn post_control_json(url: &str, body: &Value) -> Result<(), String> {
     }
 }
 
-pub async fn create_default_test_auth() -> BetterAuth {
+pub async fn create_default_test_auth() -> TestAuth {
     create_test_auth().await
 }
 
-pub async fn create_test_auth_with_reset_sender(mode: ResetSenderMode) -> BetterAuth {
+pub async fn create_test_auth_with_reset_sender(mode: ResetSenderMode) -> TestAuth {
     create_test_auth_with_options(TestAuthOptions {
         reset_sender_mode: mode,
     })
@@ -449,7 +453,7 @@ pub async fn create_test_auth_with_reset_sender(mode: ResetSenderMode) -> Better
 }
 
 pub async fn seed_rust_reset_password_token(
-    auth: &BetterAuth,
+    auth: &TestAuth,
     email: &str,
     token: &str,
     expires_at: DateTime<Utc>,
@@ -474,7 +478,7 @@ pub async fn seed_rust_reset_password_token(
         .unwrap_or_else(|error| panic!("reset-password verification should be created: {error}"));
 }
 
-pub async fn seed_rust_oauth_account(auth: &BetterAuth, user_id: &str, seed: &OAuthSeed) {
+pub async fn seed_rust_oauth_account(auth: &TestAuth, user_id: &str, seed: &OAuthSeed) {
     let access_token_expires_at = seed
         .access_token_expires_at
         .as_deref()
@@ -511,7 +515,7 @@ fn parse_rfc3339(value: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
 }
 
 pub async fn signup_on_both(
-    auth: &BetterAuth,
+    auth: &TestAuth,
     ref_client: &mut RefClient,
     prefix: &str,
 ) -> (String, String, String) {
@@ -546,7 +550,7 @@ pub async fn signup_on_both(
 }
 
 pub async fn request_reset_on_both(
-    auth: &BetterAuth,
+    auth: &TestAuth,
     ref_client: &mut RefClient,
     email: &str,
 ) -> (String, String) {
@@ -568,7 +572,7 @@ pub async fn request_reset_on_both(
     (rust_token, reference_token)
 }
 
-pub async fn rust_send(auth: &BetterAuth, req: better_auth::prelude::AuthRequest) -> FullResponse {
+pub async fn rust_send(auth: &TestAuth, req: better_auth::prelude::AuthRequest) -> FullResponse {
     let resp = auth
         .handle_request(req)
         .await
@@ -936,7 +940,7 @@ pub fn expect_status(response: &FullResponse, status: StatusCode, context: &str)
     );
 }
 
-pub async fn get_session_status(auth: &BetterAuth, token: &str) -> u16 {
+pub async fn get_session_status(auth: &TestAuth, token: &str) -> u16 {
     rust_send(auth, get_with_auth("/get-session", token))
         .await
         .status
