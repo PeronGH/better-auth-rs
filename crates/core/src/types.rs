@@ -25,7 +25,7 @@ pub use super::types_org::{
 /// behavior where these fields only appear when the corresponding plugin is
 /// enabled.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct User {
+pub(crate) struct User {
     pub id: String,
     pub name: Option<String>,
     pub email: Option<String>,
@@ -58,7 +58,7 @@ pub struct User {
 
 /// Session information - matches OpenAPI schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Session {
+pub(crate) struct Session {
     pub id: String,
     #[serde(rename = "expiresAt")]
     pub expires_at: DateTime<Utc>,
@@ -88,7 +88,7 @@ pub struct Session {
 
 /// Account linking (for OAuth providers) - matches OpenAPI schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Account {
+pub(crate) struct Account {
     pub id: String,
     #[serde(rename = "accountId")]
     pub account_id: String,
@@ -116,7 +116,7 @@ pub struct Account {
 
 /// Verification token - matches OpenAPI schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Verification {
+pub(crate) struct Verification {
     pub id: String,
     pub identifier: String,
     pub value: String,

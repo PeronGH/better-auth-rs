@@ -9,7 +9,7 @@ pub use better_auth_core::entity::{
     AuthSession, AuthTwoFactor, AuthUser, AuthVerification, MemberUserView,
 };
 pub use better_auth_core::types::{
-    Account, ApiKey, AuthRequest, AuthResponse, CreateAccount, CreateApiKey, CreateInvitation,
+    ApiKey, AuthRequest, AuthResponse, CreateAccount, CreateApiKey, CreateInvitation,
     CreateMember, CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
     CreateVerification, Headers, HttpMethod, Invitation, InvitationStatus, ListUsersParams, Member,
     Organization, Passkey, RequestMeta, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization,
