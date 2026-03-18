@@ -106,8 +106,7 @@ impl<S: AuthSchema> AuthStore<S> {
             .filter(<S::Verification as AuthVerificationModel>::id_column().eq(id))
             .one(self.connection())
             .await
-            .map_err(map_db_err)?
-            ;
+            .map_err(map_db_err)?;
         let hook_context = self.hook_context(None);
         if let Some(verification) = &verification {
             for hook in self.hooks() {

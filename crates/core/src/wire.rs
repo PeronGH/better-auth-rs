@@ -187,70 +187,159 @@ impl<T: AuthVerification> From<&T> for VerificationView {
 }
 
 impl AuthUser for UserView {
-    fn id(&self) -> &str { &self.id }
-    fn email(&self) -> Option<&str> { self.email.as_deref() }
-    fn name(&self) -> Option<&str> { self.name.as_deref() }
-    fn email_verified(&self) -> bool { self.email_verified }
-    fn image(&self) -> Option<&str> { self.image.as_deref() }
-    fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
-    fn username(&self) -> Option<&str> { self.username.as_deref() }
-    fn display_username(&self) -> Option<&str> { self.display_username.as_deref() }
-    fn two_factor_enabled(&self) -> bool { self.two_factor_enabled }
-    fn role(&self) -> Option<&str> { self.role.as_deref() }
-    fn banned(&self) -> bool { self.banned }
-    fn ban_reason(&self) -> Option<&str> { self.ban_reason.as_deref() }
-    fn ban_expires(&self) -> Option<DateTime<Utc>> { self.ban_expires }
-    fn metadata(&self) -> &serde_json::Value { &self.metadata }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn email(&self) -> Option<&str> {
+        self.email.as_deref()
+    }
+    fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+    fn email_verified(&self) -> bool {
+        self.email_verified
+    }
+    fn image(&self) -> Option<&str> {
+        self.image.as_deref()
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+    fn username(&self) -> Option<&str> {
+        self.username.as_deref()
+    }
+    fn display_username(&self) -> Option<&str> {
+        self.display_username.as_deref()
+    }
+    fn two_factor_enabled(&self) -> bool {
+        self.two_factor_enabled
+    }
+    fn role(&self) -> Option<&str> {
+        self.role.as_deref()
+    }
+    fn banned(&self) -> bool {
+        self.banned
+    }
+    fn ban_reason(&self) -> Option<&str> {
+        self.ban_reason.as_deref()
+    }
+    fn ban_expires(&self) -> Option<DateTime<Utc>> {
+        self.ban_expires
+    }
+    fn metadata(&self) -> &serde_json::Value {
+        &self.metadata
+    }
 }
 
 impl AuthSession for SessionView {
-    fn id(&self) -> &str { &self.id }
-    fn expires_at(&self) -> DateTime<Utc> { self.expires_at }
-    fn token(&self) -> &str { &self.token }
-    fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
-    fn ip_address(&self) -> Option<&str> { self.ip_address.as_deref() }
-    fn user_agent(&self) -> Option<&str> { self.user_agent.as_deref() }
-    fn user_id(&self) -> &str { &self.user_id }
-    fn impersonated_by(&self) -> Option<&str> { self.impersonated_by.as_deref() }
-    fn active_organization_id(&self) -> Option<&str> { self.active_organization_id.as_deref() }
-    fn active(&self) -> bool { self.active }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn expires_at(&self) -> DateTime<Utc> {
+        self.expires_at
+    }
+    fn token(&self) -> &str {
+        &self.token
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+    fn ip_address(&self) -> Option<&str> {
+        self.ip_address.as_deref()
+    }
+    fn user_agent(&self) -> Option<&str> {
+        self.user_agent.as_deref()
+    }
+    fn user_id(&self) -> &str {
+        &self.user_id
+    }
+    fn impersonated_by(&self) -> Option<&str> {
+        self.impersonated_by.as_deref()
+    }
+    fn active_organization_id(&self) -> Option<&str> {
+        self.active_organization_id.as_deref()
+    }
+    fn active(&self) -> bool {
+        self.active
+    }
 }
 
 impl AuthAccount for AccountView {
-    fn id(&self) -> &str { &self.id }
-    fn account_id(&self) -> &str { &self.account_id }
-    fn provider_id(&self) -> &str { &self.provider_id }
-    fn user_id(&self) -> &str { &self.user_id }
-    fn access_token(&self) -> Option<&str> { self.access_token.as_deref() }
-    fn refresh_token(&self) -> Option<&str> { self.refresh_token.as_deref() }
-    fn id_token(&self) -> Option<&str> { self.id_token.as_deref() }
-    fn access_token_expires_at(&self) -> Option<DateTime<Utc>> { self.access_token_expires_at }
-    fn refresh_token_expires_at(&self) -> Option<DateTime<Utc>> { self.refresh_token_expires_at }
-    fn scope(&self) -> Option<&str> { self.scope.as_deref() }
-    fn password(&self) -> Option<&str> { self.password.as_deref() }
-    fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn account_id(&self) -> &str {
+        &self.account_id
+    }
+    fn provider_id(&self) -> &str {
+        &self.provider_id
+    }
+    fn user_id(&self) -> &str {
+        &self.user_id
+    }
+    fn access_token(&self) -> Option<&str> {
+        self.access_token.as_deref()
+    }
+    fn refresh_token(&self) -> Option<&str> {
+        self.refresh_token.as_deref()
+    }
+    fn id_token(&self) -> Option<&str> {
+        self.id_token.as_deref()
+    }
+    fn access_token_expires_at(&self) -> Option<DateTime<Utc>> {
+        self.access_token_expires_at
+    }
+    fn refresh_token_expires_at(&self) -> Option<DateTime<Utc>> {
+        self.refresh_token_expires_at
+    }
+    fn scope(&self) -> Option<&str> {
+        self.scope.as_deref()
+    }
+    fn password(&self) -> Option<&str> {
+        self.password.as_deref()
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 }
 
 impl AuthVerification for VerificationView {
-    fn id(&self) -> &str { &self.id }
-    fn identifier(&self) -> &str { &self.identifier }
-    fn value(&self) -> &str { &self.value }
-    fn expires_at(&self) -> DateTime<Utc> { self.expires_at }
-    fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn identifier(&self) -> &str {
+        &self.identifier
+    }
+    fn value(&self) -> &str {
+        &self.value
+    }
+    fn expires_at(&self) -> DateTime<Utc> {
+        self.expires_at
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Session, User};
 
     #[test]
     fn user_view_serializes_camel_case() {
-        let user = User {
+        let user = UserView {
             id: "user-1".to_string(),
             name: Some("Ada".to_string()),
             email: Some("ada@example.com".to_string()),
@@ -276,7 +365,7 @@ mod tests {
 
     #[test]
     fn session_view_serializes_camel_case() {
-        let session = Session {
+        let session = SessionView {
             id: "session-1".to_string(),
             expires_at: Utc::now(),
             token: "token".to_string(),
@@ -290,8 +379,8 @@ mod tests {
             active: true,
         };
 
-        let json = serde_json::to_value(SessionView::from(&session))
-            .expect("serialize session view");
+        let json =
+            serde_json::to_value(SessionView::from(&session)).expect("serialize session view");
         assert_eq!(json["expiresAt"].is_string(), true);
         assert_eq!(json["ipAddress"], "127.0.0.1");
         assert_eq!(json["activeOrganizationId"], "org-1");

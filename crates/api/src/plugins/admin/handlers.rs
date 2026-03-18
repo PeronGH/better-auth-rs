@@ -227,10 +227,7 @@ pub(crate) async fn impersonate_user_core(
     ip_address: Option<&str>,
     user_agent: Option<&str>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(
-    SessionUserResponse<SessionView, UserView>,
-    String,
-)> {
+) -> AuthResult<(SessionUserResponse<SessionView, UserView>, String)> {
     if body.user_id == admin_user_id {
         return Err(AuthError::bad_request("Cannot impersonate yourself"));
     }
@@ -267,10 +264,7 @@ pub(crate) async fn stop_impersonating_core(
     ip_address: Option<&str>,
     user_agent: Option<&str>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(
-    SessionUserResponse<SessionView, UserView>,
-    String,
-)> {
+) -> AuthResult<(SessionUserResponse<SessionView, UserView>, String)> {
     let admin_id = session
         .impersonated_by()
         .ok_or_else(|| AuthError::bad_request("Current session is not an impersonation session"))?

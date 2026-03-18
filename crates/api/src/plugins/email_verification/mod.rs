@@ -4,10 +4,10 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use better_auth_core::AuthUser;
+use better_auth_core::wire::UserView;
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
-use better_auth_core::wire::UserView;
-use better_auth_core::AuthUser;
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 

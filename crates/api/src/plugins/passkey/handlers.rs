@@ -4,9 +4,9 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use rand::RngCore;
 
 use better_auth_core::entity::{AuthPasskey, AuthSession, AuthUser};
+use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthContext, CreatePasskey, CreateVerification};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::wire::{SessionView, UserView};
 
 use crate::plugins::StatusResponse;
 
@@ -330,10 +330,7 @@ pub(crate) async fn verify_authentication_core(
     ip_address: Option<String>,
     user_agent: Option<String>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(
-    SessionUserResponse<UserView, SessionView>,
-    String,
-)> {
+) -> AuthResult<(SessionUserResponse<UserView, SessionView>, String)> {
     ensure_insecure_verification_enabled(config)?;
 
     let resp = &body.response;

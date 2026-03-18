@@ -28,7 +28,8 @@ pub(crate) mod test_helpers {
     use better_auth_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
     use better_auth_core::wire::{SessionView, UserView};
     use better_auth_core::{
-        AuthContext, AuthRequest, AuthStore, CreateSession, CreateUser, HttpMethod, sea_orm::Database,
+        AuthContext, AuthRequest, AuthStore, CreateSession, CreateUser, HttpMethod,
+        sea_orm::Database,
     };
     use chrono::{Duration, Utc};
 

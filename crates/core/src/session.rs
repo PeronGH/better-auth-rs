@@ -217,6 +217,7 @@ mod tests {
     use crate::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
     use crate::types::AuthRequest;
     use crate::types::HttpMethod;
+    use crate::wire::SessionView;
     use chrono::Duration;
 
     fn test_config() -> Arc<AuthConfig> {
@@ -332,7 +333,7 @@ mod tests {
         let mgr = SessionManager::new(Arc::new(config), runtime.block_on(test_database()));
 
         // A session created "now" is fresh within a 10-minute window.
-        let session = crate::types::Session {
+        let session = SessionView {
             id: "s1".into(),
             expires_at: Utc::now() + Duration::hours(1),
             token: "tok".into(),
@@ -356,7 +357,7 @@ mod tests {
         let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
         let mgr = SessionManager::new(Arc::new(config), runtime.block_on(test_database()));
 
-        let session = crate::types::Session {
+        let session = SessionView {
             id: "s1".into(),
             expires_at: Utc::now() + Duration::hours(1),
             token: "tok".into(),
@@ -376,7 +377,7 @@ mod tests {
     #[test]
     fn session_never_fresh_when_no_fresh_age() {
         let mgr = test_manager(); // default: fresh_age = None
-        let session = crate::types::Session {
+        let session = SessionView {
             id: "s1".into(),
             expires_at: Utc::now() + Duration::hours(1),
             token: "tok".into(),

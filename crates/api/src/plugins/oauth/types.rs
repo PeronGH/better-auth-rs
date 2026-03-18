@@ -1,6 +1,6 @@
+use better_auth_core::wire::UserView;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
-use better_auth_core::wire::UserView;
 
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct SocialSignInRequest {

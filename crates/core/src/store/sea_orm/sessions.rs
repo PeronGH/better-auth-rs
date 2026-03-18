@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::{AuthSchema, AuthSessionModel};
-use crate::types::{CreateSession, Session};
+use crate::types::CreateSession;
 
 use super::{AuthStore, cancelled_by_hook, map_db_err};
 

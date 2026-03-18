@@ -1,8 +1,8 @@
 use jsonwebtoken::errors::ErrorKind;
 
+use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthContext, AuthError, AuthResult, UpdateUser};
 use better_auth_core::{AuthSession, AuthUser};
-use better_auth_core::wire::{SessionView, UserView};
 
 use super::token::{create_email_verification_token, decode_email_verification_token};
 use super::types::*;
@@ -104,8 +104,8 @@ where
     U: AuthUser,
     S: AuthSession,
 {
-    let current_session = current_session
-        .map(|(user, session)| (UserView::from(&user), SessionView::from(&session)));
+    let current_session =
+        current_session.map(|(user, session)| (UserView::from(&user), SessionView::from(&session)));
 
     let claims = match decode_email_verification_token(&ctx.config.secret, &query.token) {
         Ok(claims) => claims,
@@ -190,15 +190,15 @@ where
             }
             Some("change-email-verification") => {
                 let (_session_user, session): (UserView, SessionView) = match current_session {
-                        Some((user, session)) => (user, session),
-                        None => {
-                            let session = ctx
-                                .session_manager()
-                                .create_session(&user, ip_address, user_agent)
-                                .await?;
-                            (UserView::from(&user), SessionView::from(&session))
-                        }
-                    };
+                    Some((user, session)) => (user, session),
+                    None => {
+                        let session = ctx
+                            .session_manager()
+                            .create_session(&user, ip_address, user_agent)
+                            .await?;
+                        (UserView::from(&user), SessionView::from(&session))
+                    }
+                };
 
                 let updated_user = ctx
                     .database

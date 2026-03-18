@@ -139,7 +139,8 @@ impl<S: AuthSchema> AuthStore<S> {
             .await
             .map_err(map_db_err)?;
         for hook in self.hooks() {
-            hook.after_delete_account(&account_model, &hook_context).await?;
+            hook.after_delete_account(&account_model, &hook_context)
+                .await?;
         }
         Ok(())
     }

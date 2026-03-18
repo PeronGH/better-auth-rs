@@ -3,11 +3,11 @@ use url::Url;
 use uuid::Uuid;
 
 use better_auth_core::utils::password::{self as password_utils};
+use better_auth_core::wire::UserView;
 use better_auth_core::{
     AuthAccount, AuthContext, AuthError, AuthResult, AuthSession, AuthUser, AuthVerification,
     CreateAccount, RequestMeta, UpdateAccount, extract_origin,
 };
-use better_auth_core::wire::UserView;
 
 use crate::plugins::helpers::{get_credential_account, get_credential_password_hash};
 
@@ -218,10 +218,7 @@ pub(crate) async fn change_password_core(
     config: &PasswordManagementConfig,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(
-    ChangePasswordResponse<UserView>,
-    Option<String>,
-)> {
+) -> AuthResult<(ChangePasswordResponse<UserView>, Option<String>)> {
     if config.require_current_password {
         let stored_hash = get_credential_password_hash(ctx, user)
             .await?

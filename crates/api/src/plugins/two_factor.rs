@@ -3,11 +3,11 @@ use totp_rs::{Algorithm, Secret, TOTP};
 use validator::Validate;
 
 use better_auth_core::entity::{AuthSession, AuthTwoFactor, AuthUser, AuthVerification};
+use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{
     AuthRequest, AuthResponse, CreateTwoFactor, CreateVerification, UpdateUser,
 };
-use better_auth_core::wire::{SessionView, UserView};
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 

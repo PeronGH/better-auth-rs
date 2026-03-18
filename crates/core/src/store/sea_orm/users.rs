@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::{AuthSchema, AuthUserModel};
-use crate::types::{CreateUser, ListUsersParams, UpdateUser, User};
+use crate::types::{CreateUser, ListUsersParams, UpdateUser};
 use crate::utils::email::{normalize_optional_user_email, normalize_user_email};
 
 use super::{AuthStore, cancelled_by_hook, map_db_err};
