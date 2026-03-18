@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post},
 };
 use better_auth::integrations::axum::AxumIntegration;
-use better_auth::prelude::{AuthAccount, AuthUser, CreateAccount, CreateVerification, User};
+use better_auth::prelude::{AuthAccount, AuthUser, CreateAccount, CreateVerification};
 use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, EmailVerificationPlugin, OAuthPlugin,
     PasswordManagementPlugin, SessionManagementPlugin, UserManagementPlugin,
@@ -16,13 +16,17 @@ use better_auth::plugins::{
     },
     password_management::SendResetPassword,
 };
-use better_auth::{AuthBuilder, AuthConfig, run_migrations, store::sea_orm::Database};
+use better_auth::wire::UserView;
+use better_auth::{AuthBuilder, AuthConfig, BetterAuth, store::sea_orm::Database};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
+
+type TestSchema =
+    better_auth::__private_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ResetPasswordMode {
@@ -146,7 +150,7 @@ struct CompatVerificationSender {
 impl SendVerificationEmail for CompatVerificationSender {
     async fn send(
         &self,
-        user: &User,
+        user: &UserView,
         url: &str,
         token: &str,
     ) -> better_auth::AuthResult<()> {
@@ -445,7 +449,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .password_min_length(8);
 
     let database = Database::connect("sqlite::memory:").await?;
-    run_migrations(&database).await?;
+    better_auth::__private_core::store::sea_orm::__private_test_support::migrator::run_migrations(
+        &database,
+    )
+    .await?;
 
     let reset_outbox = Arc::new(Mutex::new(HashMap::new()));
     let verification_outbox = Arc::new(Mutex::new(HashMap::new()));
@@ -457,7 +464,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let social_id_token_valid = Arc::new(Mutex::new(true));
 
     let auth = Arc::new(
-        AuthBuilder::new(config)
+        AuthBuilder::<TestSchema>::new(config)
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
