@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::error::AuthResult;
 use crate::schema::{AuthAccountModel, AuthSchema};
-use crate::types::{Account, CreateAccount, UpdateAccount};
+use crate::types::{CreateAccount, UpdateAccount};
 
 use super::{AuthStore, cancelled_by_hook, map_db_err};
 
@@ -17,7 +17,7 @@ impl<S: AuthSchema> AuthStore<S> {
         db: &C,
         tx: Option<&DatabaseTransaction>,
         mut create_account: CreateAccount,
-    ) -> AuthResult<Account>
+    ) -> AuthResult<S::Account>
     where
         C: ConnectionTrait,
     {
@@ -39,10 +39,10 @@ impl<S: AuthSchema> AuthStore<S> {
         for hook in self.hooks() {
             hook.after_create_account(&account, &hook_context).await?;
         }
-        Ok(Account::from(&account))
+        Ok(account)
     }
 
-    pub async fn create_account(&self, create_account: CreateAccount) -> AuthResult<Account> {
+    pub async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account> {
         self.create_account_with_connection(self.connection(), None, create_account)
             .await
     }
@@ -53,7 +53,7 @@ impl<S: AuthSchema> AuthStore<S> {
         &self,
         tx: &DatabaseTransaction,
         create_account: CreateAccount,
-    ) -> AuthResult<Account> {
+    ) -> AuthResult<S::Account> {
         self.create_account_with_connection(tx, Some(tx), create_account)
             .await
     }
@@ -62,27 +62,29 @@ impl<S: AuthSchema> AuthStore<S> {
         &self,
         provider: &str,
         provider_account_id: &str,
-    ) -> AuthResult<Option<Account>> {
+    ) -> AuthResult<Option<S::Account>> {
         <S::Account as AuthAccountModel>::Entity::find()
             .filter(<S::Account as AuthAccountModel>::provider_id_column().eq(provider))
             .filter(<S::Account as AuthAccountModel>::account_id_column().eq(provider_account_id))
             .one(self.connection())
             .await
-            .map(|model| model.map(|model| Account::from(&model)))
             .map_err(map_db_err)
     }
 
-    pub async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Account>> {
+    pub async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<S::Account>> {
         <S::Account as AuthAccountModel>::Entity::find()
             .filter(<S::Account as AuthAccountModel>::user_id_column().eq(user_id))
             .order_by_desc(<S::Account as AuthAccountModel>::created_at_column())
             .all(self.connection())
             .await
-            .map(|models| models.iter().map(Account::from).collect())
             .map_err(map_db_err)
     }
 
-    pub async fn update_account(&self, id: &str, mut update: UpdateAccount) -> AuthResult<Account> {
+    pub async fn update_account(
+        &self,
+        id: &str,
+        mut update: UpdateAccount,
+    ) -> AuthResult<S::Account> {
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
             if hook
@@ -109,7 +111,7 @@ impl<S: AuthSchema> AuthStore<S> {
         for hook in self.hooks() {
             hook.after_update_account(&account, &hook_context).await?;
         }
-        Ok(Account::from(&account))
+        Ok(account)
     }
 
     pub async fn delete_account(&self, id: &str) -> AuthResult<()> {

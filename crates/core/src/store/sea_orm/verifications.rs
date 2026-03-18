@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::entity::AuthVerification;
 use crate::error::AuthResult;
 use crate::schema::{AuthSchema, AuthVerificationModel};
-use crate::types::{CreateVerification, Verification};
+use crate::types::CreateVerification;
 
 use super::{AuthStore, cancelled_by_hook, map_db_err};
 
@@ -13,7 +13,7 @@ impl<S: AuthSchema> AuthStore<S> {
     pub async fn create_verification(
         &self,
         mut verification: CreateVerification,
-    ) -> AuthResult<Verification> {
+    ) -> AuthResult<S::Verification> {
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
             if hook
@@ -34,44 +34,44 @@ impl<S: AuthSchema> AuthStore<S> {
             hook.after_create_verification(&verification, &hook_context)
                 .await?;
         }
-        Ok(Verification::from(&verification))
+        Ok(verification)
     }
 
     pub async fn get_verification(
         &self,
         identifier: &str,
         value: &str,
-    ) -> AuthResult<Option<Verification>> {
+    ) -> AuthResult<Option<S::Verification>> {
         <S::Verification as AuthVerificationModel>::Entity::find()
             .filter(<S::Verification as AuthVerificationModel>::identifier_column().eq(identifier))
             .filter(<S::Verification as AuthVerificationModel>::value_column().eq(value))
             .filter(<S::Verification as AuthVerificationModel>::expires_at_column().gt(Utc::now()))
             .one(self.connection())
             .await
-            .map(|model| model.map(|model| Verification::from(&model)))
             .map_err(map_db_err)
     }
 
-    pub async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<Verification>> {
+    pub async fn get_verification_by_value(
+        &self,
+        value: &str,
+    ) -> AuthResult<Option<S::Verification>> {
         <S::Verification as AuthVerificationModel>::Entity::find()
             .filter(<S::Verification as AuthVerificationModel>::value_column().eq(value))
             .filter(<S::Verification as AuthVerificationModel>::expires_at_column().gt(Utc::now()))
             .one(self.connection())
             .await
-            .map(|model| model.map(|model| Verification::from(&model)))
             .map_err(map_db_err)
     }
 
     pub async fn get_verification_by_identifier(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<Verification>> {
+    ) -> AuthResult<Option<S::Verification>> {
         <S::Verification as AuthVerificationModel>::Entity::find()
             .filter(<S::Verification as AuthVerificationModel>::identifier_column().eq(identifier))
             .filter(<S::Verification as AuthVerificationModel>::expires_at_column().gt(Utc::now()))
             .one(self.connection())
             .await
-            .map(|model| model.map(|model| Verification::from(&model)))
             .map_err(map_db_err)
     }
 
@@ -79,7 +79,7 @@ impl<S: AuthSchema> AuthStore<S> {
         &self,
         identifier: &str,
         value: &str,
-    ) -> AuthResult<Option<Verification>> {
+    ) -> AuthResult<Option<S::Verification>> {
         let Some(model) = <S::Verification as AuthVerificationModel>::Entity::find()
             .filter(<S::Verification as AuthVerificationModel>::identifier_column().eq(identifier))
             .filter(<S::Verification as AuthVerificationModel>::value_column().eq(value))
@@ -98,7 +98,7 @@ impl<S: AuthSchema> AuthStore<S> {
             .await
             .map_err(map_db_err)?;
 
-        Ok(Some(Verification::from(&model)))
+        Ok(Some(model))
     }
 
     pub async fn delete_verification(&self, id: &str) -> AuthResult<()> {
