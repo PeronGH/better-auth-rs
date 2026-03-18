@@ -13,6 +13,7 @@ use better_auth_core::plugin::AuthContext;
 use better_auth_core::types::{
     AuthRequest, AuthResponse, CreateMember, CreateOrganization, UpdateOrganization,
 };
+use better_auth_core::wire::SessionView;
 
 // ---------------------------------------------------------------------------
 // Core functions
@@ -227,7 +228,7 @@ pub(crate) async fn set_active_organization_core(
     user: &impl AuthUser,
     session: &impl AuthSession,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<better_auth_core::Session> {
+) -> AuthResult<SessionView> {
     let org_id = if body.organization_id.is_some() || body.organization_slug.is_some() {
         Some(
             resolve_organization_id(
@@ -255,7 +256,7 @@ pub(crate) async fn set_active_organization_core(
         .update_session_active_organization(session.token(), org_id.as_deref())
         .await?;
 
-    Ok(better_auth_core::Session::from(&updated_session))
+    Ok(SessionView::from(&updated_session))
 }
 
 pub(crate) async fn leave_organization_core(
