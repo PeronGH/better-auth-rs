@@ -8,7 +8,7 @@ use sea_orm::{
 use better_auth_core::store::SessionStore;
 
 use crate::error::{AuthError, AuthResult};
-use crate::schema::{AuthSchema, AuthSessionModel};
+use crate::schema::{AuthSchema, SeaOrmSessionModel};
 use crate::types::CreateSession;
 
 use super::{AuthStore, cancelled_by_hook, map_db_err};
@@ -16,7 +16,7 @@ use super::{AuthStore, cancelled_by_hook, map_db_err};
 impl<S> AuthStore<S>
 where
     S: AuthSchema,
-    S::Session: AuthSessionModel,
+    S::Session: SeaOrmSessionModel,
 {
     fn normalize_session_client_field(value: Option<String>) -> Option<String> {
         match value {
@@ -76,7 +76,7 @@ where
 impl<S> SessionStore<S> for AuthStore<S>
 where
     S: AuthSchema + Send + Sync,
-    S::Session: AuthSessionModel,
+    S::Session: SeaOrmSessionModel,
 {
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session> {
         self.create_session_with_connection(self.connection(), None, create_session)
@@ -84,20 +84,20 @@ where
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<S::Session>> {
-        <S::Session as AuthSessionModel>::Entity::find()
-            .filter(<S::Session as AuthSessionModel>::token_column().eq(token))
-            .filter(<S::Session as AuthSessionModel>::active_column().eq(true))
+        <S::Session as SeaOrmSessionModel>::Entity::find()
+            .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
+            .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
             .one(self.connection())
             .await
             .map_err(map_db_err)
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S::Session>> {
-        let user_id = <S::Session as AuthSessionModel>::parse_user_id(user_id)?;
-        <S::Session as AuthSessionModel>::Entity::find()
-            .filter(<S::Session as AuthSessionModel>::user_id_column().eq(user_id))
-            .filter(<S::Session as AuthSessionModel>::active_column().eq(true))
-            .order_by_desc(<S::Session as AuthSessionModel>::created_at_column())
+        let user_id = <S::Session as SeaOrmSessionModel>::parse_user_id(user_id)?;
+        <S::Session as SeaOrmSessionModel>::Entity::find()
+            .filter(<S::Session as SeaOrmSessionModel>::user_id_column().eq(user_id))
+            .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
+            .order_by_desc(<S::Session as SeaOrmSessionModel>::created_at_column())
             .all(self.connection())
             .await
             .map_err(map_db_err)
@@ -108,9 +108,9 @@ where
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> AuthResult<()> {
-        let Some(model) = <S::Session as AuthSessionModel>::Entity::find()
-            .filter(<S::Session as AuthSessionModel>::token_column().eq(token))
-            .filter(<S::Session as AuthSessionModel>::active_column().eq(true))
+        let Some(model) = <S::Session as SeaOrmSessionModel>::Entity::find()
+            .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
+            .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
             .one(self.connection())
             .await
             .map_err(map_db_err)?
@@ -142,8 +142,8 @@ where
                 }
             }
         }
-        let _ = <S::Session as AuthSessionModel>::Entity::delete_many()
-            .filter(<S::Session as AuthSessionModel>::token_column().eq(token))
+        let _ = <S::Session as SeaOrmSessionModel>::Entity::delete_many()
+            .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -156,9 +156,9 @@ where
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        let user_id = <S::Session as AuthSessionModel>::parse_user_id(user_id)?;
-        <S::Session as AuthSessionModel>::Entity::delete_many()
-            .filter(<S::Session as AuthSessionModel>::user_id_column().eq(user_id))
+        let user_id = <S::Session as SeaOrmSessionModel>::parse_user_id(user_id)?;
+        <S::Session as SeaOrmSessionModel>::Entity::delete_many()
+            .filter(<S::Session as SeaOrmSessionModel>::user_id_column().eq(user_id))
             .exec(self.connection())
             .await
             .map(|_| ())
@@ -166,11 +166,11 @@ where
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-        <S::Session as AuthSessionModel>::Entity::delete_many()
+        <S::Session as SeaOrmSessionModel>::Entity::delete_many()
             .filter(
-                <S::Session as AuthSessionModel>::expires_at_column()
+                <S::Session as SeaOrmSessionModel>::expires_at_column()
                     .lt(Utc::now())
-                    .or(<S::Session as AuthSessionModel>::active_column().eq(false)),
+                    .or(<S::Session as SeaOrmSessionModel>::active_column().eq(false)),
             )
             .exec(self.connection())
             .await
@@ -183,9 +183,9 @@ where
         token: &str,
         organization_id: Option<&str>,
     ) -> AuthResult<S::Session> {
-        let Some(model) = <S::Session as AuthSessionModel>::Entity::find()
-            .filter(<S::Session as AuthSessionModel>::token_column().eq(token))
-            .filter(<S::Session as AuthSessionModel>::active_column().eq(true))
+        let Some(model) = <S::Session as SeaOrmSessionModel>::Entity::find()
+            .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
+            .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
             .one(self.connection())
             .await
             .map_err(map_db_err)?

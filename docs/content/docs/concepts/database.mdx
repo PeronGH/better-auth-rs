@@ -48,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 If your application already has a `users` table with extra fields or non-string primary keys, keep the same public integration story:
 
 1. Reuse your app-owned SeaORM entities.
-2. Implement the public `AuthUser` / `AuthUserModel` traits manually instead of relying on `#[derive(AuthEntity)]`.
+2. Implement the public `AuthUser` / `SeaOrmUserModel` traits manually instead of relying on `#[derive(AuthEntity)]`.
 3. Keep `sessions`, `accounts`, and `verifications` as app-owned SeaORM entities in the same database.
 4. Run your own SeaORM migrations alongside the rest of the application schema.
 

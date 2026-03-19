@@ -15,8 +15,8 @@ use better_auth_seaorm::sea_orm;
 use better_auth_seaorm::sea_orm::entity::prelude::*;
 use better_auth_seaorm::sea_orm::{ActiveValue::NotSet, ActiveValue::Set, ConnectionTrait, Schema};
 use better_auth_seaorm::{
-    AuthAccountModel, AuthSessionModel, AuthUserModel, AuthVerificationModel, Database,
-    DatabaseConnection, SeaOrmStore,
+    Database, DatabaseConnection, SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmStore,
+    SeaOrmUserModel, SeaOrmVerificationModel,
 };
 use chrono::{DateTime, Utc};
 use rand::rngs::OsRng;
@@ -115,7 +115,7 @@ mod user {
         }
     }
 
-    impl AuthUserModel for Model {
+    impl SeaOrmUserModel for Model {
         type Id = i32;
         type Entity = Entity;
         type ActiveModel = ActiveModel;
@@ -291,7 +291,7 @@ mod session {
         }
     }
 
-    impl AuthSessionModel for Model {
+    impl SeaOrmSessionModel for Model {
         type Id = i32;
         type UserId = i32;
         type Entity = Entity;
@@ -456,7 +456,7 @@ mod account {
         }
     }
 
-    impl AuthAccountModel for Model {
+    impl SeaOrmAccountModel for Model {
         type Id = i32;
         type UserId = i32;
         type Entity = Entity;
@@ -593,7 +593,7 @@ mod verification {
         }
     }
 
-    impl AuthVerificationModel for Model {
+    impl SeaOrmVerificationModel for Model {
         type Id = i32;
         type Entity = Entity;
         type ActiveModel = ActiveModel;

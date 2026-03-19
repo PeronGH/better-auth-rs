@@ -37,14 +37,14 @@ use sea_orm::{DatabaseConnection, DatabaseTransaction, DbErr, SqlErr, Transactio
 
 use crate::config::AuthConfig;
 use crate::error::{AuthError, AuthResult, DatabaseError};
-use crate::hooks::{DatabaseHookContext, DatabaseHooks, current_request_hook_context};
+use crate::hooks::{SeaOrmHookContext, SeaOrmHooks, current_request_hook_context};
 use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmUserModel};
 
 #[derive(Clone)]
 pub struct AuthStore<S: AuthSchema> {
     config: Arc<AuthConfig>,
     db: DatabaseConnection,
-    hooks: Vec<Arc<dyn DatabaseHooks<S>>>,
+    hooks: Vec<Arc<dyn SeaOrmHooks<S>>>,
     _schema: PhantomData<S>,
 }
 
@@ -58,12 +58,12 @@ impl<S: AuthSchema> AuthStore<S> {
         }
     }
 
-    pub fn with_hooks(mut self, hooks: Vec<Arc<dyn DatabaseHooks<S>>>) -> Self {
+    pub fn with_hooks(mut self, hooks: Vec<Arc<dyn SeaOrmHooks<S>>>) -> Self {
         self.hooks = hooks;
         self
     }
 
-    pub fn hook<H: DatabaseHooks<S> + 'static>(mut self, hook: H) -> Self {
+    pub fn hook<H: SeaOrmHooks<S> + 'static>(mut self, hook: H) -> Self {
         self.hooks.push(Arc::new(hook));
         self
     }
@@ -76,15 +76,15 @@ impl<S: AuthSchema> AuthStore<S> {
         &self.config
     }
 
-    pub(crate) fn hooks(&self) -> &[Arc<dyn DatabaseHooks<S>>] {
+    pub(crate) fn hooks(&self) -> &[Arc<dyn SeaOrmHooks<S>>] {
         &self.hooks
     }
 
     pub(crate) fn hook_context<'a>(
         &'a self,
         tx: Option<&'a DatabaseTransaction>,
-    ) -> DatabaseHookContext<'a> {
-        DatabaseHookContext {
+    ) -> SeaOrmHookContext<'a> {
+        SeaOrmHookContext {
             config: self.config.as_ref(),
             db: &self.db,
             tx,

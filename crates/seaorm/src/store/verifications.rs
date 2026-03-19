@@ -6,7 +6,7 @@ use better_auth_core::store::VerificationStore;
 
 use crate::entity::AuthVerification;
 use crate::error::AuthResult;
-use crate::schema::{AuthSchema, AuthVerificationModel};
+use crate::schema::{AuthSchema, SeaOrmVerificationModel};
 use crate::types::CreateVerification;
 
 use super::{AuthStore, cancelled_by_hook, map_db_err};
@@ -15,7 +15,7 @@ use super::{AuthStore, cancelled_by_hook, map_db_err};
 impl<S> VerificationStore<S> for AuthStore<S>
 where
     S: AuthSchema + Send + Sync,
-    S::Verification: AuthVerificationModel,
+    S::Verification: SeaOrmVerificationModel,
 {
     async fn create_verification(
         &self,
@@ -48,19 +48,25 @@ where
         identifier: &str,
         value: &str,
     ) -> AuthResult<Option<S::Verification>> {
-        <S::Verification as AuthVerificationModel>::Entity::find()
-            .filter(<S::Verification as AuthVerificationModel>::identifier_column().eq(identifier))
-            .filter(<S::Verification as AuthVerificationModel>::value_column().eq(value))
-            .filter(<S::Verification as AuthVerificationModel>::expires_at_column().gt(Utc::now()))
+        <S::Verification as SeaOrmVerificationModel>::Entity::find()
+            .filter(
+                <S::Verification as SeaOrmVerificationModel>::identifier_column().eq(identifier),
+            )
+            .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
+            .filter(
+                <S::Verification as SeaOrmVerificationModel>::expires_at_column().gt(Utc::now()),
+            )
             .one(self.connection())
             .await
             .map_err(map_db_err)
     }
 
     async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<S::Verification>> {
-        <S::Verification as AuthVerificationModel>::Entity::find()
-            .filter(<S::Verification as AuthVerificationModel>::value_column().eq(value))
-            .filter(<S::Verification as AuthVerificationModel>::expires_at_column().gt(Utc::now()))
+        <S::Verification as SeaOrmVerificationModel>::Entity::find()
+            .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
+            .filter(
+                <S::Verification as SeaOrmVerificationModel>::expires_at_column().gt(Utc::now()),
+            )
             .one(self.connection())
             .await
             .map_err(map_db_err)
@@ -70,9 +76,13 @@ where
         &self,
         identifier: &str,
     ) -> AuthResult<Option<S::Verification>> {
-        <S::Verification as AuthVerificationModel>::Entity::find()
-            .filter(<S::Verification as AuthVerificationModel>::identifier_column().eq(identifier))
-            .filter(<S::Verification as AuthVerificationModel>::expires_at_column().gt(Utc::now()))
+        <S::Verification as SeaOrmVerificationModel>::Entity::find()
+            .filter(
+                <S::Verification as SeaOrmVerificationModel>::identifier_column().eq(identifier),
+            )
+            .filter(
+                <S::Verification as SeaOrmVerificationModel>::expires_at_column().gt(Utc::now()),
+            )
             .one(self.connection())
             .await
             .map_err(map_db_err)
@@ -83,11 +93,15 @@ where
         identifier: &str,
         value: &str,
     ) -> AuthResult<Option<S::Verification>> {
-        let Some(model) = <S::Verification as AuthVerificationModel>::Entity::find()
-            .filter(<S::Verification as AuthVerificationModel>::identifier_column().eq(identifier))
-            .filter(<S::Verification as AuthVerificationModel>::value_column().eq(value))
-            .filter(<S::Verification as AuthVerificationModel>::expires_at_column().gt(Utc::now()))
-            .order_by_desc(<S::Verification as AuthVerificationModel>::created_at_column())
+        let Some(model) = <S::Verification as SeaOrmVerificationModel>::Entity::find()
+            .filter(
+                <S::Verification as SeaOrmVerificationModel>::identifier_column().eq(identifier),
+            )
+            .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
+            .filter(
+                <S::Verification as SeaOrmVerificationModel>::expires_at_column().gt(Utc::now()),
+            )
+            .order_by_desc(<S::Verification as SeaOrmVerificationModel>::created_at_column())
             .one(self.connection())
             .await
             .map_err(map_db_err)?
@@ -96,9 +110,9 @@ where
         };
 
         let verification_id =
-            <S::Verification as AuthVerificationModel>::parse_id(model.id().as_ref())?;
-        let _ = <S::Verification as AuthVerificationModel>::Entity::delete_many()
-            .filter(<S::Verification as AuthVerificationModel>::id_column().eq(verification_id))
+            <S::Verification as SeaOrmVerificationModel>::parse_id(model.id().as_ref())?;
+        let _ = <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+            .filter(<S::Verification as SeaOrmVerificationModel>::id_column().eq(verification_id))
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -107,10 +121,11 @@ where
     }
 
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
-        let verification_id = <S::Verification as AuthVerificationModel>::parse_id(id)?;
-        let verification = <S::Verification as AuthVerificationModel>::Entity::find()
+        let verification_id = <S::Verification as SeaOrmVerificationModel>::parse_id(id)?;
+        let verification = <S::Verification as SeaOrmVerificationModel>::Entity::find()
             .filter(
-                <S::Verification as AuthVerificationModel>::id_column().eq(verification_id.clone()),
+                <S::Verification as SeaOrmVerificationModel>::id_column()
+                    .eq(verification_id.clone()),
             )
             .one(self.connection())
             .await
@@ -127,8 +142,8 @@ where
                 }
             }
         }
-        let _ = <S::Verification as AuthVerificationModel>::Entity::delete_many()
-            .filter(<S::Verification as AuthVerificationModel>::id_column().eq(verification_id))
+        let _ = <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+            .filter(<S::Verification as SeaOrmVerificationModel>::id_column().eq(verification_id))
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -142,8 +157,10 @@ where
     }
 
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
-        <S::Verification as AuthVerificationModel>::Entity::delete_many()
-            .filter(<S::Verification as AuthVerificationModel>::expires_at_column().lt(Utc::now()))
+        <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+            .filter(
+                <S::Verification as SeaOrmVerificationModel>::expires_at_column().lt(Utc::now()),
+            )
             .exec(self.connection())
             .await
             .map(|result| result.rows_affected as usize)

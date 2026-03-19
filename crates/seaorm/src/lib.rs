@@ -16,8 +16,7 @@ mod utils;
 pub use better_auth_seaorm_macros::AuthEntity;
 pub use hooks::{HookControl, SeaOrmHookContext, SeaOrmHooks, current_request_hook_context};
 pub use schema::{
-    AuthAccountModel, AuthSessionModel, AuthUserModel, AuthVerificationModel, SeaOrmAccountModel,
-    SeaOrmSessionModel, SeaOrmUserModel, SeaOrmVerificationModel,
+    SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmUserModel, SeaOrmVerificationModel,
 };
 pub use sea_orm;
 pub use sea_orm::{Database, DatabaseConnection};

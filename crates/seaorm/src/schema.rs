@@ -117,8 +117,3 @@ pub trait SeaOrmVerificationModel:
         now: DateTime<Utc>,
     ) -> Self::ActiveModel;
 }
-
-pub use SeaOrmAccountModel as AuthAccountModel;
-pub use SeaOrmSessionModel as AuthSessionModel;
-pub use SeaOrmUserModel as AuthUserModel;
-pub use SeaOrmVerificationModel as AuthVerificationModel;
