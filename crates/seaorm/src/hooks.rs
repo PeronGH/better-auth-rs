@@ -8,7 +8,7 @@ use better_auth_core::schema::AuthSchema;
 use better_auth_core::types::{
     CreateAccount, CreateSession, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
 };
-use better_auth_core::{AuthResult, HttpMethod};
+use better_auth_core::AuthResult;
 
 /// Control flow returned by SeaORM `before_*` hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -216,9 +216,6 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
         Ok(())
     }
 }
-
-#[allow(dead_code)]
-fn _keep_http_method_reexport(_: HttpMethod) {}
 
 pub use SeaOrmHookContext as DatabaseHookContext;
 pub use SeaOrmHooks as DatabaseHooks;

@@ -13,7 +13,7 @@ These examples assume you've already defined `AppAuthSchema`. If you want a comp
 use better_auth::plugins::ApiKeyPlugin;
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
-    .database(database)
+    .store(store)
     .plugin(ApiKeyPlugin::new())
     .build()
     .await?;
@@ -25,7 +25,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 use better_auth::plugins::api_key::ApiKeyConfig;
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
-    .database(database)
+    .store(store)
     .plugin(
         ApiKeyPlugin::new()
             .key_length(32)

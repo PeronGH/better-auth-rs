@@ -4,6 +4,10 @@
 //! 2. allow_unlinking_all: unlink-account respects the config flag
 //! 3. account_linking.enabled=false: callback rejects linking for existing emails
 //! 4. handle_link_social: confirm token handling in the link flow
+#![allow(
+    unused_results,
+    reason = "oauth integration tests intentionally discard setup return values from inserts and config mutation helpers"
+)]
 
 use std::sync::{Arc, Once};
 

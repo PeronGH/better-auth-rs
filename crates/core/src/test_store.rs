@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -6,7 +5,6 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use crate::config::AuthConfig;
-use crate::entity::{AuthSession, AuthUser};
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
 use crate::store::{
@@ -445,14 +443,6 @@ impl VerificationStore<BundledSchema> for MemoryStore {
             .retain(|_, verification| verification.expires_at > now);
         Ok(before - state.verifications.len())
     }
-}
-
-macro_rules! unsupported_store {
-    ($name:ident, $ret:ty) => {
-        async fn $name(&self, $(_: impl Send),*) -> AuthResult<$ret> {
-            Err(AuthError::internal("unsupported test-store operation"))
-        }
-    };
 }
 
 #[async_trait]

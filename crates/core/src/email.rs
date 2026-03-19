@@ -98,7 +98,7 @@ mod tests {
     #[tokio::test]
     async fn test_missing_provider_returns_error() {
         use crate::plugin::AuthContext;
-        use crate::test_store::{BundledSchema, test_config, test_database};
+        use crate::test_store::{test_config, test_database};
 
         let config = test_config();
         let database = test_database().await;

@@ -13,7 +13,7 @@ These examples assume you've already defined `AppAuthSchema`. If you want a comp
 use better_auth::plugins::OrganizationPlugin;
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
-    .database(database)
+    .store(store)
     .plugin(OrganizationPlugin::new())
     .build()
     .await?;
@@ -25,7 +25,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 use better_auth::plugins::organization::OrganizationConfig;
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
-    .database(database)
+    .store(store)
     .plugin(
         OrganizationPlugin::new()
             .allow_user_to_create_organization(true)
@@ -80,7 +80,7 @@ let config = OrganizationConfig {
 };
 
 let auth = BetterAuth::<AppAuthSchema>::new(auth_config)
-    .database(database)
+    .store(store)
     .plugin(OrganizationPlugin::with_config(config))
     .build()
     .await?;

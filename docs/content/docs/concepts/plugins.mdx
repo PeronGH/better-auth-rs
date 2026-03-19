@@ -36,7 +36,7 @@ These examples assume you've already defined `AppAuthSchema`. If you want a comp
 
 ```rust
 let auth = BetterAuth::<AppAuthSchema>::new(config)
-    .database(database)
+    .store(store)
     .plugin(EmailPasswordPlugin::new().enable_signup(true))
     .plugin(SessionManagementPlugin::new())
     .plugin(PasswordManagementPlugin::new())

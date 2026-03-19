@@ -314,7 +314,7 @@ impl<S: AuthSchema> AuthContext<S> {
 mod tests {
     use super::*;
     use crate::entity::AuthUser;
-    use crate::test_store::{BundledSchema, test_database};
+    use crate::test_store::test_database;
 
     // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]

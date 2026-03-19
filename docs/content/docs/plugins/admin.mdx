@@ -13,7 +13,7 @@ These examples assume you've already defined `AppAuthSchema`. If you want a comp
 use better_auth::plugins::AdminPlugin;
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
-    .database(database)
+    .store(store)
     .plugin(AdminPlugin::new())
     .build()
     .await?;
@@ -25,7 +25,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 use better_auth::plugins::admin::AdminConfig;
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
-    .database(database)
+    .store(store)
     .plugin(
         AdminPlugin::new()
             .admin_role("admin")

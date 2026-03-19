@@ -13,7 +13,7 @@ These examples assume you've already defined `AppAuthSchema`. If you want a comp
 use better_auth::plugins::TwoFactorPlugin;
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
-    .database(database)
+    .store(store)
     .plugin(TwoFactorPlugin::new())
     .build()
     .await?;
@@ -25,7 +25,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 use better_auth::plugins::two_factor::TwoFactorConfig;
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
-    .database(database)
+    .store(store)
     .plugin(
         TwoFactorPlugin::new().with_config(TwoFactorConfig {
             issuer: "My App".to_string(),

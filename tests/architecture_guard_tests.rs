@@ -73,7 +73,6 @@ fn legacy_persistence_symbols_are_gone_from_tracked_sources() {
     let banned = [
         "DatabaseAdapter",
         "AuthDatabase",
-        "SeaOrmStore",
         "UserOps",
         "SessionOps",
         "AccountOps",

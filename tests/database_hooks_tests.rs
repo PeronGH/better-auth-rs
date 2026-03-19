@@ -9,9 +9,8 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use better_auth::error::{AuthResult, DatabaseError};
-use better_auth::plugin::{AuthContext, AuthPlugin};
 use better_auth::plugins::EmailPasswordPlugin;
-use better_auth::prelude::{AuthRequest, AuthResponse, AuthUser, CreateUser, HttpMethod};
+use better_auth::prelude::{AuthRequest, AuthUser, CreateUser, HttpMethod};
 use better_auth::{AuthBuilder, AuthConfig};
 use better_auth_seaorm::sea_orm::sea_query::{Alias, ColumnDef, Expr, ExprTrait, Query, Table};
 use better_auth_seaorm::sea_orm::{ConnectionTrait, Database, DatabaseConnection};

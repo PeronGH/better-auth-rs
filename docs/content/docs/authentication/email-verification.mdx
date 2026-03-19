@@ -15,7 +15,7 @@ use better_auth::plugins::EmailVerificationPlugin;
 use better_auth::email::ConsoleEmailProvider;
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
-    .database(database)
+    .store(store)
     .email_provider(ConsoleEmailProvider) // Required for sending emails
     .plugin(
         EmailVerificationPlugin::new()
