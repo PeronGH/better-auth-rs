@@ -443,13 +443,10 @@ fn validate_redirect_target(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     error_message: &str,
 ) -> AuthResult<()> {
-    if !target.starts_with("//") && url::Url::parse(target).is_err() {
+    if ctx.config.advanced.disable_origin_check {
         return Ok(());
     }
-
-    let origin = better_auth_core::extract_origin(target)
-        .ok_or_else(|| AuthError::forbidden(error_message.to_string()))?;
-    if ctx.config.is_origin_trusted(&origin) {
+    if ctx.config.is_redirect_target_trusted(target) {
         Ok(())
     } else {
         Err(AuthError::forbidden(error_message.to_string()))
@@ -1990,4 +1987,40 @@ pub(crate) async fn handle_refresh_token(
         );
     }
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::test_helpers;
+
+    // Upstream reference: packages/better-auth/src/api/middlewares/origin-check.ts :: originCheck respects ctx.context.skipOriginCheck.
+    #[tokio::test]
+    async fn validate_redirect_target_respects_disable_origin_check() {
+        let config = test_helpers::create_test_config().disable_origin_check(true);
+        let ctx = test_helpers::create_test_context_with_config(config).await;
+
+        assert!(
+            validate_redirect_target("https://evil.com/phish", &ctx, "Invalid callbackURL").is_ok()
+        );
+    }
+
+    // Upstream reference: packages/better-auth/src/api/middlewares/origin-check.ts :: originCheck rejects untrusted origins by default.
+    #[tokio::test]
+    async fn validate_redirect_target_rejects_untrusted_by_default() {
+        let ctx = test_helpers::create_test_context().await;
+
+        assert!(
+            validate_redirect_target("https://evil.com/phish", &ctx, "Invalid callbackURL")
+                .is_err()
+        );
+    }
+
+    // Upstream reference: packages/better-auth/src/api/middlewares/origin-check.ts :: originCheck allows relative paths.
+    #[tokio::test]
+    async fn validate_redirect_target_allows_relative() {
+        let ctx = test_helpers::create_test_context().await;
+
+        assert!(validate_redirect_target("/dashboard", &ctx, "Invalid callbackURL").is_ok());
+    }
 }

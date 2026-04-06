@@ -23,6 +23,17 @@ pub mod core_paths {
     ///
     /// Matches the TS better-auth error page that displays the error code.
     pub fn error_page_html(error_code: &str) -> String {
+        // Whitelist error codes to prevent reflected XSS.
+        // Matches the TS sanitization: /^[A-Za-z0-9_'-]+$/
+        let safe_code = if !error_code.is_empty()
+            && error_code
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '\'')
+        {
+            error_code
+        } else {
+            "UNKNOWN"
+        };
         format!(
             r#"<!DOCTYPE html>
 <html lang="en">
@@ -34,7 +45,7 @@ pub mod core_paths {
   <body>
     <h1>ERROR</h1>
     <h2>Something went wrong</h2>
-    <p>CODE: {error_code}</p>
+    <p>CODE: {safe_code}</p>
   </body>
 </html>"#
         )
@@ -1011,6 +1022,21 @@ mod tests {
         let html = core_paths::error_page_html("TEST_ERROR");
         assert!(html.contains("CODE: TEST_ERROR"));
         assert!(html.contains("<title>Error</title>"));
+    }
+
+    // Upstream reference: packages/better-auth/src/api/routes/error.ts :: sanitize function and /^[A-Za-z0-9_'-]+$/ whitelist.
+    #[test]
+    fn error_page_sanitizes_script_tag() {
+        let html = core_paths::error_page_html("<script>alert(1)</script>");
+        assert!(html.contains("CODE: UNKNOWN"));
+        assert!(!html.contains("<script>"));
+    }
+
+    // Upstream reference: packages/better-auth/src/api/routes/error.ts :: sanitize function and /^[A-Za-z0-9_'-]+$/ whitelist.
+    #[test]
+    fn error_page_allows_valid_codes() {
+        assert!(core_paths::error_page_html("SOME_ERROR-CODE").contains("CODE: SOME_ERROR-CODE"));
+        assert!(core_paths::error_page_html("it's").contains("CODE: it's"));
     }
 
     // ── session builder methods ─────────────────────────────────────────
