@@ -98,6 +98,7 @@ pub struct AccountView {
     #[serde(rename = "refreshTokenExpiresAt")]
     pub refresh_token_expires_at: Option<DateTime<Utc>>,
     pub scope: Option<String>,
+    #[serde(skip_serializing)]
     pub password: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
@@ -578,5 +579,30 @@ mod tests {
         assert_eq!(json["expiresAt"].is_string(), true);
         assert_eq!(json["ipAddress"], "127.0.0.1");
         assert_eq!(json["activeOrganizationId"], "org-1");
+    }
+
+    #[test]
+    fn account_view_omits_password_on_serialize() {
+        let account = AccountView {
+            id: "acc-1".to_string(),
+            account_id: "account-id".to_string(),
+            provider_id: "credential".to_string(),
+            user_id: "user-1".to_string(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: Some("$2a$hash".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        let json = serde_json::to_value(&account).expect("serialize account view");
+        assert!(
+            json.get("password").is_none(),
+            "password field must not appear in serialized output"
+        );
     }
 }

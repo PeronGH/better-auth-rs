@@ -147,6 +147,16 @@ impl EmailVerificationPlugin {
             .get("token")
             .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
         let callback_url = req.query.get("callbackURL").cloned();
+
+        // Validate callbackURL against trusted origins, matching the TS
+        // `originCheck` middleware applied to the verify-email endpoint.
+        if let Some(ref url) = callback_url
+            && !ctx.config.advanced.disable_origin_check
+            && !ctx.config.is_redirect_target_trusted(url)
+        {
+            return Ok(AuthError::forbidden("Invalid callbackURL").to_auth_response());
+        }
+
         let query = VerifyEmailQuery {
             token: token.clone(),
             callback_url,

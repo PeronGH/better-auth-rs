@@ -152,15 +152,7 @@ impl CsrfMiddleware {
         }
 
         for (name, value) in Self::request_target_values(req) {
-            if Self::is_safe_relative_target(&value) {
-                continue;
-            }
-
-            let Some(origin) = extract_origin(&value) else {
-                return Err(AuthError::forbidden(Self::target_error_message(name)));
-            };
-
-            if !self.auth_config.is_origin_trusted(&origin) {
+            if !self.auth_config.is_redirect_target_trusted(&value) {
                 return Err(AuthError::forbidden(Self::target_error_message(name)));
             }
         }
@@ -215,16 +207,6 @@ impl CsrfMiddleware {
                 .filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_string())))
                 .collect(),
         )
-    }
-
-    fn is_safe_relative_target(value: &str) -> bool {
-        if !value.starts_with('/') || value.starts_with("//") || value.contains('\\') {
-            return false;
-        }
-
-        let tail = &value[1..];
-        let lower = tail.to_ascii_lowercase();
-        !lower.starts_with("%2f") && !lower.starts_with("%5c")
     }
 
     fn target_error_message(name: &str) -> &'static str {

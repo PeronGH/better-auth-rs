@@ -100,3 +100,25 @@ compatScenario("verify email callback redirects to callbackURL", async (ctx) => 
     verify: ctx.snapshot(verify),
   };
 });
+
+compatScenario("verify email rejects untrusted callbackURL", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase2-verify-evil-redirect");
+
+  await primary.client.signUp.email({
+    email,
+    password: "password123",
+    name: "Redirect Guard User",
+  });
+  await primary.client.sendVerificationEmail({ email });
+  const record = await ctx.readVerificationEmail({ email }) as { token: string };
+
+  const verify = await ctx.rawRequest({
+    path: `/api/auth/verify-email?token=${encodeURIComponent(record.token)}&callbackURL=${encodeURIComponent("https://evil.com/phish")}`,
+    redirect: "manual",
+  });
+
+  return {
+    verify: ctx.snapshot(verify),
+  };
+});

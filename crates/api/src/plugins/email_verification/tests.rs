@@ -858,16 +858,13 @@ async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), token_value);
-    query.insert(
-        "callbackURL".to_string(),
-        "https://myapp.com/verified".to_string(),
-    );
+    query.insert("callbackURL".to_string(), "/verified".to_string());
     let req =
         test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
 
     assert_eq!(response.status, 302);
-    assert_eq!(response.headers["Location"], "https://myapp.com/verified");
+    assert_eq!(response.headers["Location"], "/verified");
     // Session cookie should be present on the redirect
     assert!(response.headers.contains_key("Set-Cookie"));
     assert!(response.headers["Set-Cookie"].contains("better-auth.session"));
@@ -893,10 +890,7 @@ async fn test_verify_email_redirect_without_auto_sign_in_no_cookie() {
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), token_value);
-    query.insert(
-        "callbackURL".to_string(),
-        "https://myapp.com/verified".to_string(),
-    );
+    query.insert("callbackURL".to_string(), "/verified".to_string());
     let req =
         test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
@@ -1093,4 +1087,134 @@ fn test_create_session_cookie_special_characters_in_token() {
     let cookie_str = create_session_cookie(token, &ctx.config);
     // The cookie crate should handle encoding properly
     assert!(cookie_str.contains("better-auth.session_token="));
+}
+
+// ------------------------------------------------------------------
+// handle_verify_email -- callbackURL origin check
+// ------------------------------------------------------------------
+
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.ts :: `use: [originCheck((ctx) => ctx.query.callbackURL)]` on the verifyEmail endpoint.
+#[tokio::test]
+async fn test_verify_email_rejects_untrusted_callback_url() {
+    let plugin = EmailVerificationPlugin::new();
+    let ctx = test_helpers::create_test_context().await;
+
+    let _user = ctx
+        .database
+        .create_user(
+            CreateUser::new()
+                .with_email("redirect-guard@test.com")
+                .with_name("Redirect Guard"),
+        )
+        .await
+        .unwrap();
+
+    let token_value = jwt_token(&ctx, "redirect-guard@test.com", None, None);
+
+    let mut query = HashMap::new();
+    query.insert("token".to_string(), token_value);
+    query.insert(
+        "callbackURL".to_string(),
+        "https://evil.com/phish".to_string(),
+    );
+    let req =
+        test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+    let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
+
+    assert_eq!(response.status, 403);
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.ts :: `use: [originCheck((ctx) => ctx.query.callbackURL)]` on the verifyEmail endpoint.
+#[tokio::test]
+async fn test_verify_email_allows_relative_callback_url() {
+    let plugin = EmailVerificationPlugin::new();
+    let ctx = test_helpers::create_test_context().await;
+
+    let _user = ctx
+        .database
+        .create_user(
+            CreateUser::new()
+                .with_email("redirect-rel@test.com")
+                .with_name("Redirect Rel"),
+        )
+        .await
+        .unwrap();
+
+    let token_value = jwt_token(&ctx, "redirect-rel@test.com", None, None);
+
+    let mut query = HashMap::new();
+    query.insert("token".to_string(), token_value);
+    query.insert("callbackURL".to_string(), "/dashboard".to_string());
+    let req =
+        test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+    let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
+
+    assert_eq!(response.status, 302);
+    assert_eq!(response.headers["Location"], "/dashboard");
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.ts :: `use: [originCheck((ctx) => ctx.query.callbackURL)]` on the verifyEmail endpoint.
+#[tokio::test]
+async fn test_verify_email_allows_trusted_origin_callback_url() {
+    let plugin = EmailVerificationPlugin::new();
+    let config = test_helpers::create_test_config().trusted_origin("https://trusted.com");
+    let ctx = test_helpers::create_test_context_with_config(config).await;
+
+    let _user = ctx
+        .database
+        .create_user(
+            CreateUser::new()
+                .with_email("redirect-trusted@test.com")
+                .with_name("Redirect Trusted"),
+        )
+        .await
+        .unwrap();
+
+    let token_value = jwt_token(&ctx, "redirect-trusted@test.com", None, None);
+
+    let mut query = HashMap::new();
+    query.insert("token".to_string(), token_value);
+    query.insert(
+        "callbackURL".to_string(),
+        "https://trusted.com/verified".to_string(),
+    );
+    let req =
+        test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+    let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
+
+    assert_eq!(response.status, 302);
+    assert_eq!(response.headers["Location"], "https://trusted.com/verified");
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.ts :: `use: [originCheck((ctx) => ctx.query.callbackURL)]` on the verifyEmail endpoint; `advanced.disableOriginCheck` skips the check.
+#[tokio::test]
+async fn test_verify_email_skips_origin_check_when_disabled() {
+    let plugin = EmailVerificationPlugin::new();
+    let config = test_helpers::create_test_config().disable_origin_check(true);
+    let ctx = test_helpers::create_test_context_with_config(config).await;
+
+    let _user = ctx
+        .database
+        .create_user(
+            CreateUser::new()
+                .with_email("redirect-disabled@test.com")
+                .with_name("Redirect Disabled"),
+        )
+        .await
+        .unwrap();
+
+    let token_value = jwt_token(&ctx, "redirect-disabled@test.com", None, None);
+
+    let mut query = HashMap::new();
+    query.insert("token".to_string(), token_value);
+    query.insert(
+        "callbackURL".to_string(),
+        "https://evil.com/anywhere".to_string(),
+    );
+    let req =
+        test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+    let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
+
+    // With origin check disabled, the redirect should proceed
+    assert_eq!(response.status, 302);
 }

@@ -637,6 +637,21 @@ impl AuthConfig {
         })
     }
 
+    /// Check whether a URL is a safe redirect target.
+    ///
+    /// A URL is safe if it is a relative path (starts with `/`, no
+    /// traversal tricks) or its origin matches [`base_url`](Self::base_url)
+    /// or [`trusted_origins`](Self::trusted_origins).
+    ///
+    /// This is used by both the CSRF middleware (for POST body/query
+    /// targets) and per-endpoint origin checks (e.g. verify-email GET).
+    pub fn is_redirect_target_trusted(&self, url: &str) -> bool {
+        if is_safe_relative_path(url) {
+            return true;
+        }
+        extract_origin(url).is_some_and(|origin| self.is_origin_trusted(&origin))
+    }
+
     /// Check whether a given path is disabled.
     pub fn is_path_disabled(&self, path: &str) -> bool {
         self.disabled_paths.iter().any(|disabled| disabled == path)
@@ -654,6 +669,23 @@ impl AuthConfig {
 
         Ok(())
     }
+}
+
+/// Check whether a URL is a safe relative path.
+///
+/// A relative path is safe if it starts with a single `/` and has no
+/// traversal or scheme-escape tricks (`//`, `\`, `%2f`, `%5c`).
+///
+/// This is used by [`AuthConfig::is_redirect_target_trusted`] and the
+/// CSRF middleware.
+pub fn is_safe_relative_path(value: &str) -> bool {
+    if !value.starts_with('/') || value.starts_with("//") || value.contains('\\') {
+        return false;
+    }
+
+    let tail = &value[1..];
+    let lower = tail.to_ascii_lowercase();
+    !lower.starts_with("%2f") && !lower.starts_with("%5c")
 }
 
 /// Extract the origin (scheme + host + port) from a URL string.
@@ -842,6 +874,46 @@ mod tests {
             .trusted_origin("https://*.example.com");
         assert!(cfg.is_origin_trusted("https://sub.example.com"));
         assert!(!cfg.is_origin_trusted("https://other.com"));
+    }
+
+    // ── is_redirect_target_trusted ─────────────────────────────────────
+
+    // Upstream reference: packages/better-auth/src/api/middlewares/origin-check.ts :: originCheck validates callbackURL against trustedOrigins.
+    #[test]
+    fn redirect_target_allows_relative_path() {
+        let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").base_url("https://myapp.com");
+        assert!(cfg.is_redirect_target_trusted("/dashboard"));
+        assert!(cfg.is_redirect_target_trusted("/callback?foo=bar"));
+    }
+
+    // Upstream reference: packages/better-auth/src/api/middlewares/origin-check.ts :: originCheck validates callbackURL against trustedOrigins.
+    #[test]
+    fn redirect_target_allows_same_origin() {
+        let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").base_url("https://myapp.com");
+        assert!(cfg.is_redirect_target_trusted("https://myapp.com/verified"));
+    }
+
+    // Upstream reference: packages/better-auth/src/api/middlewares/origin-check.ts :: originCheck validates callbackURL against trustedOrigins.
+    #[test]
+    fn redirect_target_allows_trusted_origin() {
+        let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
+            .base_url("https://myapp.com")
+            .trusted_origin("https://trusted.com");
+        assert!(cfg.is_redirect_target_trusted("https://trusted.com/path"));
+    }
+
+    // Upstream reference: packages/better-auth/src/api/middlewares/origin-check.ts :: originCheck validates callbackURL against trustedOrigins.
+    #[test]
+    fn redirect_target_rejects_untrusted_origin() {
+        let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").base_url("https://myapp.com");
+        assert!(!cfg.is_redirect_target_trusted("https://evil.com/phish"));
+    }
+
+    // Upstream reference: packages/better-auth/src/api/middlewares/origin-check.ts :: originCheck validates callbackURL against trustedOrigins.
+    #[test]
+    fn redirect_target_rejects_protocol_relative() {
+        let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").base_url("https://myapp.com");
+        assert!(!cfg.is_redirect_target_trusted("//evil.com"));
     }
 
     // ── is_path_disabled ────────────────────────────────────────────────
