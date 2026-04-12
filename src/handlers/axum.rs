@@ -146,7 +146,18 @@ fn create_plugin_handler<DB: DatabaseAdapter>() -> impl Fn(
 > + Clone {
     |State(auth): State<Arc<BetterAuth<DB>>>, req: Request| {
         Box::pin(async move {
-            match convert_axum_request(req).await {
+            // `enabled = false` on the configured body limit means the
+            // caller has opted out of body-size enforcement entirely —
+            // honour that by using `usize::MAX`, the same posture the
+            // handler had before the 1 MiB cap was introduced. When
+            // enabled, use the configured ceiling.
+            let limit_cfg = auth.body_limit_config();
+            let max_bytes = if limit_cfg.enabled {
+                limit_cfg.max_bytes
+            } else {
+                usize::MAX
+            };
+            match convert_axum_request(req, max_bytes).await {
                 Ok(auth_req) => match auth.handle_request(auth_req).await {
                     Ok(auth_response) => convert_auth_response(auth_response),
                     Err(err) => convert_auth_error(err),
@@ -158,7 +169,10 @@ fn create_plugin_handler<DB: DatabaseAdapter>() -> impl Fn(
 }
 
 #[cfg(feature = "axum")]
-async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
+async fn convert_axum_request(
+    req: Request,
+    max_body_bytes: usize,
+) -> Result<AuthRequest, AuthError> {
     use std::collections::HashMap;
 
     let (parts, body) = req.into_parts();
@@ -198,8 +212,31 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
         }
     }
 
-    // Convert body
-    let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
+    // Bound the body read at the caller-configured limit
+    // (`AuthBuilder::body_limit(...)`; defaults to
+    // `DEFAULT_MAX_BODY_BYTES` = 1 MiB). `BodyLimitMiddleware` only
+    // inspects `Content-Length` and cannot cover chunked bodies, so
+    // this pre-parse cap is the only line of defence against
+    // memory-exhaustion DoS via `Transfer-Encoding: chunked`.
+    //
+    // Two paths:
+    // - Content-Length declared > limit → 413 before reading anything.
+    // - `to_bytes` error during the read → 413 if the error is a
+    //   `LengthLimitError` (chunked body exceeded the cap), otherwise
+    //   400 (malformed chunked framing, client disconnect, etc.).
+    if let Some(len) = parts
+        .headers
+        .get(axum::http::header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<usize>().ok())
+        && len > max_body_bytes
+    {
+        return Err(AuthError::payload_too_large(format!(
+            "Request body exceeds the {}-byte limit",
+            max_body_bytes
+        )));
+    }
+    let body_bytes = match axum::body::to_bytes(body, max_body_bytes).await {
         Ok(bytes) => {
             if bytes.is_empty() {
                 None
@@ -207,7 +244,16 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
                 Some(bytes.to_vec())
             }
         }
-        Err(_) => None,
+        Err(err) => {
+            if better_auth_core::extractors::is_body_length_limit_error(&err) {
+                return Err(AuthError::payload_too_large(format!(
+                    "Request body exceeds the {}-byte limit",
+                    max_body_bytes
+                )));
+            }
+            tracing::warn!(error = %err, "Failed to read request body");
+            return Err(AuthError::bad_request("Failed to read request body"));
+        }
     };
 
     Ok(AuthRequest::from_parts(

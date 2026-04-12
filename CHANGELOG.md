@@ -3,6 +3,31 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+### Fixed
+
+- `SessionManager::get_session` previously discarded
+  `update_session_expiry` failures with `let _ = ...` and returned the
+  pre-refresh session, so callers observed a stale `expires_at` and real
+  DB errors were invisible. On the happy path the returned session now
+  reflects the persisted expiry. Transient write errors, re-read
+  failures, and concurrent revocations all emit a `tracing::warn!` and
+  fall back to the pre-refresh session instead of 500-ing the request.
+
+### Behavior change
+
+- The axum entry handler caps request body reads at the configured
+  `AuthBuilder::body_limit(...)` ceiling (defaults to
+  `better_auth_core::config::DEFAULT_MAX_BODY_BYTES = 1 MiB`, matching
+  upstream TS `better-auth@1.4.19`). The `AuthRequestExt` extractor
+  uses the same default. Requests that declare `Content-Length` above
+  the cap are rejected with `413 Payload Too Large` before any bytes
+  are buffered. A `LengthLimitError` that surfaces during the read
+  (chunked body exceeding the cap) also returns `413`. Other transport
+  failures (malformed chunked framing, client disconnect) return
+  `400 Bad Request` with the underlying error captured via
+  `tracing::warn!` for operators.
+
 ## [0.9.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.8.0...v0.9.0) - 2026-03-11
 
 ### Bug Fixes
