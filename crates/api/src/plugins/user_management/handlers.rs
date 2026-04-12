@@ -85,6 +85,20 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
     config: &UserManagementConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusMessageResponse> {
+    // Validate callbackURL up front. The verification flow embeds it in
+    // an email `href`, so it must be an absolute http(s) URL on a
+    // trusted origin — a relative path can't be resolved by a mail
+    // client. Validating even in the `update_without_verification`
+    // branch keeps the API contract stable: if a caller supplies
+    // `callbackURL`, we act on it or reject it.
+    if let Some(ref url) = body.callback_url
+        && !ctx.config.is_absolute_trusted_callback_url(url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
+        ));
+    }
+
     // Prevent changing to the same email
     if user.email().map(|e| e == body.new_email).unwrap_or(false) {
         return Err(AuthError::bad_request(
@@ -104,7 +118,7 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
         ));
     }
 
-    // If update_without_verification is true, update the email immediately
+    // If update_without_verification is true, update the email immediately.
     if config.change_email.update_without_verification {
         let update_user = UpdateUser {
             email: Some(body.new_email.clone()),

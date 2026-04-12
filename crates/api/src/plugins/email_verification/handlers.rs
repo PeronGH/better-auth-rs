@@ -14,6 +14,21 @@ pub(super) async fn send_verification_email_core<DB: DatabaseAdapter>(
     config: &EmailVerificationConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusResponse> {
+    // Validate callbackURL before any DB work or user enumeration. Keeps
+    // the response uniform across unknown/verified/valid emails when the
+    // supplied callback is untrusted, and avoids wasted writes.
+    //
+    // The callback is embedded in the outgoing email `href`, so require
+    // an absolute http(s) URL — a relative path can't be resolved by
+    // a mail client and would produce a dead link.
+    if let Some(ref callback_url) = body.callback_url
+        && !ctx.config.is_absolute_trusted_callback_url(callback_url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
+        ));
+    }
+
     // Check if user exists
     let user = ctx
         .database
@@ -143,13 +158,25 @@ pub(super) async fn verify_email_core<DB: DatabaseAdapter>(
         None
     };
 
-    // If callback URL is provided, redirect
+    // Policy note: unlike /send-verification-email and /change-email which
+    // reject untrusted callbacks with 400, this endpoint (GET /verify-email)
+    // is reached by users clicking a link in their mailbox. A hard 400 here
+    // would strand them after they've already consumed the verification
+    // token. Silent fallback to the JSON response preserves the successful
+    // verification and avoids reflecting an attacker-chosen origin into a
+    // server-issued Location header.
     if let Some(ref callback_url) = query.callback_url {
-        let redirect_url = format!("{}?verified=true", callback_url);
-        return Ok(VerifyEmailResult::Redirect {
-            url: redirect_url,
-            session_token: session_info.map(|(_, t)| t),
-        });
+        if ctx.config.is_redirect_target_trusted(callback_url) {
+            let redirect_url = format!("{}?verified=true", callback_url);
+            return Ok(VerifyEmailResult::Redirect {
+                url: redirect_url,
+                session_token: session_info.map(|(_, t)| t),
+            });
+        }
+        tracing::warn!(
+            callback_url = %callback_url,
+            "Ignoring untrusted callbackURL on /verify-email"
+        );
     }
 
     // Return JSON

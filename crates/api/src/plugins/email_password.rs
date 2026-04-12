@@ -270,6 +270,19 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
         return Err(AuthError::forbidden("User registration is not enabled"));
     }
 
+    // Validate callbackURL even though sign-up does not currently use it:
+    // the request type accepts the field, so we must not let a caller
+    // think an untrusted value was accepted. Require an absolute URL so
+    // the contract matches `send_verification_email` / `/sign-in/email`
+    // when sign-up eventually wires this through.
+    if let Some(ref url) = body.callback_url
+        && !ctx.config.is_absolute_trusted_callback_url(url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
+        ));
+    }
+
     password_utils::validate_password(
         &body.password,
         config.password_min_length,
@@ -335,6 +348,19 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
     callback_url: Option<&str>,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SignInCoreResult<DB::User>> {
+    // Defence in depth: `sign_in_core` already validated the callback,
+    // but helper functions called directly (`sign_in_username_core`
+    // passes `None`) must still honour the same contract. Require an
+    // absolute http(s) URL on a trusted origin so any future caller
+    // that plumbs a raw request value through can't regress.
+    if let Some(url) = callback_url
+        && !ctx.config.is_absolute_trusted_callback_url(url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
+        ));
+    }
+
     // Verify password
     let stored_hash = user.password_hash().ok_or(AuthError::InvalidCredentials)?;
 
@@ -393,6 +419,20 @@ pub(crate) async fn sign_in_core<DB: DatabaseAdapter>(
     email_verification: Option<&EmailVerificationPlugin>,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SignInCoreResult<DB::User>> {
+    // Validate callbackURL BEFORE the user lookup so that "unknown user"
+    // and "untrusted callback" return the same 400 regardless of whether
+    // the email exists — prevents the enumeration oracle that would
+    // otherwise differ 401 vs 400. The callback ends up in a
+    // verification-email `href` when the user is unverified, so require
+    // an absolute URL.
+    if let Some(ref url) = body.callback_url
+        && !ctx.config.is_absolute_trusted_callback_url(url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
+        ));
+    }
+
     let user = ctx
         .database
         .get_user_by_email(&body.email)
@@ -767,5 +807,82 @@ mod tests {
         );
         let err = plugin.handle_sign_in(&bad_req, &ctx).await.unwrap_err();
         assert_eq!(err.to_string(), AuthError::InvalidCredentials.to_string());
+    }
+
+    fn create_signin_request_with_callback(
+        email: &str,
+        password: &str,
+        callback_url: &str,
+    ) -> AuthRequest {
+        let body = serde_json::json!({
+            "email": email,
+            "password": password,
+            "callbackURL": callback_url,
+        });
+        AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-in/email".to_string(),
+            HashMap::new(),
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_sign_in_rejects_untrusted_callback_url_without_email_oracle() {
+        // callback URL is rejected for both existing and non-existing users,
+        // proving the check lives before the user lookup and does not create
+        // an enumeration oracle.
+        let plugin = EmailPasswordPlugin::new();
+        let ctx = create_test_context();
+
+        let signup_req = create_signup_request("sign-in-cb@test.com", "Password123!");
+        plugin.handle_sign_up(&signup_req, &ctx).await.unwrap();
+
+        let bad_for_existing = create_signin_request_with_callback(
+            "sign-in-cb@test.com",
+            "Password123!",
+            "https://evil.example.com/cb",
+        );
+        let err_existing = plugin
+            .handle_sign_in(&bad_for_existing, &ctx)
+            .await
+            .unwrap_err();
+        assert_eq!(err_existing.status_code(), 400);
+
+        let bad_for_missing = create_signin_request_with_callback(
+            "does-not-exist@test.com",
+            "Password123!",
+            "https://evil.example.com/cb",
+        );
+        let err_missing = plugin
+            .handle_sign_in(&bad_for_missing, &ctx)
+            .await
+            .unwrap_err();
+        assert_eq!(err_missing.status_code(), 400);
+        assert_eq!(err_existing.to_string(), err_missing.to_string());
+    }
+
+    #[tokio::test]
+    async fn test_sign_up_rejects_untrusted_callback_url() {
+        let plugin = EmailPasswordPlugin::new();
+        let ctx = create_test_context();
+
+        let body = serde_json::json!({
+            "name": "Sign Up CB",
+            "email": "signup-cb@test.com",
+            "password": "Password123!",
+            "callbackURL": "https://evil.example.com/cb",
+        });
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-up/email".to_string(),
+            HashMap::new(),
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+
+        let err = plugin.handle_sign_up(&req, &ctx).await.unwrap_err();
+        assert_eq!(err.status_code(), 400);
     }
 }

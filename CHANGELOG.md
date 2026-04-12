@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- `AuthConfig::is_redirect_target_trusted` now validates every user-supplied
+  `callbackURL` / `redirectTo` used in a server-issued 302 `Location` header
+  or an outgoing email link. Protocol-relative (`//evil.com`) and browser
+  backslash-normalised forms (`/\evil.com`) are rejected even when
+  `advanced.disable_origin_check` is enabled.
+- `extract_origin` now uses the WHATWG URL parser; this fixes the
+  previous hand-rolled version that kept query strings, fragments, and
+  userinfo in the returned origin (so `app.example.com@evil.com` could
+  masquerade as an app-origin URL).
+- `Account.password` (bcrypt/argon2 hash) is no longer serialized by
+  serde. Deserialization is unchanged.
+
 ### Fixed
 
 - `SessionManager::get_session` previously discarded
@@ -27,6 +41,31 @@ All notable changes to this project will be documented in this file.
   failures (malformed chunked framing, client disconnect) return
   `400 Bad Request` with the underlying error captured via
   `tracing::warn!` for operators.
+
+### Behavior change (breaking for some deployments)
+
+- `POST /sign-in/social`, `POST /link-social`, `POST /sign-in/email`,
+  `POST /sign-up/email`, `POST /change-email`, and
+  `POST /send-verification-email` now return `400 Bad Request` when
+  `callbackURL` is not an absolute http(s) URL on a trusted origin
+  (same-origin with `base_url` or matching a `trusted_origins`
+  pattern). Absolute is required because the callback is either
+  forwarded to an OAuth provider as `redirect_uri` (the OAuth spec
+  mandates absolute URIs) or embedded in an outgoing email `href`
+  (mail clients have no base URL to resolve against). This is
+  stricter than upstream TypeScript `better-auth@1.4.19` for the
+  OAuth flows; deployments that rely on cross-origin callbacks must
+  add the callback origin to `AuthConfig::trusted_origins` or set
+  `advanced.disable_origin_check = true`.
+- `POST /forget-password` applies the same absolute-URL requirement to
+  `redirectTo`; untrusted or relative values fall back to the server
+  base URL to preserve the enumeration-safety invariant.
+- `GET /verify-email` and `GET /reset-password/:token` silently ignore
+  an untrusted `callbackURL` and fall through to their JSON responses
+  (these endpoints are reached via email-link clicks — a hard 400
+  would strand users who already consumed a one-shot token). Relative
+  paths are still accepted here because the server issues the
+  redirect directly.
 
 ## [0.9.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.8.0...v0.9.0) - 2026-03-11
 
