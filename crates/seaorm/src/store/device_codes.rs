@@ -97,4 +97,14 @@ where
             .map(|_| ())
             .map_err(map_db_err)
     }
+
+    async fn delete_device_code_if_status(&self, id: &str, status: &str) -> AuthResult<bool> {
+        Entity::delete_many()
+            .filter(Column::Id.eq(id))
+            .filter(Column::Status.eq(status))
+            .exec(self.connection())
+            .await
+            .map(|result| result.rows_affected == 1)
+            .map_err(map_db_err)
+    }
 }

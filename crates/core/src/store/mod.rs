@@ -205,6 +205,10 @@ pub trait DeviceCodeStore: Send + Sync {
     ) -> AuthResult<DeviceCode>;
     /// Delete a device code record.
     async fn delete_device_code(&self, id: &str) -> AuthResult<()>;
+    /// Delete a device code only when it still has the expected status.
+    ///
+    /// Returns `true` when a matching row was deleted and `false` otherwise.
+    async fn delete_device_code_if_status(&self, id: &str, status: &str) -> AuthResult<bool>;
 }
 
 #[async_trait]
