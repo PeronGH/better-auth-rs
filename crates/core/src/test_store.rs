@@ -8,15 +8,16 @@ use crate::config::AuthConfig;
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
 use crate::store::{
-    AccountStore, ApiKeyStore, AuthStore, AuthTransaction, InvitationStore, MemberStore,
-    OrganizationStore, PasskeyStore, SessionStore, TransactionStore, TwoFactorStore, UserStore,
-    VerificationStore,
+    AccountStore, ApiKeyStore, AuthStore, AuthTransaction, DeviceCodeStore, InvitationStore,
+    MemberStore, OrganizationStore, PasskeyStore, SessionStore, TransactionStore, TwoFactorStore,
+    UserStore, VerificationStore,
 };
 use crate::types::{
-    ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization,
-    CreatePasskey, CreateSession, CreateTwoFactor, CreateUser, CreateVerification, Invitation,
-    InvitationStatus, ListUsersParams, Member, Organization, Passkey, TwoFactor, UpdateAccount,
-    UpdateApiKey, UpdateOrganization, UpdateUser,
+    ApiKey, CreateAccount, CreateApiKey, CreateDeviceCode, CreateInvitation, CreateMember,
+    CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
+    CreateVerification, DeviceCode, Invitation, InvitationStatus, ListUsersParams, Member,
+    Organization, Passkey, TwoFactor, UpdateAccount, UpdateApiKey, UpdateDeviceCode,
+    UpdateOrganization, UpdateUser,
 };
 use crate::wire::{AccountView, SessionView, UserView, VerificationView};
 
@@ -35,6 +36,7 @@ struct State {
     sessions: HashMap<String, SessionView>,
     accounts: HashMap<String, AccountView>,
     verifications: HashMap<String, VerificationView>,
+    device_codes: HashMap<String, DeviceCode>,
 }
 
 #[derive(Default)]
@@ -602,6 +604,81 @@ impl PasskeyStore for MemoryStore {
         Err(AuthError::internal("unsupported test-store operation"))
     }
     async fn delete_passkey(&self, _id: &str) -> AuthResult<()> {
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl DeviceCodeStore for MemoryStore {
+    async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
+        let device_code = DeviceCode {
+            id: uuid::Uuid::new_v4().to_string(),
+            device_code: input.device_code,
+            user_code: input.user_code,
+            user_id: input.user_id,
+            expires_at: input.expires_at,
+            status: input.status,
+            last_polled_at: input.last_polled_at,
+            polling_interval: input.polling_interval,
+            client_id: input.client_id,
+            scope: input.scope,
+        };
+        self.lock()
+            .device_codes
+            .insert(device_code.id.clone(), device_code.clone());
+        Ok(device_code)
+    }
+
+    async fn get_device_code_by_device_code(
+        &self,
+        device_code: &str,
+    ) -> AuthResult<Option<DeviceCode>> {
+        Ok(self
+            .lock()
+            .device_codes
+            .values()
+            .find(|value| value.device_code == device_code)
+            .cloned())
+    }
+
+    async fn get_device_code_by_user_code(
+        &self,
+        user_code: &str,
+    ) -> AuthResult<Option<DeviceCode>> {
+        Ok(self
+            .lock()
+            .device_codes
+            .values()
+            .find(|value| value.user_code == user_code)
+            .cloned())
+    }
+
+    async fn update_device_code(
+        &self,
+        id: &str,
+        update: UpdateDeviceCode,
+    ) -> AuthResult<DeviceCode> {
+        let mut state = self.lock();
+        let device_code = state
+            .device_codes
+            .get_mut(id)
+            .ok_or_else(|| AuthError::not_found("Device code not found"))?;
+
+        if let Some(status) = update.status {
+            device_code.status = status;
+        }
+        if let Some(user_id) = update.user_id {
+            device_code.user_id = user_id;
+        }
+        if let Some(last_polled_at) = update.last_polled_at {
+            device_code.last_polled_at = last_polled_at;
+        }
+
+        Ok(device_code.clone())
+    }
+
+    async fn delete_device_code(&self, id: &str) -> AuthResult<()> {
+        self.lock().device_codes.remove(id);
         Ok(())
     }
 }

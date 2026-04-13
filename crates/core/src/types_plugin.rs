@@ -68,6 +68,56 @@ pub struct UpdatePasskey {
     pub name: Option<String>,
 }
 
+/// Device authorization code storage shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceCode {
+    pub id: String,
+    #[serde(rename = "deviceCode")]
+    pub device_code: String,
+    #[serde(rename = "userCode")]
+    pub user_code: String,
+    #[serde(rename = "userId", skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: DateTime<Utc>,
+    pub status: String,
+    #[serde(rename = "lastPolledAt", skip_serializing_if = "Option::is_none")]
+    pub last_polled_at: Option<DateTime<Utc>>,
+    #[serde(rename = "pollingInterval", skip_serializing_if = "Option::is_none")]
+    pub polling_interval: Option<i64>,
+    #[serde(rename = "clientId", skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+}
+
+/// Input for creating a new device authorization code.
+#[derive(Debug, Clone)]
+pub struct CreateDeviceCode {
+    pub device_code: String,
+    pub user_code: String,
+    pub user_id: Option<String>,
+    pub expires_at: DateTime<Utc>,
+    pub status: String,
+    pub last_polled_at: Option<DateTime<Utc>>,
+    pub polling_interval: Option<i64>,
+    pub client_id: Option<String>,
+    pub scope: Option<String>,
+}
+
+/// Input for updating an existing device authorization code.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateDeviceCode {
+    /// Update the status. `None` leaves it unchanged.
+    pub status: Option<String>,
+    /// Update the approving/denying user. `Some(None)` clears it, `None` leaves
+    /// it unchanged.
+    pub user_id: Option<Option<String>>,
+    /// Update the last poll timestamp. `Some(None)` clears it, `None` leaves it
+    /// unchanged.
+    pub last_polled_at: Option<Option<DateTime<Utc>>>,
+}
+
 /// API key response shape.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKey {

@@ -29,6 +29,7 @@ pub mod plugins;
 
 pub use plugins::account_management::AccountManagementPlugin;
 pub use plugins::api_key::{ApiKeyConfig, ApiKeyPlugin};
+pub use plugins::device_authorization::DeviceAuthorizationPlugin;
 pub use plugins::email_password::EmailPasswordPlugin;
 pub use plugins::email_verification::EmailVerificationPlugin;
 pub use plugins::oauth::OAuthPlugin;

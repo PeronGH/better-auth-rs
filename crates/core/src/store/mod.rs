@@ -8,10 +8,11 @@ pub mod cache;
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
 use crate::types::{
-    ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization,
-    CreatePasskey, CreateSession, CreateTwoFactor, CreateUser, CreateVerification, Invitation,
-    InvitationStatus, ListUsersParams, Member, Organization, Passkey, TwoFactor, UpdateAccount,
-    UpdateApiKey, UpdateOrganization, UpdateUser,
+    ApiKey, CreateAccount, CreateApiKey, CreateDeviceCode, CreateInvitation, CreateMember,
+    CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
+    CreateVerification, DeviceCode, Invitation, InvitationStatus, ListUsersParams, Member,
+    Organization, Passkey, TwoFactor, UpdateAccount, UpdateApiKey, UpdateDeviceCode,
+    UpdateOrganization, UpdateUser,
 };
 
 pub use cache::{CacheAdapter, MemoryCacheAdapter};
@@ -183,6 +184,29 @@ pub trait PasskeyStore: Send + Sync {
     async fn delete_passkey(&self, id: &str) -> AuthResult<()>;
 }
 
+/// Persistence for OAuth device authorization codes.
+#[async_trait]
+pub trait DeviceCodeStore: Send + Sync {
+    /// Persist a newly-issued device code.
+    async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode>;
+    /// Fetch a device code by its opaque device-facing token.
+    async fn get_device_code_by_device_code(
+        &self,
+        device_code: &str,
+    ) -> AuthResult<Option<DeviceCode>>;
+    /// Fetch a device code by its user-facing verification code.
+    async fn get_device_code_by_user_code(&self, user_code: &str)
+    -> AuthResult<Option<DeviceCode>>;
+    /// Update mutable device-code state such as approval status or poll time.
+    async fn update_device_code(
+        &self,
+        id: &str,
+        update: UpdateDeviceCode,
+    ) -> AuthResult<DeviceCode>;
+    /// Delete a device code record.
+    async fn delete_device_code(&self, id: &str) -> AuthResult<()>;
+}
+
 #[async_trait]
 pub trait TransactionStore<S: AuthSchema>: Send + Sync {
     async fn transaction_boxed(
@@ -202,6 +226,7 @@ pub trait AuthStore<S: AuthSchema>:
     + TwoFactorStore
     + ApiKeyStore
     + PasskeyStore
+    + DeviceCodeStore
     + TransactionStore<S>
     + Send
     + Sync
@@ -221,6 +246,7 @@ where
         + TwoFactorStore
         + ApiKeyStore
         + PasskeyStore
+        + DeviceCodeStore
         + TransactionStore<S>
         + Send
         + Sync,

@@ -3,6 +3,7 @@
 mod accounts;
 mod api_keys;
 mod bundled_schema;
+mod device_codes;
 pub mod entities;
 mod invitations;
 mod members;
