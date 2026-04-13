@@ -31,11 +31,15 @@ Test suites, scripts, and source comments reference these phase numbers
 `/sign-in/social`, `/callback`, `/link-social`, `/list-accounts`,
 `/unlink-account`
 
-**Phase 4 — Machine auth and API-key CRUD:**
+**Phase 4 — Device authorization grant (RFC 8628):**
+`/device/code`, `/device/token`, `/device`,
+`/device/approve`, `/device/deny`
+
+**Phase 5 — Machine auth and API-key CRUD:**
 Bearer behavior, `/api-key/create`, `/api-key/list`, `/api-key/get`,
 `/api-key/update`, `/api-key/delete`, `/api-key/verify`
 
-**Phase 5 — Organization core:**
+**Phase 6 — Organization core:**
 `/organization/create`, `/organization/check-slug`,
 `/organization/update`, `/organization/delete`,
 `/organization/get-full-organization`, `/organization/set-active`,
@@ -53,15 +57,15 @@ Bearer behavior, `/api-key/create`, `/api-key/list`, `/api-key/get`,
 `/organization/list-user-invitations`,
 `/organization/has-permission`
 
-**Phase 6 — Admin core:**
+**Phase 7 — Admin core:**
 `/admin/list-users`, `/admin/create-user`, `/admin/remove-user`,
 `/admin/set-user-password`, `/admin/set-role`,
 `/admin/has-permission`
 
-**Phase 7 — Passkey surface:**
+**Phase 8 — Passkey surface:**
 All `/passkey/*` endpoints.
 
-**Phase 8 — Organization advanced:**
+**Phase 9 — Organization advanced:**
 `/organization/create-team`, `/organization/remove-team`,
 `/organization/update-team`, `/organization/list-teams`,
 `/organization/set-active-team`, `/organization/list-user-teams`,
@@ -72,14 +76,14 @@ All `/passkey/*` endpoints.
 `/organization/list-roles`, `/organization/get-role`,
 `/organization/update-role`
 
-**Phase 9 — Admin extended support flows:**
+**Phase 10 — Admin extended support flows:**
 `/admin/get-user`, `/admin/update-user`, `/admin/ban-user`,
 `/admin/unban-user`, `/admin/impersonate-user`,
 `/admin/stop-impersonating`, `/admin/list-user-sessions`,
 `/admin/revoke-user-session`, `/admin/revoke-user-sessions`
 
-**Phase 10 — Two-factor authentication:**
+**Phase 11 — Two-factor authentication:**
 All `/two-factor/*` endpoints.
 
-**Phase 11 — Cold account and token surfaces:**
+**Phase 12 — Cold account and token surfaces:**
 `/verify-password`, `/update-session`, `/account-info`, `/token`
