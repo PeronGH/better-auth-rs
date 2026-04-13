@@ -12,6 +12,12 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 
+// Only include the fields your plugins need.
+// Core fields (id, name, email, etc.) are always required.
+// Plugin fields (username, banned, etc.) are optional — the AuthEntity
+// macro returns sensible defaults for any missing plugin field.
+// Extra app-specific fields are also supported.
+
 mod user {
     use super::*;
 
@@ -25,18 +31,10 @@ mod user {
         pub email: Option<String>,
         pub email_verified: bool,
         pub image: Option<String>,
-        pub username: Option<String>,
-        pub display_username: Option<String>,
-        pub two_factor_enabled: bool,
-        pub role: Option<String>,
-        pub banned: bool,
-        pub ban_reason: Option<String>,
-        pub ban_expires: Option<DateTimeUtc>,
-        pub metadata: Json,
         pub created_at: DateTimeUtc,
         pub updated_at: DateTimeUtc,
-        // Extra app-specific fields — AuthEntity sets these to NotSet on
-        // creation; populate via DB defaults or ActiveModelBehavior.
+        // Extra app-specific field — gets NotSet on creation,
+        // populate via DB defaults or ActiveModelBehavior.
         pub locale: Option<String>,
     }
 
@@ -62,8 +60,6 @@ mod session {
         pub ip_address: Option<String>,
         pub user_agent: Option<String>,
         pub user_id: String,
-        pub impersonated_by: Option<String>,
-        pub active_organization_id: Option<String>,
         pub active: bool,
     }
 

@@ -245,6 +245,13 @@ fn gen_user(
     // apply_update — only update fields that exist
     let plugin_apply_update = plugin_update_fields_user(has, seaorm_root);
 
+    let username_column_impl = if has("username") {
+        quote! { fn username_column() -> Option<Self::Column> { Some(Column::Username) } }
+    } else {
+        // Use trait default (returns None)
+        quote! {}
+    };
+
     quote! {
         impl #core_root::entity::AuthUser for #ident {
             fn id(&self) -> ::std::borrow::Cow<'_, str> { ::std::borrow::Cow::Borrowed(&self.id) }
@@ -272,7 +279,7 @@ fn gen_user(
 
             fn id_column() -> Self::Column { Column::Id }
             fn email_column() -> Self::Column { Column::Email }
-            fn username_column() -> Self::Column { Column::Username }
+            #username_column_impl
             fn name_column() -> Self::Column { Column::Name }
             fn created_at_column() -> Self::Column { Column::CreatedAt }
             fn parse_id(id: &str) -> #core_root::AuthResult<Self::Id> {

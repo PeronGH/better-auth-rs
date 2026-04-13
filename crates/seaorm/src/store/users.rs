@@ -94,8 +94,11 @@ where
     }
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<S::User>> {
+        let Some(col) = <S::User as SeaOrmUserModel>::username_column() else {
+            return Ok(None);
+        };
         <S::User as SeaOrmUserModel>::Entity::find()
-            .filter(<S::User as SeaOrmUserModel>::username_column().eq(username))
+            .filter(col.eq(username))
             .one(self.connection())
             .await
             .map_err(map_db_err)
@@ -172,7 +175,13 @@ where
             let predicate = match field {
                 "email" => <S::User as SeaOrmUserModel>::email_column().contains(value),
                 "name" => <S::User as SeaOrmUserModel>::name_column().contains(value),
-                "username" => <S::User as SeaOrmUserModel>::username_column().contains(value),
+                "username" => {
+                    if let Some(col) = <S::User as SeaOrmUserModel>::username_column() {
+                        col.contains(value)
+                    } else {
+                        <S::User as SeaOrmUserModel>::email_column().contains(value)
+                    }
+                }
                 _ => <S::User as SeaOrmUserModel>::email_column().contains(value),
             };
             count_query = count_query.filter(predicate.clone());
@@ -194,10 +203,18 @@ where
             }
             (Some("name"), _) => query.order_by_desc(<S::User as SeaOrmUserModel>::name_column()),
             (Some("username"), Some("asc")) => {
-                query.order_by_asc(<S::User as SeaOrmUserModel>::username_column())
+                if let Some(col) = <S::User as SeaOrmUserModel>::username_column() {
+                    query.order_by_asc(col)
+                } else {
+                    query.order_by_asc(<S::User as SeaOrmUserModel>::created_at_column())
+                }
             }
             (Some("username"), _) => {
-                query.order_by_desc(<S::User as SeaOrmUserModel>::username_column())
+                if let Some(col) = <S::User as SeaOrmUserModel>::username_column() {
+                    query.order_by_desc(col)
+                } else {
+                    query.order_by_desc(<S::User as SeaOrmUserModel>::created_at_column())
+                }
             }
             (_, Some("asc")) => {
                 query.order_by_asc(<S::User as SeaOrmUserModel>::created_at_column())
