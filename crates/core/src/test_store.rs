@@ -677,6 +677,34 @@ impl DeviceCodeStore for MemoryStore {
         Ok(device_code.clone())
     }
 
+    async fn update_device_code_if_status(
+        &self,
+        id: &str,
+        current_status: &str,
+        update: UpdateDeviceCode,
+    ) -> AuthResult<bool> {
+        let mut state = self.lock();
+        let Some(device_code) = state.device_codes.get_mut(id) else {
+            return Ok(false);
+        };
+
+        if device_code.status != current_status {
+            return Ok(false);
+        }
+
+        if let Some(status) = update.status {
+            device_code.status = status;
+        }
+        if let Some(user_id) = update.user_id {
+            device_code.user_id = user_id;
+        }
+        if let Some(last_polled_at) = update.last_polled_at {
+            device_code.last_polled_at = last_polled_at;
+        }
+
+        Ok(true)
+    }
+
     async fn delete_device_code(&self, id: &str) -> AuthResult<()> {
         self.lock().device_codes.remove(id);
         Ok(())

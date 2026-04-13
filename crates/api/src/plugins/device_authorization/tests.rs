@@ -551,6 +551,63 @@ async fn test_device_approve_requires_authentication_and_blocks_double_processin
     );
 }
 
+// Deliberate hardening divergence from the current TS runtime: exactly one
+// approval request may process a pending device code.
+#[tokio::test]
+async fn test_device_approve_allows_only_one_concurrent_decision() {
+    let plugin = DeviceAuthorizationPlugin::new();
+    let (ctx, _user, session) = create_context_with_user("decision-race@example.com").await;
+
+    let create_request = test_helpers::create_auth_json_request_no_query(
+        HttpMethod::Post,
+        "/device/code",
+        None,
+        Some(serde_json::json!({ "client_id": "test-client" })),
+    );
+    let create_response = plugin
+        .handle_device_code(&create_request, &ctx)
+        .await
+        .unwrap();
+    let create_body = json_body(&create_response);
+    let user_code = create_body["user_code"].as_str().unwrap().to_string();
+
+    let first_request = test_helpers::create_auth_json_request_no_query(
+        HttpMethod::Post,
+        "/device/approve",
+        Some(&session.token),
+        Some(serde_json::json!({ "userCode": user_code.clone() })),
+    );
+    let second_request = test_helpers::create_auth_json_request_no_query(
+        HttpMethod::Post,
+        "/device/approve",
+        Some(&session.token),
+        Some(serde_json::json!({ "userCode": user_code })),
+    );
+
+    let (first_response, second_response) = tokio::join!(
+        plugin.handle_device_approve(&first_request, &ctx),
+        plugin.handle_device_approve(&second_request, &ctx),
+    );
+
+    let first_response = first_response.unwrap();
+    let second_response = second_response.unwrap();
+
+    let success_count = [first_response.status, second_response.status]
+        .into_iter()
+        .filter(|status| *status == 200)
+        .count();
+    assert_eq!(success_count, 1);
+
+    let already_processed_count = [json_body(&first_response), json_body(&second_response)]
+        .into_iter()
+        .filter(|body| {
+            body["error"] == "invalid_request"
+                && body["error_description"] == DEVICE_CODE_ALREADY_PROCESSED
+        })
+        .count();
+    assert_eq!(already_processed_count, 1);
+}
+
 // Upstream source: packages/better-auth/src/plugins/device-authorization/device-authorization.test.ts :: client mismatch scenario.
 #[tokio::test]
 async fn test_device_token_rejects_client_id_mismatch() {

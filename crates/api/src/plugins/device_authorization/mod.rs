@@ -369,7 +369,13 @@ impl DeviceAuthorizationPlugin {
                 .await
             {
                 Ok(session) => session,
-                Err(_) => {
+                Err(error) => {
+                    tracing::error!(
+                        error = %error,
+                        device_code_id = %device_code.id,
+                        user_id,
+                        "failed to create session after device code redemption"
+                    );
                     return device_error_response(500, "server_error", FAILED_TO_CREATE_SESSION);
                 }
             };
@@ -491,10 +497,11 @@ impl DeviceAuthorizationPlugin {
                 .unwrap_or_else(|| current_user_id.clone()),
         };
 
-        let _ = ctx
+        let updated = ctx
             .database
-            .update_device_code(
+            .update_device_code_if_status(
                 &device_code.id,
+                DEVICE_STATUS_PENDING,
                 UpdateDeviceCode {
                     status: Some(decision.status().to_string()),
                     user_id: Some(Some(updated_user_id)),
@@ -502,6 +509,10 @@ impl DeviceAuthorizationPlugin {
                 },
             )
             .await?;
+
+        if !updated {
+            return device_error_response(400, "invalid_request", DEVICE_CODE_ALREADY_PROCESSED);
+        }
 
         AuthResponse::json(200, &DeviceActionResponse { success: true }).map_err(AuthError::from)
     }
