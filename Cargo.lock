@@ -523,6 +523,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "better-auth-cli"
+version = "0.10.0"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "better-auth-core"
 version = "0.10.0"
 dependencies = [

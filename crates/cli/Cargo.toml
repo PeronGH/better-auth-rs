@@ -1,0 +1,14 @@
+[package]
+name = "better-auth-cli"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "CLI tools for better-auth-rs"
+repository = { workspace = true }
+
+[[bin]]
+name = "better-auth-rs"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }

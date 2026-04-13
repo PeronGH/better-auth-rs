@@ -11,7 +11,7 @@ workspace = true
 
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/api", "crates/derive", "crates/seaorm", "crates/seaorm-macros"]
+members = ["crates/core", "crates/api", "crates/derive", "crates/seaorm", "crates/seaorm-macros", "crates/cli"]
 exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compat-tests/rust-server"]
 
 [workspace.package]
