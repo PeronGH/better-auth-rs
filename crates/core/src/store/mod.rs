@@ -203,6 +203,16 @@ pub trait DeviceCodeStore: Send + Sync {
         id: &str,
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode>;
+    /// Update a device code only when it still has the expected status.
+    ///
+    /// Returns `true` when the compare-and-swap succeeds, or `false` when the
+    /// row was already moved to a different state.
+    async fn update_device_code_if_status(
+        &self,
+        id: &str,
+        current_status: &str,
+        update: UpdateDeviceCode,
+    ) -> AuthResult<bool>;
     /// Delete a device code record.
     async fn delete_device_code(&self, id: &str) -> AuthResult<()>;
     /// Delete a device code only when it still has the expected status.

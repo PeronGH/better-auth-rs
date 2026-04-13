@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use sea_orm::sea_query::Expr;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};
 use uuid::Uuid;
 
@@ -87,6 +88,32 @@ where
             .update(self.connection())
             .await
             .map(|model| DeviceCode::from(&model))
+            .map_err(map_db_err)
+    }
+
+    async fn update_device_code_if_status(
+        &self,
+        id: &str,
+        current_status: &str,
+        update: UpdateDeviceCode,
+    ) -> AuthResult<bool> {
+        let mut update_many = Entity::update_many();
+        if let Some(status) = update.status {
+            update_many = update_many.col_expr(Column::Status, Expr::value(status));
+        }
+        if let Some(user_id) = update.user_id {
+            update_many = update_many.col_expr(Column::UserId, Expr::value(user_id));
+        }
+        if let Some(last_polled_at) = update.last_polled_at {
+            update_many = update_many.col_expr(Column::LastPolledAt, Expr::value(last_polled_at));
+        }
+
+        update_many
+            .filter(Column::Id.eq(id))
+            .filter(Column::Status.eq(current_status))
+            .exec(self.connection())
+            .await
+            .map(|result| result.rows_affected == 1)
             .map_err(map_db_err)
     }
 
