@@ -4,6 +4,10 @@ use better_auth::seaorm::sea_orm::entity::prelude::*;
 use better_auth::seaorm::sea_orm::{ConnectionTrait, Schema};
 use better_auth::seaorm::{AuthEntity, DatabaseConnection};
 
+// Only include the fields your plugins need.
+// This example uses EmailPasswordPlugin, SessionManagementPlugin,
+// and PasswordManagementPlugin — none require username or admin fields.
+
 mod user {
     use super::*;
 
@@ -17,14 +21,6 @@ mod user {
         pub email: Option<String>,
         pub email_verified: bool,
         pub image: Option<String>,
-        pub username: Option<String>,
-        pub display_username: Option<String>,
-        pub two_factor_enabled: bool,
-        pub role: Option<String>,
-        pub banned: bool,
-        pub ban_reason: Option<String>,
-        pub ban_expires: Option<DateTimeUtc>,
-        pub metadata: Json,
         pub created_at: DateTimeUtc,
         pub updated_at: DateTimeUtc,
     }
@@ -51,8 +47,6 @@ mod session {
         pub ip_address: Option<String>,
         pub user_agent: Option<String>,
         pub user_id: String,
-        pub impersonated_by: Option<String>,
-        pub active_organization_id: Option<String>,
         pub active: bool,
     }
 
