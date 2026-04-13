@@ -5,8 +5,8 @@ use sea_orm::sea_query::IntoIden;
 use sea_orm_migration::prelude::*;
 
 use super::entities::{
-    account, api_key, invitation, member, organization, passkey, session, two_factor, user,
-    verification,
+    account, api_key, device_code, invitation, member, organization, passkey, session, two_factor,
+    user, verification,
 };
 
 pub struct AuthMigrator;
@@ -42,11 +42,13 @@ impl MigrationTrait for InitialAuthSchema {
         create_two_factor(manager).await?;
         create_api_keys(manager).await?;
         create_passkeys(manager).await?;
+        create_device_codes(manager).await?;
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         for table in [
+            device_code::Entity.table_ref(),
             passkey::Entity.table_ref(),
             api_key::Entity.table_ref(),
             two_factor::Entity.table_ref(),
@@ -775,6 +777,79 @@ async fn create_passkeys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                 .to_owned(),
         )
         .await?;
+    Ok(())
+}
+
+async fn create_device_codes(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
+    manager
+        .create_table(
+            Table::create()
+                .table(device_code::Entity)
+                .if_not_exists()
+                .col(
+                    ColumnDef::new(device_code::Column::Id)
+                        .string()
+                        .not_null()
+                        .primary_key(),
+                )
+                .col(
+                    ColumnDef::new(device_code::Column::DeviceCode)
+                        .string()
+                        .not_null()
+                        .unique_key(),
+                )
+                .col(
+                    ColumnDef::new(device_code::Column::UserCode)
+                        .string()
+                        .not_null()
+                        .unique_key(),
+                )
+                .col(ColumnDef::new(device_code::Column::UserId).string())
+                .col(
+                    ColumnDef::new(device_code::Column::ExpiresAt)
+                        .timestamp_with_time_zone()
+                        .not_null(),
+                )
+                .col(
+                    ColumnDef::new(device_code::Column::Status)
+                        .string()
+                        .not_null(),
+                )
+                .col(ColumnDef::new(device_code::Column::LastPolledAt).timestamp_with_time_zone())
+                .col(ColumnDef::new(device_code::Column::PollingInterval).big_integer())
+                .col(ColumnDef::new(device_code::Column::ClientId).string())
+                .col(ColumnDef::new(device_code::Column::Scope).string())
+                .foreign_key(
+                    ForeignKey::create()
+                        .name("fk_device_code_user_id")
+                        .from(device_code::Entity, device_code::Column::UserId)
+                        .to(user::Entity, user::Column::Id)
+                        .on_delete(ForeignKeyAction::Cascade),
+                )
+                .to_owned(),
+        )
+        .await?;
+
+    for (name, column) in [
+        (
+            "idx_device_code_device_code",
+            device_code::Column::DeviceCode,
+        ),
+        ("idx_device_code_user_code", device_code::Column::UserCode),
+        ("idx_device_code_user_id", device_code::Column::UserId),
+        ("idx_device_code_expires_at", device_code::Column::ExpiresAt),
+    ] {
+        manager
+            .create_index(
+                Index::create()
+                    .name(name)
+                    .table(device_code::Entity)
+                    .col(column)
+                    .to_owned(),
+            )
+            .await?;
+    }
+
     Ok(())
 }
 

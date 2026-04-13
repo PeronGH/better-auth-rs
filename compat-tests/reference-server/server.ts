@@ -3,6 +3,7 @@
 import { Database } from "bun:sqlite";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
+import { deviceAuthorization } from "better-auth/plugins";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 
 function getPort() {
@@ -312,6 +313,7 @@ const authOptions = {
     },
   },
   plugins: [
+    deviceAuthorization(),
     genericOAuth({
       config: [
         {

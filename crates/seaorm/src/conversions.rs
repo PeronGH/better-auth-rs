@@ -1,5 +1,5 @@
 use better_auth_core::{
-    ApiKey, Invitation, InvitationStatus, Member, Organization, Passkey, TwoFactor,
+    ApiKey, DeviceCode, Invitation, InvitationStatus, Member, Organization, Passkey, TwoFactor,
 };
 use chrono::{DateTime, Utc};
 
@@ -104,6 +104,23 @@ impl From<&entities::passkey::Model> for Passkey {
             backed_up: model.backed_up,
             transports: model.transports.clone(),
             created_at: model.created_at,
+        }
+    }
+}
+
+impl From<&entities::device_code::Model> for DeviceCode {
+    fn from(model: &entities::device_code::Model) -> Self {
+        Self {
+            id: model.id.clone(),
+            device_code: model.device_code.clone(),
+            user_code: model.user_code.clone(),
+            user_id: model.user_id.clone(),
+            expires_at: model.expires_at,
+            status: model.status.clone(),
+            last_polled_at: model.last_polled_at,
+            polling_interval: model.polling_interval,
+            client_id: model.client_id.clone(),
+            scope: model.scope.clone(),
         }
     }
 }

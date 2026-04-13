@@ -12,8 +12,8 @@ pub use super::types_org::{
     Organization, UpdateOrganization,
 };
 pub use super::types_plugin::{
-    ApiKey, CreateApiKey, CreatePasskey, CreateTwoFactor, Passkey, TwoFactor, UpdateApiKey,
-    UpdatePasskey,
+    ApiKey, CreateApiKey, CreateDeviceCode, CreatePasskey, CreateTwoFactor, DeviceCode, Passkey,
+    TwoFactor, UpdateApiKey, UpdateDeviceCode, UpdatePasskey,
 };
 
 /// HTTP method enumeration
