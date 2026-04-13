@@ -11,6 +11,20 @@
     )
 )]
 
+#[cfg(all(feature = "native-tls", feature = "rustls"))]
+compile_error!(
+    "features `native-tls` and `rustls` are mutually exclusive. \
+     Enable exactly one of them: \
+     for `native-tls` (default), remove the `rustls` feature; \
+     for `rustls`, set `default-features = false, features = [\"rustls\"]`."
+);
+
+#[cfg(not(any(feature = "native-tls", feature = "rustls")))]
+compile_error!(
+    "one of the TLS backends must be enabled: \
+     enable either the `native-tls` (default) or `rustls` feature."
+);
+
 pub mod plugins;
 
 pub use plugins::account_management::AccountManagementPlugin;

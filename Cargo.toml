@@ -23,7 +23,7 @@ repository = "https://github.com/better-auth-rs/better-auth-rs"
 [workspace.dependencies]
 # Sub-crates
 better-auth-core = { version = "0.10.0", path = "crates/core" }
-better-auth-api = { version = "0.10.0", path = "crates/api" }
+better-auth-api = { version = "0.10.0", path = "crates/api", default-features = false }
 better-auth-macros = { version = "0.10.0", path = "crates/derive", package = "better-auth-macros" }
 better-auth-seaorm = { version = "0.10.0", path = "crates/seaorm" }
 better-auth-schema-registry = { version = "0.10.0", path = "crates/schema-registry" }
@@ -68,7 +68,7 @@ hmac = "0.12"
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 
 # HTTP client
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
 
 # Web frameworks
 axum = "0.8"
@@ -84,7 +84,9 @@ quote = "1"
 syn = { version = "2", features = ["full"] }
 
 [features]
-default = []
+default = ["native-tls"]
+native-tls = ["better-auth-api/native-tls"]
+rustls = ["better-auth-api/rustls"]
 axum = ["dep:axum", "dep:tower", "dep:url", "better-auth-core/axum", "better-auth-api/axum"]
 seaorm2 = ["dep:better-auth-seaorm"]
 redis-cache = ["dep:redis"]

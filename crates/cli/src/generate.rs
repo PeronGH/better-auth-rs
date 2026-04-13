@@ -77,6 +77,10 @@ pub(crate) fn generate_schema(plugins: &[String]) -> String {
         #migration_fn
     };
 
+    #[expect(
+        clippy::expect_used,
+        reason = "generated from hardcoded registry; parse failure is a bug"
+    )]
     let file = syn::parse2(tokens).expect("generated code should be valid syntax");
     prettyplease::unparse(&file)
 }
@@ -97,6 +101,10 @@ fn gen_entity(
         .iter()
         .map(|f| {
             let name = format_ident!("{}", f.name);
+            #[expect(
+                clippy::panic,
+                reason = "type strings come from hardcoded registry; parse failure is a bug"
+            )]
             let ty: syn::Type = syn::parse_str(f.ty)
                 .unwrap_or_else(|e| panic!("invalid type `{}` for field `{}`: {e}", f.ty, f.name));
             if f.is_primary_key {
