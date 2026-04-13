@@ -582,3 +582,60 @@ async fn test_device_token_rejects_client_id_mismatch() {
     assert_eq!(body["error"], "invalid_grant");
     assert_eq!(body["error_description"], CLIENT_ID_MISMATCH);
 }
+
+// Deliberate hardening divergence from the current TS runtime: exactly one
+// poller may redeem an approved device code.
+#[tokio::test]
+async fn test_device_token_allows_only_one_concurrent_redemption() {
+    let plugin = DeviceAuthorizationPlugin::new();
+    let (ctx, _user, session) = create_context_with_user("concurrent@example.com").await;
+
+    let create_request = test_helpers::create_auth_json_request_no_query(
+        HttpMethod::Post,
+        "/device/code",
+        None,
+        Some(serde_json::json!({ "client_id": "test-client" })),
+    );
+    let create_response = plugin
+        .handle_device_code(&create_request, &ctx)
+        .await
+        .unwrap();
+    let create_body = json_body(&create_response);
+    let device_code = create_body["device_code"].as_str().unwrap().to_string();
+    let user_code = create_body["user_code"].as_str().unwrap().to_string();
+
+    let approve_request = test_helpers::create_auth_json_request_no_query(
+        HttpMethod::Post,
+        "/device/approve",
+        Some(&session.token),
+        Some(serde_json::json!({ "userCode": user_code })),
+    );
+    let approve_response = plugin
+        .handle_device_approve(&approve_request, &ctx)
+        .await
+        .unwrap();
+    assert_eq!(json_body(&approve_response)["success"], true);
+
+    let first_request = device_token_request(&device_code, "test-client");
+    let second_request = device_token_request(&device_code, "test-client");
+
+    let (first_response, second_response) = tokio::join!(
+        plugin.handle_device_token(&first_request, &ctx),
+        plugin.handle_device_token(&second_request, &ctx),
+    );
+
+    let first_response = first_response.unwrap();
+    let second_response = second_response.unwrap();
+
+    let success_count = [first_response.status, second_response.status]
+        .into_iter()
+        .filter(|status| *status == 200)
+        .count();
+    assert_eq!(success_count, 1);
+
+    let invalid_grant_count = [json_body(&first_response), json_body(&second_response)]
+        .into_iter()
+        .filter(|body| body["error"] == "invalid_grant")
+        .count();
+    assert_eq!(invalid_grant_count, 1);
+}

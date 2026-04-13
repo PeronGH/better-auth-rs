@@ -681,6 +681,20 @@ impl DeviceCodeStore for MemoryStore {
         self.lock().device_codes.remove(id);
         Ok(())
     }
+
+    async fn delete_device_code_if_status(&self, id: &str, status: &str) -> AuthResult<bool> {
+        let mut state = self.lock();
+        let should_delete = state
+            .device_codes
+            .get(id)
+            .is_some_and(|device_code| device_code.status == status);
+
+        if should_delete {
+            state.device_codes.remove(id);
+        }
+
+        Ok(should_delete)
+    }
 }
 
 #[async_trait]

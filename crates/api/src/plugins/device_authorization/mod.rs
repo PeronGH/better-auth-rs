@@ -354,6 +354,14 @@ impl DeviceAuthorizationPlugin {
                 return device_error_response(500, "server_error", USER_NOT_FOUND);
             };
 
+            if !ctx
+                .database
+                .delete_device_code_if_status(&device_code.id, DEVICE_STATUS_APPROVED)
+                .await?
+            {
+                return device_error_response(400, "invalid_grant", INVALID_DEVICE_CODE);
+            }
+
             let meta = RequestMeta::from_request(req);
             let session = match ctx
                 .session_manager()
@@ -365,8 +373,6 @@ impl DeviceAuthorizationPlugin {
                     return device_error_response(500, "server_error", FAILED_TO_CREATE_SESSION);
                 }
             };
-
-            ctx.database.delete_device_code(&device_code.id).await?;
 
             return Ok(AuthResponse::json(
                 200,
