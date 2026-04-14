@@ -538,6 +538,17 @@ pub(crate) struct AccountInfoCoreResult {
     account_cookie: Option<AccountCookiePayload>,
 }
 
+enum AccountInfoError {
+    Auth(AuthError),
+    ProviderNotConfigured(String),
+}
+
+impl From<AuthError> for AccountInfoError {
+    fn from(value: AuthError) -> Self {
+        Self::Auth(value)
+    }
+}
+
 struct AccountInfoTarget {
     provider_id: String,
     token_account_id: Option<String>,
@@ -1590,23 +1601,20 @@ async fn resolve_account_info_target(
         }))
 }
 
-pub(crate) async fn account_info_core(
+async fn account_info_core(
     query: &AccountInfoQuery,
     config: &OAuthConfig,
     req: &AuthRequest,
     session: &impl AuthSession,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<Option<AccountInfoCoreResult>> {
+) -> Result<Option<AccountInfoCoreResult>, AccountInfoError> {
     let Some(target) = resolve_account_info_target(query, req, session, ctx).await? else {
         return Ok(None);
     };
 
     let provider = config.providers.get(&target.provider_id);
     let Some(provider) = provider else {
-        return Err(AuthError::internal(format!(
-            "Provider account provider is {} but it is not configured",
-            target.provider_id
-        )));
+        return Err(AccountInfoError::ProviderNotConfigured(target.provider_id));
     };
 
     let token_result = get_access_token_core(
@@ -1620,10 +1628,13 @@ pub(crate) async fn account_info_core(
         session,
         ctx,
     )
-    .await?;
+    .await
+    .map_err(AccountInfoError::from)?;
 
     let Some(access_token) = token_result.response.access_token.clone() else {
-        return Err(AuthError::bad_request("Access token not found"));
+        return Err(AccountInfoError::Auth(AuthError::bad_request(
+            "Access token not found",
+        )));
     };
 
     let access_token_expires_at = token_result
@@ -1643,7 +1654,8 @@ pub(crate) async fn account_info_core(
             ..Default::default()
         },
     )
-    .await?;
+    .await
+    .map_err(AccountInfoError::from)?;
 
     Ok(Some(AccountInfoCoreResult {
         response: AccountInfoResponse {
@@ -2153,12 +2165,16 @@ pub(crate) async fn handle_account_info(
     let result = match account_info_core(&query, config, req, &session, ctx).await {
         Ok(Some(result)) => result,
         Ok(None) => return code_message_response(400, "Account not found"),
-        Err(AuthError::Internal(message))
-            if message.starts_with("Provider account provider is ") =>
-        {
-            return code_message_response(500, message);
+        Err(AccountInfoError::ProviderNotConfigured(provider_id)) => {
+            return code_message_response(
+                500,
+                format!(
+                    "Provider account provider is {} but it is not configured",
+                    provider_id
+                ),
+            );
         }
-        Err(error) => return Err(error),
+        Err(AccountInfoError::Auth(error)) => return Err(error),
     };
 
     let mut response = AuthResponse::json(200, &result.response).map_err(AuthError::from)?;
