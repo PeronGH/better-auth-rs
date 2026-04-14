@@ -220,20 +220,36 @@ pub(crate) async fn update_key_core(
         ));
     }
 
+    // Check that at least one client-allowed field is provided.
+    // expires_in is Option<Option<i64>>: None = not sent.
+    if body.name.is_none()
+        && body.enabled.is_none()
+        && body.expires_in.is_none()
+        && body.metadata.is_none()
+    {
+        return Err(super::api_key_error(
+            super::ApiKeyErrorCode::NoValuesToUpdate,
+        ));
+    }
+
     // Validations
     plugin.validate_name(body.name.as_deref(), false)?;
     plugin.validate_metadata(&body.metadata)?;
-    ApiKeyPlugin::validate_refill(body.refill_interval, body.refill_amount)?;
 
     // Ownership check via shared helper
     let _existing = helpers::get_owned_api_key(ctx, &body.key_id, user_id).await?;
 
-    // Build expires_at if expiresIn is provided
-    let expires_at = if let Some(ms) = body.expires_in {
-        let effective_ms = plugin.validate_expires_in(Some(ms))?;
-        helpers::expires_in_to_at(effective_ms)?.map(Some)
-    } else {
-        None
+    // Build expires_at from expiresIn:
+    //   None         = not sent → don't touch expires_at
+    //   Some(None)   = sent as null → clear expires_at
+    //   Some(Some(n)) = sent with value → set expires_at
+    let expires_at = match body.expires_in {
+        None => None,
+        Some(None) => Some(None),
+        Some(Some(secs)) => {
+            let validated = plugin.validate_expires_in(Some(secs))?;
+            helpers::expires_in_to_at(validated)?.map(Some)
+        }
     };
 
     let update = UpdateApiKey {

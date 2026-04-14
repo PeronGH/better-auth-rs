@@ -54,6 +54,7 @@ bon = "3.3"
 nonzero_ext = "0.3.0"
 axum = { workspace = true, optional = true }
 jsonwebtoken.workspace = true
+serde_with = "3.18.0"
 
 [dev-dependencies]
 tokio = { workspace = true }

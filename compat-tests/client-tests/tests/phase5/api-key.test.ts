@@ -520,3 +520,64 @@ compatScenario("api-key list returns keys in insertion order", async (ctx) => {
     names: items.map((item) => asRecord(item).name),
   };
 });
+
+// =========================================================================
+// Update edge cases
+// =========================================================================
+
+compatScenario("api-key update with no fields returns error", async (ctx) => {
+  const { primary } = await signUpAndGetHeaders(ctx, "phase5-update-empty");
+
+  const createRes = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/create",
+    method: "POST",
+    json: { name: "empty-update-key" },
+  });
+  const created = asRecord(createRes.body);
+
+  // Send update with only keyId and no actual changes
+  const updateRes = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/update",
+    method: "POST",
+    json: {
+      keyId: created.id,
+    },
+  });
+
+  return {
+    status: updateRes.status,
+  };
+});
+
+compatScenario("api-key update expiresIn null clears expiration", async (ctx) => {
+  const { primary } = await signUpAndGetHeaders(ctx, "phase5-update-null-exp");
+
+  // Create a key with expiration
+  const createRes = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/create",
+    method: "POST",
+    json: { expiresIn: 86400 },
+  });
+  const created = asRecord(createRes.body);
+
+  // Update with expiresIn: null to clear expiration
+  const updateRes = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/update",
+    method: "POST",
+    json: {
+      keyId: created.id,
+      expiresIn: null,
+    },
+  });
+
+  const updated = asRecord(updateRes.body);
+
+  return {
+    status: updateRes.status,
+    expiresAt: updated.expiresAt,
+  };
+});

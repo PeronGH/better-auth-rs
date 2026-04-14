@@ -47,8 +47,14 @@ pub(crate) struct UpdateKeyRequest {
     pub refill_amount: Option<i64>,
     pub permissions: Option<serde_json::Value>,
     pub metadata: Option<serde_json::Value>,
-    #[serde(rename = "expiresIn")]
-    pub expires_in: Option<i64>,
+    /// `None` = not sent, `Some(None)` = sent as null (clear expiration),
+    /// `Some(Some(n))` = sent with a value in seconds.
+    #[serde(
+        default,
+        rename = "expiresIn",
+        with = "::serde_with::rust::double_option"
+    )]
+    pub expires_in: Option<Option<i64>>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
