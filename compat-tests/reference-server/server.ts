@@ -4,6 +4,7 @@ import { Database } from "bun:sqlite";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
 import { apiKey, deviceAuthorization } from "better-auth/plugins";
+import { organization } from "better-auth/plugins/organization";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 
 function getPort() {
@@ -315,6 +316,7 @@ const authOptions = {
   plugins: [
     apiKey({ enableMetadata: true }),
     deviceAuthorization(),
+    organization(),
     genericOAuth({
       config: [
         {

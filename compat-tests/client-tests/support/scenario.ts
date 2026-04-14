@@ -21,6 +21,7 @@ import { normalizeClientValue } from "./normalize";
 import { createTracingFetch, type TraceEntry } from "./trace";
 
 type ScenarioServerContext = {
+  baseURL: string;
   actor(name?: string): {
     client: ReturnType<typeof createAuthClient>;
     fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
@@ -134,6 +135,7 @@ async function runScenario(
   const shortSeed = seed.replace(/-/g, "").slice(0, 12);
 
   const context: ScenarioServerContext = {
+    baseURL,
     actor(name = "primary") {
       const existing = actors.get(name);
       if (existing) {
