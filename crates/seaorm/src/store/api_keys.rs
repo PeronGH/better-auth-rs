@@ -182,13 +182,30 @@ where
                 // Re-derive request_count from the locked row so concurrent
                 // requests that pre-computed a stale value outside the
                 // transaction get the correct, serialized increment.
+                //
+                // Also check whether the rate-limit window has expired: if
+                // last_request + time_window < now, the counter should reset
+                // rather than reject.
                 let mut update = update;
                 if let Some(max) = rate_limit_max {
                     let current = model.request_count.unwrap_or(0) as i64;
-                    if current >= max {
+                    let window_expired = model
+                        .last_request
+                        .map(|lr| {
+                            let tw = model.rate_limit_time_window.unwrap_or(0) as i64;
+                            (Utc::now() - lr).num_milliseconds() > tw
+                        })
+                        .unwrap_or(true);
+
+                    if current >= max && !window_expired {
                         return Ok(None);
                     }
-                    update.request_count = Some(current + 1);
+
+                    if window_expired {
+                        update.request_count = Some(1);
+                    } else {
+                        update.request_count = Some(current + 1);
+                    }
                 }
 
                 let active = apply_update_fields(model.into_active_model(), update)?;
