@@ -130,8 +130,8 @@ compatScenario("api-key list returns created keys without key field", async (ctx
       const rec = asRecord(item);
       return rec.key === undefined;
     }),
-    // Sort names for order-independent comparison
-    names: items.map((item) => asRecord(item).name).sort(),
+    // List should return insertion order (not reverse)
+    names: items.map((item) => asRecord(item).name),
   };
 });
 
@@ -306,5 +306,217 @@ compatScenario("api-key create with metadata preserves it", async (ctx) => {
   return {
     status: res.status,
     metadata: body.metadata,
+  };
+});
+
+// =========================================================================
+// Prefix and start field
+// =========================================================================
+
+compatScenario("api-key create with prefix includes prefix in start field", async (ctx) => {
+  const { primary } = await signUpAndGetHeaders(ctx, "phase5-prefix-start");
+
+  const res = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/create",
+    method: "POST",
+    json: {
+      prefix: "ba_",
+    },
+  });
+
+  const body = asRecord(res.body);
+  const key = body.key as string;
+  const start = body.start as string;
+
+  return {
+    status: res.status,
+    prefix: body.prefix,
+    keyStartsWithPrefix: key.startsWith("ba_"),
+    // TS computes start from the full key (including prefix),
+    // so start should equal key.substring(0, 6)
+    startMatchesKeySubstring: start === key.substring(0, 6),
+    startLength: start.length,
+  };
+});
+
+compatScenario("api-key create without prefix has start from key beginning", async (ctx) => {
+  const { primary } = await signUpAndGetHeaders(ctx, "phase5-no-prefix-start");
+
+  const res = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/create",
+    method: "POST",
+    json: {},
+  });
+
+  const body = asRecord(res.body);
+  const key = body.key as string;
+  const start = body.start as string;
+
+  return {
+    status: res.status,
+    startMatchesKeySubstring: start === key.substring(0, 6),
+    startLength: start.length,
+  };
+});
+
+// =========================================================================
+// Permissions in response
+// =========================================================================
+
+compatScenario("api-key create rejects server-only permissions field from client", async (ctx) => {
+  const { primary } = await signUpAndGetHeaders(ctx, "phase5-perms-reject");
+
+  // TS rejects server-only fields (permissions, remaining, refillAmount, etc.)
+  // when the request comes over HTTP (i.e. from a client)
+  const res = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/create",
+    method: "POST",
+    json: {
+      permissions: { admin: ["read", "write"], user: ["read"] },
+    },
+  });
+
+  return {
+    status: res.status,
+  };
+});
+
+// =========================================================================
+// Error shapes
+// =========================================================================
+
+compatScenario("api-key create without session returns 401", async (ctx) => {
+  // Don't sign up — just call create directly without session
+  const res = await ctx.rawRequest({
+    path: "/api/auth/api-key/create",
+    method: "POST",
+    json: {},
+  });
+
+  return {
+    status: res.status,
+  };
+});
+
+compatScenario("api-key get non-existent key returns error", async (ctx) => {
+  const { primary } = await signUpAndGetHeaders(ctx, "phase5-get-missing");
+
+  const res = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/get?id=non-existent-id",
+  });
+
+  return {
+    status: res.status,
+  };
+});
+
+compatScenario("api-key update non-existent key returns error", async (ctx) => {
+  const { primary } = await signUpAndGetHeaders(ctx, "phase5-update-missing");
+
+  const res = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/update",
+    method: "POST",
+    json: {
+      keyId: "non-existent-id",
+      name: "new-name",
+    },
+  });
+
+  return {
+    status: res.status,
+  };
+});
+
+compatScenario("api-key delete non-existent key returns error", async (ctx) => {
+  const { primary } = await signUpAndGetHeaders(ctx, "phase5-delete-missing");
+
+  const res = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/delete",
+    method: "POST",
+    json: {
+      keyId: "non-existent-id",
+    },
+  });
+
+  return {
+    status: res.status,
+  };
+});
+
+compatScenario("api-key get another users key returns error", async (ctx) => {
+  // User A creates a key, user B tries to get it
+  const { primary } = await signUpAndGetHeaders(ctx, "phase5-cross-user-get-a");
+
+  const createRes = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/create",
+    method: "POST",
+    json: { name: "user-a-key" },
+  });
+  const created = asRecord(createRes.body);
+
+  // Sign up user B
+  const userB = ctx.actor("userB");
+  await userB.client.signUp.email({
+    email: ctx.uniqueEmail("phase5-cross-user-get-b"),
+    password: "password123",
+    name: "User B",
+  });
+
+  const getRes = await ctx.rawRequest({
+    actor: "userB",
+    path: `/api/auth/api-key/get?id=${created.id}`,
+  });
+
+  return {
+    status: getRes.status,
+  };
+});
+
+// =========================================================================
+// List ordering
+// =========================================================================
+
+compatScenario("api-key list returns keys in insertion order", async (ctx) => {
+  const { primary } = await signUpAndGetHeaders(ctx, "phase5-list-order");
+
+  // Create three keys in sequence
+  await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/create",
+    method: "POST",
+    json: { name: "first" },
+  });
+  await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/create",
+    method: "POST",
+    json: { name: "second" },
+  });
+  await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/create",
+    method: "POST",
+    json: { name: "third" },
+  });
+
+  const res = await ctx.rawRequest({
+    actor: "primary",
+    path: "/api/auth/api-key/list",
+  });
+
+  const items = asArray(res.body);
+
+  return {
+    status: res.status,
+    count: items.length,
+    // TS returns insertion order (no explicit sort)
+    names: items.map((item) => asRecord(item).name),
   };
 });
