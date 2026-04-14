@@ -1,7 +1,6 @@
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use rand::Rng as _;
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::sync::Mutex;
 
@@ -23,56 +22,34 @@ use types::*;
 // ---------------------------------------------------------------------------
 
 /// Dedicated API Key error codes aligned with the TypeScript implementation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApiKeyErrorCode {
-    #[serde(rename = "INVALID_API_KEY")]
     InvalidApiKey,
-    #[serde(rename = "KEY_DISABLED")]
     KeyDisabled,
-    #[serde(rename = "KEY_EXPIRED")]
     KeyExpired,
-    #[serde(rename = "USAGE_EXCEEDED")]
     UsageExceeded,
-    #[serde(rename = "KEY_NOT_FOUND")]
     KeyNotFound,
-    #[serde(rename = "RATE_LIMITED")]
     RateLimited,
-    #[serde(rename = "UNAUTHORIZED_SESSION")]
     UnauthorizedSession,
-    #[serde(rename = "INVALID_PREFIX_LENGTH")]
     InvalidPrefixLength,
-    #[serde(rename = "INVALID_NAME_LENGTH")]
     InvalidNameLength,
-    #[serde(rename = "METADATA_DISABLED")]
     MetadataDisabled,
-    #[serde(rename = "NO_VALUES_TO_UPDATE")]
     NoValuesToUpdate,
-    #[serde(rename = "KEY_DISABLED_EXPIRATION")]
     KeyDisabledExpiration,
-    #[serde(rename = "EXPIRES_IN_IS_TOO_SMALL")]
     ExpiresInTooSmall,
-    #[serde(rename = "EXPIRES_IN_IS_TOO_LARGE")]
     ExpiresInTooLarge,
-    #[serde(rename = "INVALID_REMAINING")]
     InvalidRemaining,
-    #[serde(rename = "REFILL_AMOUNT_AND_INTERVAL_REQUIRED")]
     RefillAmountAndIntervalRequired,
-    #[serde(rename = "NAME_REQUIRED")]
     NameRequired,
-    #[serde(rename = "INVALID_USER_ID_FROM_API_KEY")]
     InvalidUserIdFromApiKey,
-    #[serde(rename = "SERVER_ONLY_PROPERTY")]
     ServerOnlyProperty,
-    #[serde(rename = "FAILED_TO_UPDATE_API_KEY")]
     FailedToUpdateApiKey,
-    #[serde(rename = "INVALID_METADATA_TYPE")]
     InvalidMetadataType,
 }
 
 impl ApiKeyErrorCode {
-    /// Return the SCREAMING_SNAKE_CASE string for this error code.
-    /// Used by `handle_verify` to produce the structured JSON error response.
-    pub fn as_str(self) -> &'static str {
+    #[cfg(test)]
+    fn as_str(self) -> &'static str {
         match self {
             Self::InvalidApiKey => "INVALID_API_KEY",
             Self::KeyDisabled => "KEY_DISABLED",
@@ -135,8 +112,7 @@ fn api_key_error(code: ApiKeyErrorCode) -> AuthError {
     AuthError::bad_request(code.message())
 }
 
-/// Structured error returned by `validate_api_key` so that `handle_verify`
-/// can extract the error code without fragile string matching.
+/// Structured error returned by `validate_api_key`.
 struct ApiKeyValidationError {
     code: ApiKeyErrorCode,
     message: String,
@@ -538,24 +514,7 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    // -----------------------------------------------------------------------
-    // POST /api-key/verify -- core verification endpoint
-    // -----------------------------------------------------------------------
-
-    async fn handle_verify(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    ) -> AuthResult<AuthResponse> {
-        let verify_req: VerifyKeyRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
-        let response = verify_key_core(&verify_req, self, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
-    }
-
-    /// Core validation logic shared by `handle_verify` and `before_request`.
+    /// Core validation logic used by `before_request`.
     ///
     /// Validation chain: exists -> disabled -> expired -> permissions ->
     /// remaining/refill -> rate limit.
@@ -720,18 +679,48 @@ impl ApiKeyPlugin {
         Ok(ApiKeyView::from(&updated))
     }
 
-    // -----------------------------------------------------------------------
-    // POST /api-key/delete-all-expired-api-keys
-    // -----------------------------------------------------------------------
+    // -- Test-only handlers (not exposed as HTTP routes) ---------------------
 
+    #[cfg(test)]
+    async fn handle_verify(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<AuthResponse> {
+        use types::VerifyKeyRequest;
+
+        let verify_req: VerifyKeyRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+
+        let result = self
+            .validate_api_key(ctx, &verify_req.key, verify_req.permissions.as_ref())
+            .await;
+
+        let response = match result {
+            Ok(view) => serde_json::json!({ "valid": true, "error": null, "key": view }),
+            Err(e) => serde_json::json!({
+                "valid": false,
+                "error": { "message": e.message, "code": e.code.as_str() },
+                "key": null,
+            }),
+        };
+        Ok(AuthResponse::json(200, &response)?)
+    }
+
+    #[cfg(test)]
     async fn handle_delete_all_expired(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
-        let response = delete_all_expired_core(user.id(), self, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        let (_user, _session) = ctx.require_session(req).await?;
+        let _ = ctx.database.delete_expired_api_keys().await?;
+        Ok(AuthResponse::json(
+            200,
+            &serde_json::json!({ "success": true, "error": null }),
+        )?)
     }
 }
 
@@ -747,8 +736,6 @@ better_auth_core::impl_auth_plugin! {
         post "/api-key/update"                    => handle_update,             "api_key_update";
         post "/api-key/delete"                    => handle_delete,             "api_key_delete";
         get  "/api-key/list"                      => handle_list,               "api_key_list";
-        post "/api-key/verify"                    => handle_verify,             "api_key_verify";
-        post "/api-key/delete-all-expired-api-keys" => handle_delete_all_expired, "api_key_delete_all_expired";
     }
     extra {
         async fn before_request(
