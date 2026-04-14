@@ -168,6 +168,23 @@ pub trait ApiKeyStore: Send + Sync {
     async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<ApiKey>;
     async fn delete_api_key(&self, id: &str) -> AuthResult<()>;
     async fn delete_expired_api_keys(&self) -> AuthResult<usize>;
+
+    /// Atomically apply an update to an API key, but only if the current
+    /// `request_count` is below `rate_limit_max`.
+    ///
+    /// Returns `Ok(Some(key))` if the update was applied, `Ok(None)` if the
+    /// rate limit was already reached. Implementations should use a
+    /// transaction or conditional write to prevent concurrent requests from
+    /// exceeding the limit.
+    ///
+    /// When `rate_limit_max` is `None`, the check is skipped and the update
+    /// is always applied (equivalent to `update_api_key`).
+    async fn update_api_key_if_rate_allowed(
+        &self,
+        id: &str,
+        update: UpdateApiKey,
+        rate_limit_max: Option<i64>,
+    ) -> AuthResult<Option<ApiKey>>;
 }
 
 #[async_trait]

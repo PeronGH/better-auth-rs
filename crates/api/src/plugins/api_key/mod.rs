@@ -618,7 +618,10 @@ impl ApiKeyPlugin {
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited));
         }
 
-        // 6. Build update
+        // 6. Build update and apply atomically with rate-limit guard.
+        // The store implementation uses SELECT ... FOR UPDATE inside a
+        // transaction so concurrent requests cannot exceed the configured
+        // max — an improvement over the TS which has a read-check-write race.
         let mut update = UpdateApiKey {
             remaining: new_remaining,
             ..Default::default()
@@ -633,11 +636,18 @@ impl ApiKeyPlugin {
             update.request_count = Some(rc);
         }
 
+        let effective_max = if self.config.rate_limit.enabled && api_key.rate_limit_enabled() {
+            api_key.rate_limit_max()
+        } else {
+            None
+        };
+
         let updated = ctx
             .database
-            .update_api_key(&api_key.id(), update)
+            .update_api_key_if_rate_allowed(&api_key.id(), update, effective_max)
             .await
-            .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::FailedToUpdateApiKey))?;
+            .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::FailedToUpdateApiKey))?
+            .ok_or_else(|| ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited))?;
 
         // Throttled cleanup
         self.maybe_delete_expired(ctx).await;

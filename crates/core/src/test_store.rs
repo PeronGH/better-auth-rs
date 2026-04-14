@@ -578,6 +578,14 @@ impl ApiKeyStore for MemoryStore {
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
         Ok(0)
     }
+    async fn update_api_key_if_rate_allowed(
+        &self,
+        _id: &str,
+        _update: UpdateApiKey,
+        _rate_limit_max: Option<i64>,
+    ) -> AuthResult<Option<ApiKey>> {
+        Err(AuthError::internal("unsupported test-store operation"))
+    }
 }
 
 #[async_trait]
