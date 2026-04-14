@@ -2,6 +2,7 @@ use better_auth_core::entity::{AuthMember, AuthOrganization, AuthSession, AuthUs
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::types::{AuthRequest, AuthResponse};
+use std::cmp::Ordering;
 
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::OrganizationConfig;
@@ -18,6 +19,67 @@ fn has_role(member: &impl AuthMember, role: &str) -> bool {
         .split(',')
         .map(str::trim)
         .any(|candidate| candidate == role)
+}
+
+fn member_field_value(member: &MemberResponse, field: &str) -> Option<String> {
+    match field {
+        "id" => Some(member.id.clone()),
+        "organizationId" => Some(member.organization_id.clone()),
+        "userId" => Some(member.user_id.clone()),
+        "role" => Some(member.role.clone()),
+        "createdAt" => Some(member.created_at.to_rfc3339()),
+        _ => None,
+    }
+}
+
+fn compare_member_field(left: &MemberResponse, right: &MemberResponse, field: &str) -> Ordering {
+    match field {
+        "createdAt" => left.created_at.cmp(&right.created_at),
+        "role" => left.role.cmp(&right.role),
+        "id" => left.id.cmp(&right.id),
+        "organizationId" => left.organization_id.cmp(&right.organization_id),
+        "userId" => left.user_id.cmp(&right.user_id),
+        _ => Ordering::Equal,
+    }
+}
+
+fn member_matches_filter(member: &MemberResponse, query: &ListMembersQuery) -> bool {
+    let Some(field) = query.filter_field.as_deref() else {
+        return true;
+    };
+    let Some(filter_value) = query.filter_value.as_deref() else {
+        return true;
+    };
+    let operator = query.filter_operator.as_deref().unwrap_or("eq");
+    let Some(actual_value) = member_field_value(member, field) else {
+        return true;
+    };
+
+    match operator {
+        "eq" => actual_value == filter_value,
+        "ne" => actual_value != filter_value,
+        "contains" => actual_value.contains(filter_value),
+        "gt" | "gte" | "lt" | "lte" if field == "createdAt" => {
+            let Ok(actual) = chrono::DateTime::parse_from_rfc3339(&actual_value) else {
+                return false;
+            };
+            let Ok(expected) = chrono::DateTime::parse_from_rfc3339(filter_value) else {
+                return false;
+            };
+            match operator {
+                "gt" => actual > expected,
+                "gte" => actual >= expected,
+                "lt" => actual < expected,
+                "lte" => actual <= expected,
+                _ => false,
+            }
+        }
+        "gt" => actual_value.as_str() > filter_value,
+        "gte" => actual_value.as_str() >= filter_value,
+        "lt" => actual_value.as_str() < filter_value,
+        "lte" => actual_value.as_str() <= filter_value,
+        _ => true,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -37,7 +99,7 @@ pub(crate) async fn get_active_member_core(
         .database
         .get_member(org_id, &user.id())
         .await?
-        .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
+        .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
     Ok(MemberResponse::from_member_and_user(&member, user))
 }
@@ -66,19 +128,27 @@ pub(crate) async fn list_members_core(
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
     let members_raw = ctx.database.list_organization_members(&org_id).await?;
-    let total = members_raw.len();
-
-    let offset = query.offset.unwrap_or(0);
-    let limit = query.limit.unwrap_or(50).min(100);
-
-    let members_page: Vec<_> = members_raw.into_iter().skip(offset).take(limit).collect();
-
-    let mut members = Vec::with_capacity(members_page.len());
-    for member in &members_page {
+    let mut members = Vec::with_capacity(members_raw.len());
+    for member in &members_raw {
         if let Some(user_info) = ctx.database.get_user_by_id(&member.user_id()).await? {
             members.push(MemberResponse::from_member_and_user(member, &user_info));
         }
     }
+
+    members.retain(|member| member_matches_filter(member, query));
+
+    if let Some(sort_by) = query.sort_by.as_deref() {
+        members.sort_by(|left, right| compare_member_field(left, right, sort_by));
+        if matches!(query.sort_direction.as_deref(), Some("desc")) {
+            members.reverse();
+        }
+    }
+
+    let total = members.len();
+
+    let offset = query.offset.unwrap_or(0);
+    let limit = query.limit.unwrap_or(50).min(100);
+    let members = members.into_iter().skip(offset).take(limit).collect();
 
     Ok(ListMembersResponse { members, total })
 }

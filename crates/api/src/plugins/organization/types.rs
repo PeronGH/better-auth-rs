@@ -28,6 +28,27 @@ where
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum NullableStringField {
+    #[default]
+    Missing,
+    Null,
+    Value(String),
+}
+
+fn deserialize_nullable_string_field<'de, D>(
+    deserializer: D,
+) -> Result<NullableStringField, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    Ok(match value {
+        Some(value) => NullableStringField::Value(value),
+        None => NullableStringField::Null,
+    })
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum RoleInput {
@@ -98,8 +119,12 @@ pub struct CheckSlugRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct SetActiveOrganizationRequest {
-    #[serde(rename = "organizationId")]
-    pub organization_id: Option<Option<String>>,
+    #[serde(
+        default,
+        rename = "organizationId",
+        deserialize_with = "deserialize_nullable_string_field"
+    )]
+    pub organization_id: NullableStringField,
     #[serde(rename = "organizationSlug")]
     pub organization_slug: Option<String>,
 }
@@ -154,6 +179,16 @@ pub struct ListMembersQuery {
     pub limit: Option<usize>,
     #[serde(default, deserialize_with = "deserialize_optional_usize_from_string")]
     pub offset: Option<usize>,
+    #[serde(rename = "sortBy")]
+    pub sort_by: Option<String>,
+    #[serde(rename = "sortDirection")]
+    pub sort_direction: Option<String>,
+    #[serde(rename = "filterField")]
+    pub filter_field: Option<String>,
+    #[serde(rename = "filterValue")]
+    pub filter_value: Option<String>,
+    #[serde(rename = "filterOperator")]
+    pub filter_operator: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -393,5 +428,34 @@ impl BasicMemberResponse {
             role: member.role().to_string(),
             created_at: member.created_at(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NullableStringField, SetActiveOrganizationRequest};
+
+    #[test]
+    fn set_active_request_distinguishes_missing_from_null() {
+        let missing: SetActiveOrganizationRequest = serde_json::from_value(serde_json::json!({}))
+            .expect("missing field should deserialize");
+        let null: SetActiveOrganizationRequest = serde_json::from_value(serde_json::json!({
+            "organizationId": null
+        }))
+        .expect("null field should deserialize");
+        let value: SetActiveOrganizationRequest = serde_json::from_value(serde_json::json!({
+            "organizationId": "org-123"
+        }))
+        .expect("string field should deserialize");
+
+        assert!(matches!(
+            missing.organization_id,
+            NullableStringField::Missing
+        ));
+        assert!(matches!(null.organization_id, NullableStringField::Null));
+        assert!(matches!(
+            value.organization_id,
+            NullableStringField::Value(ref organization_id) if organization_id == "org-123"
+        ));
     }
 }

@@ -87,6 +87,58 @@ compatScenario("organization member queries cover add member and active member e
   };
 });
 
+compatScenario("organization list members supports sort and filter queries", async (ctx) => {
+  const owner = await signUpUser(ctx, "owner", "phase6-list-owner", "Owner");
+  const member = await signUpUser(ctx, "member", "phase6-list-member", "Member");
+  const admin = await signUpUser(ctx, "admin", "phase6-list-admin", "Admin");
+  const slug = ctx.uniqueToken("phase6-list-org");
+
+  const organization = await owner.orgClient.organization.create({
+    name: "List Org",
+    slug,
+  });
+
+  const invitedMember = await owner.orgClient.organization.inviteMember({
+    organizationId: organization.data?.id ?? "",
+    email: member.email,
+    role: "member",
+  });
+  await member.orgClient.organization.acceptInvitation({
+    invitationId: invitedMember.data?.id ?? "",
+  });
+
+  const invitedAdmin = await owner.orgClient.organization.inviteMember({
+    organizationId: organization.data?.id ?? "",
+    email: admin.email,
+    role: "admin",
+  });
+  await admin.orgClient.organization.acceptInvitation({
+    invitationId: invitedAdmin.data?.id ?? "",
+  });
+
+  const filteredMembers = await owner.orgClient.organization.listMembers({
+    query: {
+      organizationId: organization.data?.id,
+      filterField: "role",
+      filterOperator: "ne",
+      filterValue: "owner",
+    },
+  });
+  const sortedMembers = await owner.orgClient.organization.listMembers({
+    query: {
+      organizationId: organization.data?.id,
+      sortBy: "createdAt",
+      sortDirection: "desc",
+    },
+  });
+
+  return {
+    organization: ctx.snapshot(organization),
+    filteredMembers: ctx.snapshot(filteredMembers),
+    sortedMembers: ctx.snapshot(sortedMembers),
+  };
+});
+
 compatScenario("organization membership mutations cover permissions, role updates, removal, and leave", async (ctx) => {
   const owner = await signUpUser(ctx, "owner", "phase6-mutations-owner", "Owner");
   const member = await signUpUser(ctx, "member", "phase6-mutations-member", "Member");

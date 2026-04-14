@@ -5,7 +5,8 @@ use crate::plugins::organization::types::{
     BasicMemberResponse, CheckSlugRequest, CheckSlugResponse, CreateOrganizationRequest,
     CreateOrganizationResponse, CreatedOrganizationResponse, DeleteOrganizationRequest,
     FullOrganizationResponse, GetFullOrganizationQuery, LeaveOrganizationRequest, MemberResponse,
-    OrganizationResponse, SetActiveOrganizationRequest, UpdateOrganizationRequest,
+    NullableStringField, OrganizationResponse, SetActiveOrganizationRequest,
+    UpdateOrganizationRequest,
 };
 use better_auth_core::entity::{AuthMember, AuthOrganization, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
@@ -255,7 +256,7 @@ pub(crate) async fn set_active_organization_core(
     session: &impl AuthSession,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Option<OrganizationResponse>> {
-    if matches!(body.organization_id, Some(None)) {
+    if matches!(body.organization_id, NullableStringField::Null) {
         if session.active_organization_id().is_none() {
             return Ok(None);
         }
@@ -267,7 +268,7 @@ pub(crate) async fn set_active_organization_core(
         return Ok(None);
     }
 
-    let org_id = if let Some(Some(id)) = &body.organization_id {
+    let org_id = if let NullableStringField::Value(id) = &body.organization_id {
         id.clone()
     } else if let Some(slug) = body.organization_slug.as_deref() {
         let organization = ctx
@@ -447,17 +448,11 @@ pub async fn handle_set_active_organization(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let clear_active_requested = req
-        .body
-        .as_ref()
-        .and_then(|body| std::str::from_utf8(body).ok())
-        .map(|body| body.contains("\"organizationId\":null"))
-        .unwrap_or(false);
     let body: SetActiveOrganizationRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    if clear_active_requested {
+    if matches!(body.organization_id, NullableStringField::Null) {
         let _ = ctx
             .database
             .update_session_active_organization(session.token(), None)
