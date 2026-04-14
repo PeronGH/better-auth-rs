@@ -324,13 +324,15 @@ impl ApiKeyPlugin {
             .map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char)
             .collect();
 
-        let start_len = self.config.starting_characters_length;
-        let start = raw.chars().take(start_len).collect::<String>();
-
         let prefix = custom_prefix
             .or(self.config.prefix.as_deref())
             .unwrap_or("");
         let full_key = format!("{}{}", prefix, raw);
+
+        // TS computes start from the full key (including prefix):
+        //   start = key.substring(0, charactersLength)
+        let start_len = self.config.starting_characters_length;
+        let start: String = full_key.chars().take(start_len).collect();
 
         let hash = if self.config.disable_key_hashing {
             full_key.clone()

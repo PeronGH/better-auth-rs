@@ -116,6 +116,26 @@ async fn verify_key(
     }
 }
 
+/// Create a key via the HTTP handler (client-allowed fields only), then
+/// patch server-only fields directly through the database.
+///
+/// `server_fields` may contain: remaining, refill_interval, refill_amount,
+/// rate_limit_enabled, rate_limit_time_window, rate_limit_max, permissions.
+async fn create_key_with_server_fields(
+    plugin: &ApiKeyPlugin,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    token: &str,
+    client_body: serde_json::Value,
+    server_fields: UpdateApiKey,
+) -> (String, String) {
+    let (id, raw_key) = create_key_and_get_raw(plugin, ctx, token, client_body).await;
+    ctx.database
+        .update_api_key(&id, server_fields)
+        .await
+        .unwrap();
+    (id, raw_key)
+}
+
 /// Test helper: delete all expired keys and return a success JSON.
 async fn delete_all_expired(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -409,11 +429,15 @@ async fn test_verify_remaining_consumption() {
     let plugin = ApiKeyPlugin::builder().build();
     let (ctx, _user, session) = create_test_context_with_user().await;
 
-    let (_id, raw_key) = create_key_and_get_raw(
+    let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
         &session.token,
-        serde_json::json!({ "name": "remain-test", "remaining": 2 }),
+        serde_json::json!({ "name": "remain-test" }),
+        UpdateApiKey {
+            remaining: Some(2),
+            ..Default::default()
+        },
     )
     .await;
 
@@ -445,16 +469,17 @@ async fn test_verify_rate_limiting() {
         .build();
     let (ctx, _user, session) = create_test_context_with_user().await;
 
-    let (_id, raw_key) = create_key_and_get_raw(
+    let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
         &session.token,
-        serde_json::json!({
-            "name": "rl-test",
-            "rateLimitEnabled": true,
-            "rateLimitTimeWindow": 60000,
-            "rateLimitMax": 2
-        }),
+        serde_json::json!({ "name": "rl-test" }),
+        UpdateApiKey {
+            rate_limit_enabled: Some(true),
+            rate_limit_time_window: Some(60_000),
+            rate_limit_max: Some(2),
+            ..Default::default()
+        },
     )
     .await;
 
@@ -519,14 +544,21 @@ async fn test_verify_permissions() {
     let plugin = ApiKeyPlugin::builder().build();
     let (ctx, _user, session) = create_test_context_with_user().await;
 
-    let (_id, raw_key) = create_key_and_get_raw(
+    let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
         &session.token,
-        serde_json::json!({
-            "name": "perm-test",
-            "permissions": { "admin": ["read", "write"], "user": ["read"] }
-        }),
+        serde_json::json!({ "name": "perm-test" }),
+        UpdateApiKey {
+            permissions: Some(
+                serde_json::to_string(&serde_json::json!({
+                    "admin": ["read", "write"],
+                    "user": ["read"]
+                }))
+                .unwrap(),
+            ),
+            ..Default::default()
+        },
     )
     .await;
 
@@ -654,25 +686,18 @@ async fn test_update_with_expires_in() {
 // server-only in TS (no HTTP routes), so the Rust plugin does not expose
 // them either. Route dispatch tests for these have been removed.
 
-// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
+// Ensure refillInterval + refillAmount require each other (validation logic)
 #[tokio::test]
 async fn test_refill_logic() {
-    // Ensure refillInterval + refillAmount require each other
-    let plugin = ApiKeyPlugin::builder().build();
-    let (ctx, _user, session) = create_test_context_with_user().await;
+    let result = ApiKeyPlugin::validate_refill(Some(60_000), None);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("refillAmount"));
 
-    let req = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/create",
-        Some(&session.token),
-        Some(serde_json::json!({
-            "name": "refill-missing",
-            "refillInterval": 60000
-        })),
-        None,
-    );
-    let err = plugin.handle_create(&req, &ctx).await.unwrap_err();
-    assert!(err.to_string().contains("refillAmount"));
+    let result = ApiKeyPlugin::validate_refill(None, Some(10));
+    assert!(result.is_err());
+
+    let result = ApiKeyPlugin::validate_refill(Some(60_000), Some(10));
+    assert!(result.is_ok());
 }
 
 // =======================================================================
@@ -804,16 +829,17 @@ async fn test_rate_limiting_third_call_fails() {
         .build();
     let (ctx, _user, session) = create_test_context_with_user().await;
 
-    let (_id, raw_key) = create_key_and_get_raw(
+    let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
         &session.token,
-        serde_json::json!({
-            "name": "rl-integration",
-            "rateLimitEnabled": true,
-            "rateLimitTimeWindow": 60000,
-            "rateLimitMax": 2
-        }),
+        serde_json::json!({ "name": "rl-integration" }),
+        UpdateApiKey {
+            rate_limit_enabled: Some(true),
+            rate_limit_time_window: Some(60_000),
+            rate_limit_max: Some(2),
+            ..Default::default()
+        },
     )
     .await;
 
@@ -837,11 +863,15 @@ async fn test_remaining_consumption_no_refill() {
     let plugin = ApiKeyPlugin::builder().build();
     let (ctx, _user, session) = create_test_context_with_user().await;
 
-    let (_id, raw_key) = create_key_and_get_raw(
+    let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
         &session.token,
-        serde_json::json!({ "name": "remaining-test", "remaining": 2 }),
+        serde_json::json!({ "name": "remaining-test" }),
+        UpdateApiKey {
+            remaining: Some(2),
+            ..Default::default()
+        },
     )
     .await;
 
@@ -871,16 +901,17 @@ async fn test_refill_resets_remaining_after_interval() {
     let (ctx, _user, session) = create_test_context_with_user().await;
 
     // Use a very short refill interval for testing (100 ms)
-    let (_id, raw_key) = create_key_and_get_raw(
+    let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
         &session.token,
-        serde_json::json!({
-            "name": "refill-test",
-            "remaining": 1,
-            "refillInterval": 100,
-            "refillAmount": 10
-        }),
+        serde_json::json!({ "name": "refill-test" }),
+        UpdateApiKey {
+            remaining: Some(1),
+            refill_interval: Some(100),
+            refill_amount: Some(10),
+            ..Default::default()
+        },
     )
     .await;
 
@@ -906,14 +937,17 @@ async fn test_permissions_mismatch_fails() {
     let plugin = ApiKeyPlugin::builder().build();
     let (ctx, _user, session) = create_test_context_with_user().await;
 
-    let (_id, raw_key) = create_key_and_get_raw(
+    let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
         &session.token,
-        serde_json::json!({
-            "name": "perm-mismatch",
-            "permissions": { "admin": ["read"] }
-        }),
+        serde_json::json!({ "name": "perm-mismatch" }),
+        UpdateApiKey {
+            permissions: Some(
+                serde_json::to_string(&serde_json::json!({ "admin": ["read"] })).unwrap(),
+            ),
+            ..Default::default()
+        },
     )
     .await;
 
@@ -943,16 +977,17 @@ async fn test_concurrent_rate_limiting() {
         .build();
     let (ctx, _user, session) = create_test_context_with_user().await;
 
-    let (_id, raw_key) = create_key_and_get_raw(
+    let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
         &session.token,
-        serde_json::json!({
-            "name": "concurrent-rl",
-            "rateLimitEnabled": true,
-            "rateLimitTimeWindow": 60000,
-            "rateLimitMax": 2
-        }),
+        serde_json::json!({ "name": "concurrent-rl" }),
+        UpdateApiKey {
+            rate_limit_enabled: Some(true),
+            rate_limit_time_window: Some(60_000),
+            rate_limit_max: Some(2),
+            ..Default::default()
+        },
     )
     .await;
 

@@ -101,6 +101,22 @@ pub(crate) async fn create_key_core(
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<CreateKeyResponse> {
+    // Reject server-only properties from HTTP clients (matches TS behavior).
+    // In the TS implementation, these fields can only be set from the server
+    // auth instance; HTTP requests always count as "client" calls.
+    if body.refill_amount.is_some()
+        || body.refill_interval.is_some()
+        || body.rate_limit_max.is_some()
+        || body.rate_limit_time_window.is_some()
+        || body.rate_limit_enabled.is_some()
+        || body.permissions.is_some()
+        || body.remaining.is_some()
+    {
+        return Err(super::api_key_error(
+            super::ApiKeyErrorCode::ServerOnlyProperty,
+        ));
+    }
+
     // Validations
     plugin.validate_prefix(body.prefix.as_deref())?;
     plugin.validate_name(body.name.as_deref(), true)?;
@@ -190,6 +206,20 @@ pub(crate) async fn update_key_core(
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
+    // Reject server-only properties from HTTP clients (matches TS behavior).
+    if body.refill_amount.is_some()
+        || body.refill_interval.is_some()
+        || body.rate_limit_max.is_some()
+        || body.rate_limit_time_window.is_some()
+        || body.rate_limit_enabled.is_some()
+        || body.remaining.is_some()
+        || body.permissions.is_some()
+    {
+        return Err(super::api_key_error(
+            super::ApiKeyErrorCode::ServerOnlyProperty,
+        ));
+    }
+
     // Validations
     plugin.validate_name(body.name.as_deref(), false)?;
     plugin.validate_metadata(&body.metadata)?;

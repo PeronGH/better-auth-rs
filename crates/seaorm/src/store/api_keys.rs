@@ -1,8 +1,6 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};
 use uuid::Uuid;
 
 use better_auth_core::store::ApiKeyStore;
@@ -76,7 +74,6 @@ where
     async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<ApiKey>> {
         Entity::find()
             .filter(Column::UserId.eq(user_id))
-            .order_by_desc(Column::CreatedAt)
             .all(self.connection())
             .await
             .map(|models| models.iter().map(ApiKey::from).collect())
