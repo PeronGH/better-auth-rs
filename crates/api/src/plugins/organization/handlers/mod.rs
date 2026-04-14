@@ -101,11 +101,7 @@ pub(crate) async fn has_permission_core(
 
     Ok(HasPermissionResponse {
         success: has_all_permissions,
-        error: if has_all_permissions {
-            None
-        } else {
-            Some("Permission denied".to_string())
-        },
+        error: None,
     })
 }
 

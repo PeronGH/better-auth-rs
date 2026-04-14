@@ -115,7 +115,7 @@ where
 
         Entity::find()
             .filter(Column::Id.is_in(organization_ids))
-            .order_by_desc(Column::CreatedAt)
+            .order_by_asc(Column::CreatedAt)
             .all(self.connection())
             .await
             .map(|models| models.iter().map(Organization::from).collect())

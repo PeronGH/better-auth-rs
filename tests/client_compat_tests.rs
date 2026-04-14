@@ -184,6 +184,12 @@ async fn phase5_client_compat() {
 
 #[tokio::test]
 #[ignore = "starts external TS and Rust servers"]
+async fn phase6_client_compat() {
+    run_client_compat(&["tests/phase6"]).await;
+}
+
+#[tokio::test]
+#[ignore = "starts external TS and Rust servers"]
 async fn full_client_compat() {
     run_client_compat(&[
         "tests/phase0",
@@ -192,6 +198,7 @@ async fn full_client_compat() {
         "tests/phase3",
         "tests/phase4",
         "tests/phase5",
+        "tests/phase6",
     ])
     .await;
 }

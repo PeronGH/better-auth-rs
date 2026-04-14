@@ -14,8 +14,14 @@ export type TraceEntry = {
 
 function normalizeTracePath(url: URL) {
   const normalized = new URL(url.toString());
-  for (const key of ["token", "state", "user_code", "id"]) {
-    if (normalized.searchParams.has(key)) {
+  for (const [key] of normalized.searchParams.entries()) {
+    if (
+      key === "token" ||
+      key === "state" ||
+      key === "user_code" ||
+      key === "id" ||
+      key.endsWith("Id")
+    ) {
       normalized.searchParams.set(key, `<${key}>`);
     }
   }

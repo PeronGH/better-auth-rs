@@ -74,6 +74,10 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
             AuthRoute::post("/organization/leave", "leave_organization"),
             // Member management
             AuthRoute::get("/organization/get-active-member", "get_active_member"),
+            AuthRoute::get(
+                "/organization/get-active-member-role",
+                "get_active_member_role",
+            ),
             AuthRoute::get("/organization/list-members", "list_members"),
             AuthRoute::post("/organization/remove-member", "remove_member"),
             AuthRoute::post("/organization/update-member-role", "update_member_role"),
@@ -127,6 +131,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
             // Member management
             (HttpMethod::Get, "/organization/get-active-member") => Ok(Some(
                 handlers::member::handle_get_active_member(req, ctx).await?,
+            )),
+            (HttpMethod::Get, "/organization/get-active-member-role") => Ok(Some(
+                handlers::member::handle_get_active_member_role(req, ctx).await?,
             )),
             (HttpMethod::Get, "/organization/list-members") => {
                 Ok(Some(handlers::member::handle_list_members(req, ctx).await?))
