@@ -1,7 +1,9 @@
 use axum::{Json, Router, response::IntoResponse, routing::get};
 use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::middleware::CsrfConfig;
-use better_auth::plugins::{EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin};
+use better_auth::plugins::{
+    EmailPasswordPlugin, PasskeyPlugin, PasswordManagementPlugin, SessionManagementPlugin,
+};
 use better_auth::prelude::AuthUser;
 use better_auth::{AuthConfig, BetterAuth};
 use better_auth::seaorm::{Database, SeaOrmStore};
@@ -53,6 +55,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new())
+            .plugin(
+                PasskeyPlugin::new()
+                    .rp_name("better-auth-rs fullstack example")
+                    .origin(frontend_url.clone()),
+            )
             .build()
             .await?,
     );
@@ -101,6 +108,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  POST /api/auth/revoke-session   - Revoke a session");
     println!("  POST /api/auth/revoke-other-sessions - Revoke other sessions");
     println!("  POST /api/auth/change-password  - Change password");
+    println!("  GET  /api/auth/passkey/generate-register-options - Start passkey registration");
+    println!("  GET  /api/auth/passkey/generate-authenticate-options - Start passkey sign-in");
     println!("  GET  /api/auth/ok               - Health check");
     println!();
     println!("App endpoints:");
