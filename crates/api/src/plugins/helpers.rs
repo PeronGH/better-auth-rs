@@ -5,14 +5,14 @@
 use better_auth_core::entity::{AuthAccount, AuthApiKey, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 
-/// Convert an `expiresIn` value (milliseconds from now) into an RFC 3339
+/// Convert an `expiresIn` value (**seconds** from now) into an RFC 3339
 /// `expires_at` timestamp string.
 ///
-/// Returns `None` when `expires_in_ms` is `None`.
-pub fn expires_in_to_at(expires_in_ms: Option<i64>) -> AuthResult<Option<String>> {
-    match expires_in_ms {
-        Some(ms) => {
-            let duration = chrono::Duration::try_milliseconds(ms)
+/// Returns `None` when `expires_in_secs` is `None`.
+pub fn expires_in_to_at(expires_in_secs: Option<i64>) -> AuthResult<Option<String>> {
+    match expires_in_secs {
+        Some(secs) => {
+            let duration = chrono::Duration::try_seconds(secs)
                 .ok_or_else(|| AuthError::bad_request("expiresIn is out of range"))?;
             let dt = chrono::Utc::now()
                 .checked_add_signed(duration)

@@ -29,8 +29,9 @@ pub(crate) struct CreateKeyRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct UpdateKeyRequest {
+    #[serde(rename = "keyId")]
     #[validate(length(min = 1, message = "Key ID is required"))]
-    pub id: String,
+    pub key_id: String,
     pub name: Option<String>,
     pub enabled: Option<bool>,
     pub remaining: Option<i64>,
@@ -52,8 +53,9 @@ pub(crate) struct UpdateKeyRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct DeleteKeyRequest {
+    #[serde(rename = "keyId")]
     #[validate(length(min = 1, message = "Key ID is required"))]
-    pub id: String,
+    pub key_id: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]

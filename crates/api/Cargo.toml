@@ -51,7 +51,6 @@ reqwest = { workspace = true }
 url = { workspace = true }
 urlencoding = "2"
 bon = "3.3"
-governor = "0.10.4"
 nonzero_ext = "0.3.0"
 axum = { workspace = true, optional = true }
 jsonwebtoken.workspace = true

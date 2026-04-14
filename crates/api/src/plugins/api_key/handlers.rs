@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use better_auth_core::{AuthContext, AuthError, AuthResult, CreateApiKey, UpdateApiKey};
+use better_auth_core::{AuthContext, AuthResult, CreateApiKey, UpdateApiKey};
 
 use super::ApiKeyPlugin;
 use super::types::*;
@@ -129,9 +129,15 @@ pub(crate) async fn create_key_core(
         start: store_start,
         expires_at,
         remaining,
-        rate_limit_enabled: body.rate_limit_enabled.unwrap_or(false),
-        rate_limit_time_window: body.rate_limit_time_window,
-        rate_limit_max: body.rate_limit_max,
+        rate_limit_enabled: body
+            .rate_limit_enabled
+            .unwrap_or(plugin.config.rate_limit.enabled),
+        rate_limit_time_window: body
+            .rate_limit_time_window
+            .or(Some(plugin.config.rate_limit.time_window)),
+        rate_limit_max: body
+            .rate_limit_max
+            .or(Some(plugin.config.rate_limit.max_requests)),
         refill_interval: body.refill_interval,
         refill_amount: body.refill_amount,
         permissions: body
@@ -190,7 +196,7 @@ pub(crate) async fn update_key_core(
     ApiKeyPlugin::validate_refill(body.refill_interval, body.refill_amount)?;
 
     // Ownership check via shared helper
-    let _existing = helpers::get_owned_api_key(ctx, &body.id, user_id).await?;
+    let _existing = helpers::get_owned_api_key(ctx, &body.key_id, user_id).await?;
 
     // Build expires_at if expiresIn is provided
     let expires_at = if let Some(ms) = body.expires_in {
@@ -223,19 +229,7 @@ pub(crate) async fn update_key_core(
         last_refill_at: None,
     };
 
-    let updated = ctx.database.update_api_key(&body.id, update).await?;
-
-    // Invalidate cached rate limiter if rate limit settings changed
-    if body.rate_limit_time_window.is_some()
-        || body.rate_limit_max.is_some()
-        || body.rate_limit_enabled.is_some()
-    {
-        let _ = plugin
-            .rate_limiters
-            .lock()
-            .map_err(|_| AuthError::internal("Rate-limit lock poisoned"))?
-            .remove(&body.id);
-    }
+    let updated = ctx.database.update_api_key(&body.key_id, update).await?;
 
     plugin.maybe_delete_expired(ctx).await;
 
@@ -245,22 +239,15 @@ pub(crate) async fn update_key_core(
 pub(crate) async fn delete_key_core(
     body: &DeleteKeyRequest,
     user_id: impl AsRef<str>,
-    plugin: &ApiKeyPlugin,
+    _plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
     // Ownership check via shared helper
-    let _existing = helpers::get_owned_api_key(ctx, &body.id, user_id).await?;
+    let _existing = helpers::get_owned_api_key(ctx, &body.key_id, user_id).await?;
 
-    ctx.database.delete_api_key(&body.id).await?;
+    ctx.database.delete_api_key(&body.key_id).await?;
 
-    // Evict cached rate limiter for the deleted key
-    let _ = plugin
-        .rate_limiters
-        .lock()
-        .map_err(|_| AuthError::internal("Rate-limit lock poisoned"))?
-        .remove(&body.id);
-
-    Ok(serde_json::json!({ "status": true }))
+    Ok(serde_json::json!({ "success": true }))
 }
 
 pub(crate) async fn verify_key_core(
@@ -295,19 +282,10 @@ pub(crate) async fn verify_key_core(
 
 pub(crate) async fn delete_all_expired_core(
     _user_id: impl AsRef<str>,
-    plugin: &ApiKeyPlugin,
+    _plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
-    let count = ctx.database.delete_expired_api_keys().await?;
+    let _ = ctx.database.delete_expired_api_keys().await?;
 
-    // Best-effort eviction: clear all cached limiters when bulk-deleting.
-    if count > 0 {
-        plugin
-            .rate_limiters
-            .lock()
-            .map_err(|_| AuthError::internal("Rate-limit lock poisoned"))?
-            .clear();
-    }
-
-    Ok(serde_json::json!({ "deleted": count }))
+    Ok(serde_json::json!({ "success": true, "error": null }))
 }

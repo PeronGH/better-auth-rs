@@ -7,7 +7,7 @@ use axum::{
 use better_auth::integrations::axum::AxumIntegration;
 use better_auth::prelude::{AuthAccount, AuthUser, CreateAccount, CreateVerification};
 use better_auth::plugins::{
-    AccountManagementPlugin, DeviceAuthorizationPlugin, EmailPasswordPlugin,
+    AccountManagementPlugin, ApiKeyPlugin, DeviceAuthorizationPlugin, EmailPasswordPlugin,
     EmailVerificationPlugin, OAuthPlugin, PasswordManagementPlugin, SessionManagementPlugin,
     UserManagementPlugin,
     email_verification::SendVerificationEmail, user_management::SendChangeEmailConfirmation,
@@ -473,6 +473,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .plugin(SessionManagementPlugin::new())
             .plugin(AccountManagementPlugin::new())
             .plugin(DeviceAuthorizationPlugin::new())
+            .plugin(ApiKeyPlugin::builder().enable_metadata(true).build())
             .plugin(
                 PasswordManagementPlugin::new().send_reset_password(Arc::new(CompatResetSender {
                     outbox: reset_outbox.clone(),

@@ -1,13 +1,8 @@
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use governor::clock::DefaultClock;
-use governor::state::{InMemoryState, NotKeyed};
-use governor::{Quota, RateLimiter};
-use rand::RngCore;
+use rand::Rng as _;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
-use std::num::NonZeroU32;
 use std::sync::Mutex;
 
 use better_auth_core::entity::{AuthApiKey, AuthUser};
@@ -165,13 +160,7 @@ pub struct ApiKeyPlugin {
     pub(super) config: ApiKeyConfig,
     /// Throttle for `delete_expired_api_keys` -- stores the last check instant.
     last_expired_check: Mutex<Option<std::time::Instant>>,
-    /// Per-key in-memory rate limiters backed by the `governor` crate.
-    /// Key: API key ID -> governor rate limiter.
-    pub(super) rate_limiters: Mutex<HashMap<String, std::sync::Arc<GovernorLimiter>>>,
 }
-
-/// Type alias for the governor rate limiter we use (not keyed, in-memory, default clock).
-type GovernorLimiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
 
 /// Configuration for the API Key plugin, aligned with the TypeScript `ApiKeyOptions`.
 #[derive(Debug, Clone)]
@@ -232,7 +221,7 @@ impl Default for KeyExpirationConfig {
             default_expires_in: None,
             disable_custom_expires_time: false,
             max_expires_in: 365,
-            min_expires_in: 0,
+            min_expires_in: 1,
         }
     }
 }
@@ -260,7 +249,7 @@ impl Default for RateLimitDefaults {
 impl Default for ApiKeyConfig {
     fn default() -> Self {
         Self {
-            key_length: 32,
+            key_length: 64,
             prefix: None,
             default_remaining: None,
             api_key_header: "x-api-key".to_string(),
@@ -299,7 +288,7 @@ impl Default for ApiKeyConfig {
 impl ApiKeyPlugin {
     #[builder]
     pub fn new(
-        #[builder(default = 32)] key_length: usize,
+        #[builder(default = 64)] key_length: usize,
         prefix: Option<String>,
         default_remaining: Option<i64>,
         #[builder(default = "x-api-key".to_string())] api_key_header: String,
@@ -336,7 +325,6 @@ impl ApiKeyPlugin {
                 enable_session_for_api_keys,
             },
             last_expired_check: Mutex::new(None),
-            rate_limiters: Mutex::new(HashMap::new()),
         }
     }
 
@@ -344,16 +332,18 @@ impl ApiKeyPlugin {
         Self {
             config,
             last_expired_check: Mutex::new(None),
-            rate_limiters: Mutex::new(HashMap::new()),
         }
     }
 
     // -- internal helpers --
 
     pub(super) fn generate_key(&self, custom_prefix: Option<&str>) -> (String, String, String) {
-        let mut bytes = vec![0u8; self.config.key_length];
-        rand::rngs::OsRng.fill_bytes(&mut bytes);
-        let raw = URL_SAFE_NO_PAD.encode(&bytes);
+        // Match TS: generateRandomString(length, "a-z", "A-Z") — alpha only
+        const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let mut rng = rand::thread_rng();
+        let raw: String = (0..self.config.key_length)
+            .map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char)
+            .collect();
 
         let start_len = self.config.starting_characters_length;
         let start = raw.chars().take(start_len).collect::<String>();
@@ -435,18 +425,19 @@ impl ApiKeyPlugin {
 
     pub(super) fn validate_expires_in(&self, expires_in: Option<i64>) -> AuthResult<Option<i64>> {
         let cfg = &self.config.key_expiration;
-        if let Some(ms) = expires_in {
+        if let Some(secs) = expires_in {
             if cfg.disable_custom_expires_time {
                 return Err(api_key_error(ApiKeyErrorCode::KeyDisabledExpiration));
             }
-            let days = ms as f64 / 86_400_000.0;
+            // expiresIn is in seconds; min/max are in days
+            let days = secs as f64 / 86_400.0;
             if days < cfg.min_expires_in as f64 {
                 return Err(api_key_error(ApiKeyErrorCode::ExpiresInTooSmall));
             }
             if days > cfg.max_expires_in as f64 {
                 return Err(api_key_error(ApiKeyErrorCode::ExpiresInTooLarge));
             }
-            Ok(Some(ms))
+            Ok(Some(secs))
         } else {
             Ok(cfg.default_expires_in)
         }
@@ -602,13 +593,7 @@ impl ApiKeyPlugin {
             && let Ok(expires_at) = chrono::DateTime::parse_from_rfc3339(expires_at_str)
             && chrono::Utc::now() > expires_at
         {
-            // Delete expired key and evict its cached rate limiter
             let _ = ctx.database.delete_api_key(&api_key.id()).await;
-            let _ = self
-                .rate_limiters
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(api_key.id().as_ref());
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::KeyExpired));
         }
 
@@ -631,13 +616,7 @@ impl ApiKeyPlugin {
         if let Some(0) = api_key.remaining()
             && api_key.refill_amount().is_none()
         {
-            // Usage exhausted, no refill configured -- delete key and evict cache
             let _ = ctx.database.delete_api_key(&api_key.id()).await;
-            let _ = self
-                .rate_limiters
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(api_key.id().as_ref());
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
         }
 
@@ -669,8 +648,50 @@ impl ApiKeyPlugin {
             new_remaining = Some(current_remaining - 1);
         }
 
-        // 5. Rate limiting via `governor` crate
-        self.check_rate_limit_governor(&api_key)?;
+        // 5. Counter-based rate limiting (matches TS isRateLimited)
+        let now = chrono::Utc::now();
+        let now_str = now.to_rfc3339();
+        let new_last_request: Option<String>;
+        let mut new_request_count: Option<i64> = None;
+
+        if self.config.rate_limit.enabled && api_key.rate_limit_enabled() {
+            let time_window = api_key.rate_limit_time_window();
+            let max_requests = api_key.rate_limit_max();
+
+            if let (Some(tw), Some(max)) = (time_window, max_requests) {
+                let last_request = api_key.last_request();
+                let request_count = api_key.request_count().unwrap_or(0);
+
+                if last_request.is_none() {
+                    // First request
+                    new_last_request = Some(now_str.clone());
+                    new_request_count = Some(1);
+                } else if let Some(lr_str) = last_request
+                    && let Ok(lr_dt) = chrono::DateTime::parse_from_rfc3339(lr_str)
+                {
+                    let elapsed_ms = (now - lr_dt.with_timezone(&chrono::Utc)).num_milliseconds();
+                    if elapsed_ms > tw {
+                        // Window expired, reset
+                        new_last_request = Some(now_str.clone());
+                        new_request_count = Some(1);
+                    } else if request_count >= max {
+                        return Err(ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited));
+                    } else {
+                        new_last_request = Some(now_str.clone());
+                        new_request_count = Some(request_count + 1);
+                    }
+                } else {
+                    new_last_request = Some(now_str.clone());
+                    new_request_count = Some(1);
+                }
+            } else {
+                // No time window or max — just track the request
+                new_last_request = Some(now_str.clone());
+            }
+        } else {
+            // Rate limiting disabled — still track lastRequest
+            new_last_request = Some(now_str.clone());
+        }
 
         // 6. Build update
         let mut update = UpdateApiKey {
@@ -679,6 +700,12 @@ impl ApiKeyPlugin {
         };
         if new_last_refill_at != api_key.last_refill_at().map(|s| s.to_string()) {
             update.last_refill_at = Some(new_last_refill_at);
+        }
+        if let Some(lr) = new_last_request {
+            update.last_request = Some(Some(lr));
+        }
+        if let Some(rc) = new_request_count {
+            update.request_count = Some(rc);
         }
 
         let updated = ctx
@@ -691,72 +718,6 @@ impl ApiKeyPlugin {
         self.maybe_delete_expired(ctx).await;
 
         Ok(ApiKeyView::from(&updated))
-    }
-
-    /// Check rate limiting for an API key using the `governor` crate.
-    ///
-    /// Creates or retrieves a per-key in-memory rate limiter backed by GCRA
-    /// (Generic Cell Rate Algorithm), which is thread-safe and lock-free on
-    /// the hot path.
-    fn check_rate_limit_governor(
-        &self,
-        api_key: &impl AuthApiKey,
-    ) -> Result<(), ApiKeyValidationError> {
-        // Determine if rate limiting is enabled for this key.
-        let key_has_explicit_setting =
-            api_key.rate_limit_time_window().is_some() || api_key.rate_limit_max().is_some();
-        let key_enabled = api_key.rate_limit_enabled();
-
-        if !key_enabled {
-            // Key explicitly disabled rate limiting -- skip.
-            if key_has_explicit_setting {
-                return Ok(());
-            }
-            // Key has no explicit setting and global is also off -- skip.
-            if !self.config.rate_limit.enabled {
-                return Ok(());
-            }
-        }
-
-        let time_window_ms = api_key
-            .rate_limit_time_window()
-            .unwrap_or(self.config.rate_limit.time_window);
-        let max_requests = api_key
-            .rate_limit_max()
-            .unwrap_or(self.config.rate_limit.max_requests);
-
-        if time_window_ms <= 0 || max_requests <= 0 {
-            return Ok(());
-        }
-
-        let key_id = api_key.id().to_string();
-
-        // Get or create the rate limiter for this key
-        let limiter = {
-            let mut limiters = self.rate_limiters.lock().unwrap_or_else(|e| e.into_inner());
-            limiters
-                .entry(key_id)
-                .or_insert_with(|| {
-                    let max = NonZeroU32::new(max_requests as u32).unwrap_or(NonZeroU32::MIN);
-                    let period_ms = (time_window_ms as u64)
-                        .checked_div(max_requests as u64)
-                        .unwrap_or(0);
-                    // Guard against zero-period panic (e.g. time_window_ms < max_requests)
-                    let period = std::time::Duration::from_millis(period_ms.max(1));
-                    // `period` is guaranteed >= 1ms because of `.max(1)` above,
-                    // so `with_period` always returns `Some`.
-                    let quota = Quota::with_period(period)
-                        .unwrap_or_else(|| Quota::per_second(max))
-                        .allow_burst(max);
-                    std::sync::Arc::new(RateLimiter::direct(quota))
-                })
-                .clone()
-        };
-
-        match limiter.check() {
-            Ok(()) => Ok(()),
-            Err(_not_until) => Err(ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited)),
-        }
     }
 
     // -----------------------------------------------------------------------
@@ -804,13 +765,6 @@ better_auth_core::impl_auth_plugin! {
                 Some(k) if !k.is_empty() => k.clone(),
                 _ => return Ok(None),
             };
-
-            // Skip session emulation for API-key management routes to avoid
-            // double-validating the key (before_request + handle_verify both
-            // call validate_api_key, consuming usage/rate-limit budget twice).
-            if req.path().starts_with("/api-key/") {
-                return Ok(None);
-            }
 
             // Validate the key (reuses the full verify logic)
             let view = self

@@ -224,7 +224,7 @@ async fn test_get_update_delete_return_404_for_non_owner() {
         HttpMethod::Post,
         "/api-key/update",
         Some(&session2.token),
-        Some(serde_json::json!({ "id": key_id, "name": "new-name" })),
+        Some(serde_json::json!({ "keyId": key_id, "name": "new-name" })),
         None,
     );
     let update_err = plugin.handle_update(&update_req, &ctx).await.unwrap_err();
@@ -234,7 +234,7 @@ async fn test_get_update_delete_return_404_for_non_owner() {
         HttpMethod::Post,
         "/api-key/delete",
         Some(&session2.token),
-        Some(serde_json::json!({ "id": key_id })),
+        Some(serde_json::json!({ "keyId": key_id })),
         None,
     );
     let delete_err = plugin.handle_delete(&delete_req, &ctx).await.unwrap_err();
@@ -280,7 +280,7 @@ async fn test_owner_can_delete_key() {
         HttpMethod::Post,
         "/api-key/delete",
         Some(&session.token),
-        Some(serde_json::json!({ "id": key_id })),
+        Some(serde_json::json!({ "keyId": key_id })),
         None,
     );
     let delete_response = plugin.handle_delete(&delete_req, &ctx).await.unwrap();
@@ -571,7 +571,7 @@ async fn test_delete_all_expired() {
         .unwrap();
     assert_eq!(resp.status, 200);
     let body = json_body(&resp);
-    assert_eq!(body["deleted"], 1);
+    assert_eq!(body["success"], true);
 
     // Only the non-expired key should remain
     let remaining_keys = ctx.database.list_api_keys_by_user(&_user.id).await.unwrap();
@@ -722,8 +722,8 @@ async fn test_update_with_expires_in() {
         "/api-key/update",
         Some(&session.token),
         Some(serde_json::json!({
-            "id": key_id,
-            "expiresIn": 86400000
+            "keyId": key_id,
+            "expiresIn": 86400
         })),
         None,
     );
@@ -776,7 +776,7 @@ async fn test_on_request_dispatches_delete_all_expired() {
     let resp = plugin.on_request(&req, &ctx).await.unwrap();
     assert!(resp.is_some());
     let body = json_body(&resp.unwrap());
-    assert_eq!(body["deleted"], 0);
+    assert_eq!(body["success"], true);
 }
 
 // Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
