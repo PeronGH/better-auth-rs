@@ -243,8 +243,17 @@ pub(crate) async fn update_key_core(
     //   None         = not sent → don't touch expires_at
     //   Some(None)   = sent as null → clear expires_at
     //   Some(Some(n)) = sent with value → set expires_at
+    //
+    // TS checks disableCustomExpiresTime before distinguishing null vs
+    // value, so any expiresIn (including null) is rejected when custom
+    // expiration is disabled.
     let expires_at = match body.expires_in {
         None => None,
+        Some(_) if plugin.config.key_expiration.disable_custom_expires_time => {
+            return Err(super::api_key_error(
+                super::ApiKeyErrorCode::KeyDisabledExpiration,
+            ));
+        }
         Some(None) => Some(None),
         Some(Some(secs)) => {
             let validated = plugin.validate_expires_in(Some(secs))?;
