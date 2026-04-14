@@ -65,12 +65,14 @@ Test suites, scripts, and source comments reference these phase numbers
 `/organization/list-user-invitations`,
 `/organization/has-permission`
 
-**Phase 7 — Admin core:**
-`/admin/list-users`, `/admin/create-user`, `/admin/remove-user`,
-`/admin/set-user-password`, `/admin/set-role`,
-`/admin/has-permission`
+**Phase 7 — Account follow-ups:**
+`/verify-password`, `/account-info`
 
-**Phase 8 — Passkey surface:**
+**Phase 8 — JWT surface:**
+When `jwt()` is enabled:
+`/token`, `/jwks` (or configured `jwksPath`)
+
+**Phase 9 — Passkey surface:**
 `/passkey/generate-register-options`,
 `/passkey/generate-authenticate-options`,
 `/passkey/verify-registration`,
@@ -79,29 +81,42 @@ Test suites, scripts, and source comments reference these phase numbers
 `/passkey/delete-passkey`,
 `/passkey/update-passkey`
 
-**Phase 9 — Organization advanced (conditional):**
+**Phase 10 — Two-factor core:**
+`/two-factor/enable`, `/two-factor/disable`,
+`/two-factor/get-totp-uri`, `/two-factor/verify-totp`,
+`/two-factor/send-otp`, `/two-factor/verify-otp`
+
+**Phase 11 — Two-factor recovery:**
+`/two-factor/generate-backup-codes`,
+`/two-factor/view-backup-codes`,
+`/two-factor/verify-backup-code`
+
+**Phase 12 — Admin CRUD and permissions:**
+`/admin/list-users`, `/admin/get-user`, `/admin/create-user`,
+`/admin/update-user`, `/admin/remove-user`,
+`/admin/set-user-password`, `/admin/set-role`,
+`/admin/has-permission`
+
+**Phase 13 — Admin stateful flows:**
+`/admin/ban-user`, `/admin/unban-user`,
+`/admin/impersonate-user`, `/admin/stop-impersonating`,
+`/admin/list-user-sessions`, `/admin/revoke-user-session`,
+`/admin/revoke-user-sessions`
+
+**Phase 14 — Organization teams:**
 When `organization({ teams: { enabled: true } })` is enabled:
 `/organization/create-team`, `/organization/remove-team`,
 `/organization/update-team`, `/organization/list-teams`,
-`/organization/set-active-team`, `/organization/list-user-teams`,
+`/organization/set-active-team`, `/organization/list-user-teams`
+
+**Phase 15 — Organization team membership:**
+When `organization({ teams: { enabled: true } })` is enabled:
 `/organization/list-team-members`,
 `/organization/add-team-member`,
 `/organization/remove-team-member`
 
-When `organization({ dynamicAccessControl: { enabled: true } })` is
-enabled:
+**Phase 16 — Organization custom roles:**
+When `organization({ dynamicAccessControl: { enabled: true } })` is enabled:
 `/organization/create-role`, `/organization/delete-role`,
 `/organization/list-roles`, `/organization/get-role`,
 `/organization/update-role`
-
-**Phase 10 — Admin extended support flows:**
-`/admin/get-user`, `/admin/update-user`, `/admin/ban-user`,
-`/admin/unban-user`, `/admin/impersonate-user`,
-`/admin/stop-impersonating`, `/admin/list-user-sessions`,
-`/admin/revoke-user-session`, `/admin/revoke-user-sessions`
-
-**Phase 11 — Two-factor authentication:**
-All `/two-factor/*` endpoints.
-
-**Phase 12 — Cold account and token surfaces:**
-`/verify-password`, `/account-info`, `/token`

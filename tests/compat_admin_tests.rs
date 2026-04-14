@@ -1,4 +1,4 @@
-//! Compatibility tests for Admin plugin endpoints (Phase 1).
+//! Compatibility tests for a subset of Admin plugin endpoints (Phase 12).
 //!
 //! Endpoints tested:
 //! - GET  /admin/list-users
