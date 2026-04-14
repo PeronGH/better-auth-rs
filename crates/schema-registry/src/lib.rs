@@ -26,6 +26,15 @@ pub struct PluginSchema {
     pub name: &'static str,
     pub user_fields: &'static [FieldDef],
     pub session_fields: &'static [FieldDef],
+    pub extra_entities: &'static [ExtraEntitySchema],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ExtraEntitySchema {
+    pub mod_name: &'static str,
+    pub table_name: &'static str,
+    pub role: Option<EntityRole>,
+    pub fields: &'static [FieldDef],
 }
 
 macro_rules! f {
@@ -117,11 +126,13 @@ static PLUGINS: &[PluginSchema] = &[
             f!("display_username", "Option<String>"),
         ],
         session_fields: &[],
+        extra_entities: &[],
     },
     PluginSchema {
         name: "two-factor",
         user_fields: &[f!("two_factor_enabled", "bool")],
         session_fields: &[],
+        extra_entities: &[],
     },
     PluginSchema {
         name: "admin",
@@ -133,11 +144,38 @@ static PLUGINS: &[PluginSchema] = &[
             f!("metadata", "Json"),
         ],
         session_fields: &[f!("impersonated_by", "Option<String>")],
+        extra_entities: &[],
     },
     PluginSchema {
         name: "organization",
         user_fields: &[],
         session_fields: &[f!("active_organization_id", "Option<String>")],
+        extra_entities: &[],
+    },
+    PluginSchema {
+        name: "passkey",
+        user_fields: &[],
+        session_fields: &[],
+        extra_entities: &[ExtraEntitySchema {
+            mod_name: "passkey",
+            table_name: "passkeys",
+            role: None,
+            fields: &[
+                pk!("id", "String"),
+                f!("name", "Option<String>"),
+                f!("public_key", "String"),
+                f!("user_id", "String"),
+                f!("credential_id", "String"),
+                f!("counter", "i64"),
+                f!("device_type", "String"),
+                f!("backed_up", "bool"),
+                f!("transports", "Option<String>"),
+                f!("credential", "String"),
+                f!("aaguid", "Option<String>"),
+                f!("created_at", "DateTimeUtc"),
+                f!("updated_at", "DateTimeUtc"),
+            ],
+        }],
     },
 ];
 
