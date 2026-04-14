@@ -123,13 +123,20 @@ fn gen_entity(
             )]
             let ty: syn::Type = syn::parse_str(f.ty)
                 .unwrap_or_else(|e| panic!("invalid type `{}` for field `{}`: {e}", f.ty, f.name));
+            let column_attr = f.column_name.map(|column_name| {
+                quote! { #[sea_orm(column_name = #column_name)] }
+            });
             if f.is_primary_key {
                 quote! {
+                    #column_attr
                     #[sea_orm(primary_key, auto_increment = false)]
                     pub #name: #ty,
                 }
             } else {
-                quote! { pub #name: #ty, }
+                quote! {
+                    #column_attr
+                    pub #name: #ty,
+                }
             }
         })
         .collect();
@@ -168,13 +175,20 @@ fn gen_extra_entity(entity: &ExtraEntitySchema) -> TokenStream {
             )]
             let ty: syn::Type = syn::parse_str(f.ty)
                 .unwrap_or_else(|e| panic!("invalid type `{}` for field `{}`: {e}", f.ty, f.name));
+            let column_attr = f.column_name.map(|column_name| {
+                quote! { #[sea_orm(column_name = #column_name)] }
+            });
             if f.is_primary_key {
                 quote! {
+                    #column_attr
                     #[sea_orm(primary_key, auto_increment = false)]
                     pub #name: #ty,
                 }
             } else {
-                quote! { pub #name: #ty, }
+                quote! {
+                    #column_attr
+                    pub #name: #ty,
+                }
             }
         })
         .collect();
@@ -232,5 +246,27 @@ mod tests {
         assert!(schema.contains("pub credential: String"));
         assert!(schema.contains("pub aaguid: Option<String>"));
         assert!(schema.contains("schema.create_table_from_entity(passkey::Entity)"));
+    }
+
+    #[test]
+    fn generate_schema_phase_zero_through_eight_plugins_emit_required_entities() {
+        let schema = generate_schema(&[
+            "device-authorization".to_string(),
+            "api-key".to_string(),
+            "organization".to_string(),
+            "passkey".to_string(),
+        ]);
+
+        assert!(schema.contains("mod device_code"));
+        assert!(schema.contains("mod api_key"));
+        assert!(schema.contains("mod organization"));
+        assert!(schema.contains("mod member"));
+        assert!(schema.contains("mod invitation"));
+        assert!(schema.contains("#[sea_orm(column_name = \"key\")]"));
+        assert!(schema.contains("schema.create_table_from_entity(device_code::Entity)"));
+        assert!(schema.contains("schema.create_table_from_entity(api_key::Entity)"));
+        assert!(schema.contains("schema.create_table_from_entity(organization::Entity)"));
+        assert!(schema.contains("schema.create_table_from_entity(member::Entity)"));
+        assert!(schema.contains("schema.create_table_from_entity(invitation::Entity)"));
     }
 }
