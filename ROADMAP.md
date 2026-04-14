@@ -36,8 +36,8 @@ Test suites, scripts, and source comments reference these phase numbers
 `/device/approve`, `/device/deny`
 
 **Phase 5 — Machine auth and API-key CRUD:**
-Bearer behavior, `/api-key/create`, `/api-key/list`, `/api-key/get`,
-`/api-key/update`, `/api-key/delete`, `/api-key/verify`
+`/api-key/create`, `/api-key/get`, `/api-key/list`,
+`/api-key/update`, `/api-key/delete`
 
 **Phase 6 — Organization core:**
 `/organization/create`, `/organization/check-slug`,
