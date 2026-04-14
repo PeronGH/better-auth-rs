@@ -179,11 +179,16 @@ where
                     return Err(AuthError::not_found("API key not found"));
                 };
 
+                // Re-derive request_count from the locked row so concurrent
+                // requests that pre-computed a stale value outside the
+                // transaction get the correct, serialized increment.
+                let mut update = update;
                 if let Some(max) = rate_limit_max {
                     let current = model.request_count.unwrap_or(0) as i64;
                     if current >= max {
                         return Ok(None);
                     }
+                    update.request_count = Some(current + 1);
                 }
 
                 let active = apply_update_fields(model.into_active_model(), update)?;
