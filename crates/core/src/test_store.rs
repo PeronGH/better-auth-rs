@@ -8,9 +8,9 @@ use crate::config::AuthConfig;
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
 use crate::store::{
-    AccountStore, ApiKeyStore, AuthStore, AuthTransaction, DeviceCodeStore, InvitationStore,
-    MemberStore, OrganizationStore, PasskeyStore, SessionStore, TransactionStore, TwoFactorStore,
-    UserStore, VerificationStore,
+    AccountStore, ApiKeyStore, AuthStore, AuthTransaction, ConsumeApiKeyResult, DeviceCodeStore,
+    InvitationStore, MemberStore, OrganizationStore, PasskeyStore, SessionStore, TransactionStore,
+    TwoFactorStore, UserStore, VerificationStore,
 };
 use crate::types::{
     ApiKey, CreateAccount, CreateApiKey, CreateDeviceCode, CreateInvitation, CreateMember,
@@ -578,12 +578,11 @@ impl ApiKeyStore for MemoryStore {
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
         Ok(0)
     }
-    async fn update_api_key_if_rate_allowed(
+    async fn consume_api_key_usage(
         &self,
         _id: &str,
-        _update: UpdateApiKey,
-        _rate_limit_max: Option<i64>,
-    ) -> AuthResult<Option<ApiKey>> {
+        _global_rate_limit_enabled: bool,
+    ) -> AuthResult<ConsumeApiKeyResult> {
         Err(AuthError::internal("unsupported test-store operation"))
     }
 }

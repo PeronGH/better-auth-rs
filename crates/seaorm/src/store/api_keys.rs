@@ -6,7 +6,7 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use better_auth_core::store::ApiKeyStore;
+use better_auth_core::store::{ApiKeyStore, ConsumeApiKeyResult};
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
@@ -160,17 +160,16 @@ where
             .map_err(map_db_err)
     }
 
-    async fn update_api_key_if_rate_allowed(
+    async fn consume_api_key_usage(
         &self,
         id: &str,
-        update: UpdateApiKey,
-        rate_limit_max: Option<i64>,
-    ) -> AuthResult<Option<ApiKey>> {
+        global_rate_limit_enabled: bool,
+    ) -> AuthResult<ConsumeApiKeyResult> {
         let conn = self.connection();
-        conn.transaction::<_, Option<ApiKey>, AuthError>(|txn| {
+        conn.transaction::<_, ConsumeApiKeyResult, AuthError>(|txn| {
             let id = id.to_owned();
             Box::pin(async move {
-                let Some(model) = Entity::find_by_id(id)
+                let Some(model) = Entity::find_by_id(id.clone())
                     .lock_exclusive()
                     .one(txn)
                     .await
@@ -179,38 +178,78 @@ where
                     return Err(AuthError::not_found("API key not found"));
                 };
 
-                // Re-derive request_count from the locked row so concurrent
-                // requests that pre-computed a stale value outside the
-                // transaction get the correct, serialized increment.
-                //
-                // Also check whether the rate-limit window has expired: if
-                // last_request + time_window < now, the counter should reset
-                // rather than reject.
-                let mut update = update;
-                if let Some(max) = rate_limit_max {
-                    let current = model.request_count.unwrap_or(0) as i64;
-                    let window_expired = model
-                        .last_request
-                        .map(|lr| {
-                            let tw = model.rate_limit_time_window.unwrap_or(0) as i64;
-                            (Utc::now() - lr).num_milliseconds() > tw
-                        })
-                        .unwrap_or(true);
+                let now = Utc::now();
+                let mut update = UpdateApiKey::default();
 
-                    if current >= max && !window_expired {
-                        return Ok(None);
+                // -- Remaining / refill (from locked row) --
+                if let Some(remaining) = model.remaining {
+                    let remaining = remaining as i64;
+                    let refill_interval = model.refill_interval.map(|v| v as i64);
+                    let refill_amount = model.refill_amount.map(|v| v as i64);
+                    let mut current = remaining;
+
+                    if let (Some(interval), Some(amount)) = (refill_interval, refill_amount) {
+                        let last_refill = model.last_refill_at.or(Some(model.created_at));
+                        if let Some(last) = last_refill {
+                            let elapsed_ms = (now - last).num_milliseconds();
+                            if elapsed_ms > interval {
+                                current = amount;
+                                update.last_refill_at = Some(Some(now.to_rfc3339()));
+                            }
+                        }
                     }
 
-                    if window_expired {
-                        update.request_count = Some(1);
+                    if current <= 0 && refill_amount.is_none() {
+                        // Usage exhausted, no refill — delete the key
+                        let _ = Entity::delete_by_id(id)
+                            .exec(txn)
+                            .await
+                            .map_err(map_db_err)?;
+                        return Ok(ConsumeApiKeyResult::UsageExhausted);
+                    }
+
+                    if current <= 0 {
+                        return Ok(ConsumeApiKeyResult::UsageExhausted);
+                    }
+
+                    update.remaining = Some(current - 1);
+                }
+
+                // -- Rate limiting (from locked row) --
+                let rate_limit_active = global_rate_limit_enabled && model.rate_limit_enabled;
+                if rate_limit_active {
+                    if let (Some(tw), Some(max)) = (
+                        model.rate_limit_time_window.map(|v| v as i64),
+                        model.rate_limit_max.map(|v| v as i64),
+                    ) {
+                        let request_count = model.request_count.unwrap_or(0) as i64;
+
+                        let window_expired = model
+                            .last_request
+                            .map(|lr| (now - lr).num_milliseconds() > tw)
+                            .unwrap_or(true);
+
+                        if window_expired {
+                            update.request_count = Some(1);
+                        } else if request_count >= max {
+                            return Ok(ConsumeApiKeyResult::RateLimited);
+                        } else {
+                            update.request_count = Some(request_count + 1);
+                        }
+
+                        update.last_request = Some(Some(now.to_rfc3339()));
                     } else {
-                        update.request_count = Some(current + 1);
+                        update.last_request = Some(Some(now.to_rfc3339()));
                     }
+                } else {
+                    update.last_request = Some(Some(now.to_rfc3339()));
                 }
 
                 let active = apply_update_fields(model.into_active_model(), update)?;
                 let updated = active.update(txn).await.map_err(map_db_err)?;
-                Ok(Some(ApiKey::from(&updated)))
+                Ok(ConsumeApiKeyResult::Allowed(Box::new(ApiKey::from(
+                    &updated,
+                ))))
             })
         })
         .await

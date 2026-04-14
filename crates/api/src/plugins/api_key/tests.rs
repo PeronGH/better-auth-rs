@@ -1,6 +1,8 @@
 use super::*;
 use better_auth_core::wire::{SessionView, UserView};
-use better_auth_core::{AuthContext, AuthPlugin, CreateSession, CreateUser, HttpMethod};
+use better_auth_core::{
+    AuthContext, AuthPlugin, CreateSession, CreateUser, HttpMethod, UpdateApiKey,
+};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;

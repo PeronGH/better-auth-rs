@@ -4,9 +4,10 @@ use rand::Rng as _;
 use sha2::{Digest, Sha256};
 use std::sync::Mutex;
 
-use better_auth_core::entity::{AuthApiKey, AuthUser};
+use better_auth_core::entity::{AuthApiKey as _, AuthUser};
+use better_auth_core::store::ConsumeApiKeyResult;
 use better_auth_core::{AuthContext, AuthError, AuthResult, BeforeRequestAction};
-use better_auth_core::{AuthRequest, AuthResponse, UpdateApiKey};
+use better_auth_core::{AuthRequest, AuthResponse};
 
 pub(super) mod handlers;
 pub(super) mod types;
@@ -572,193 +573,29 @@ impl ApiKeyPlugin {
             }
         }
 
-        // 4. Remaining / refill
-        let mut new_remaining = api_key.remaining();
-        let mut new_last_refill_at: Option<String> =
-            api_key.last_refill_at().map(|s| s.to_string());
-
-        if let Some(0) = api_key.remaining()
-            && api_key.refill_amount().is_none()
-        {
-            let _ = ctx.database.delete_api_key(&api_key.id()).await;
-            return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
-        }
-
-        if let Some(remaining) = api_key.remaining() {
-            let refill_interval = api_key.refill_interval();
-            let refill_amount = api_key.refill_amount();
-            let mut current_remaining = remaining;
-
-            if let (Some(interval), Some(amount)) = (refill_interval, refill_amount) {
-                let now = chrono::Utc::now();
-                let last_time_str = api_key
-                    .last_refill_at()
-                    .or_else(|| Some(api_key.created_at()));
-                if let Some(last_str) = last_time_str
-                    && let Ok(last_dt) = chrono::DateTime::parse_from_rfc3339(last_str)
-                {
-                    let elapsed_ms = (now - last_dt.with_timezone(&chrono::Utc)).num_milliseconds();
-                    if elapsed_ms > interval {
-                        current_remaining = amount;
-                        new_last_refill_at = Some(now.to_rfc3339());
-                    }
-                }
-            }
-
-            if current_remaining <= 0 {
-                return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
-            }
-
-            new_remaining = Some(current_remaining - 1);
-        }
-
-        // 5. Counter-based rate limiting (mirrors TS `isRateLimited`)
-        let rate_limit_result = is_rate_limited(&api_key, &self.config.rate_limit);
-        if !rate_limit_result.allowed {
-            return Err(ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited));
-        }
-
-        // 6. Build update and apply atomically with rate-limit guard.
-        // The store implementation uses SELECT ... FOR UPDATE inside a
-        // transaction so concurrent requests cannot exceed the configured
-        // max — an improvement over the TS which has a read-check-write race.
-        let mut update = UpdateApiKey {
-            remaining: new_remaining,
-            ..Default::default()
-        };
-        if new_last_refill_at != api_key.last_refill_at().map(|s| s.to_string()) {
-            update.last_refill_at = Some(new_last_refill_at);
-        }
-        if let Some(lr) = rate_limit_result.last_request {
-            update.last_request = Some(Some(lr));
-        }
-        if let Some(rc) = rate_limit_result.request_count {
-            update.request_count = Some(rc);
-        }
-
-        let effective_max = if self.config.rate_limit.enabled && api_key.rate_limit_enabled() {
-            api_key.rate_limit_max()
-        } else {
-            None
-        };
-
-        let updated = ctx
+        // 4. Atomically consume one use: decrement remaining (with refill),
+        // increment rate-limit counter, update timestamps. All counter
+        // mutations happen inside a transaction against the locked row to
+        // prevent concurrent requests from corrupting counters.
+        let updated = match ctx
             .database
-            .update_api_key_if_rate_allowed(&api_key.id(), update, effective_max)
+            .consume_api_key_usage(&api_key.id(), self.config.rate_limit.enabled)
             .await
             .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::FailedToUpdateApiKey))?
-            .ok_or_else(|| ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited))?;
+        {
+            ConsumeApiKeyResult::Allowed(key) => *key,
+            ConsumeApiKeyResult::RateLimited => {
+                return Err(ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited));
+            }
+            ConsumeApiKeyResult::UsageExhausted => {
+                return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
+            }
+        };
 
         // Throttled cleanup
         self.maybe_delete_expired(ctx).await;
 
         Ok(ApiKeyView::from(&updated))
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Counter-based rate limiting (mirrors TS `isRateLimited`)
-// ---------------------------------------------------------------------------
-
-struct RateLimitResult {
-    allowed: bool,
-    last_request: Option<String>,
-    request_count: Option<i64>,
-}
-
-/// Determine whether a request should be allowed based on the API key's
-/// rate-limit counters and the global defaults.
-///
-/// Mirrors the TypeScript `isRateLimited` function: uses a fixed window
-/// tracked by `lastRequest` / `requestCount` in the database, resetting
-/// the counter when `rateLimitTimeWindow` elapses.
-fn is_rate_limited(api_key: &impl AuthApiKey, defaults: &RateLimitDefaults) -> RateLimitResult {
-    let now = chrono::Utc::now();
-    let now_str = now.to_rfc3339();
-
-    if !defaults.enabled {
-        return RateLimitResult {
-            allowed: true,
-            last_request: Some(now_str),
-            request_count: None,
-        };
-    }
-
-    if !api_key.rate_limit_enabled() {
-        return RateLimitResult {
-            allowed: true,
-            last_request: Some(now_str),
-            request_count: None,
-        };
-    }
-
-    let time_window = match api_key.rate_limit_time_window() {
-        Some(tw) => tw,
-        None => {
-            return RateLimitResult {
-                allowed: true,
-                last_request: None,
-                request_count: None,
-            };
-        }
-    };
-    let max_requests = match api_key.rate_limit_max() {
-        Some(m) => m,
-        None => {
-            return RateLimitResult {
-                allowed: true,
-                last_request: None,
-                request_count: None,
-            };
-        }
-    };
-
-    let last_request = api_key.last_request();
-    let request_count = api_key.request_count().unwrap_or(0);
-
-    // No previous requests — allow and start counting.
-    if last_request.is_none() {
-        return RateLimitResult {
-            allowed: true,
-            last_request: Some(now_str),
-            request_count: Some(1),
-        };
-    }
-
-    if let Some(lr_str) = last_request
-        && let Ok(lr_dt) = chrono::DateTime::parse_from_rfc3339(lr_str)
-    {
-        let elapsed_ms = (now - lr_dt.with_timezone(&chrono::Utc)).num_milliseconds();
-
-        if elapsed_ms > time_window {
-            // Window expired — reset counter.
-            return RateLimitResult {
-                allowed: true,
-                last_request: Some(now_str),
-                request_count: Some(1),
-            };
-        }
-
-        if request_count >= max_requests {
-            return RateLimitResult {
-                allowed: false,
-                last_request: None,
-                request_count: None,
-            };
-        }
-
-        return RateLimitResult {
-            allowed: true,
-            last_request: Some(now_str),
-            request_count: Some(request_count + 1),
-        };
-    }
-
-    // Unparseable lastRequest — treat as first request.
-    RateLimitResult {
-        allowed: true,
-        last_request: Some(now_str),
-        request_count: Some(1),
     }
 }
 

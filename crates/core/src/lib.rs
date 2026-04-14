@@ -58,7 +58,9 @@ pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse
 pub use plugin::{AuthContext, AuthInitContext, AuthPlugin, AuthRoute, BeforeRequestAction};
 pub use schema::AuthSchema;
 pub use session::SessionManager;
-pub use store::{AuthStore, AuthTransaction, CacheAdapter, MemoryCacheAdapter, transaction};
+pub use store::{
+    AuthStore, AuthTransaction, CacheAdapter, ConsumeApiKeyResult, MemoryCacheAdapter, transaction,
+};
 pub use types::{
     ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
     CreateDeviceCode, CreateInvitation, CreateMember, CreateOrganization, CreatePasskey,
