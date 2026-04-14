@@ -25,7 +25,7 @@ enum Command {
         output: Option<PathBuf>,
 
         /// Comma-separated list of plugins whose fields to include.
-        /// Available: username, two-factor, admin, organization.
+        /// Available: username, two-factor, admin, organization, passkey.
         /// Use "all" to include every plugin's fields.
         #[arg(short, long, value_delimiter = ',')]
         plugins: Vec<String>,
