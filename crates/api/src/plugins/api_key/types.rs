@@ -58,13 +58,6 @@ pub(crate) struct DeleteKeyRequest {
     pub key_id: String,
 }
 
-#[cfg(test)]
-#[derive(Debug, Deserialize, Validate)]
-pub(crate) struct VerifyKeyRequest {
-    pub key: String,
-    pub permissions: Option<serde_json::Value>,
-}
-
 // ---------------------------------------------------------------------------
 // Response types
 // ---------------------------------------------------------------------------

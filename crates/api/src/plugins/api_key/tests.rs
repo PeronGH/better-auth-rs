@@ -97,6 +97,33 @@ fn json_body(response: &AuthResponse) -> serde_json::Value {
     serde_json::from_slice(&response.body).unwrap()
 }
 
+/// Test helper: verify a key and return the same JSON shape the old HTTP
+/// handler produced (`{ valid, error, key }`).  Calls `validate_api_key`
+/// directly — no HTTP route involved.
+async fn verify_key(
+    plugin: &ApiKeyPlugin,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    raw_key: &str,
+    permissions: Option<&serde_json::Value>,
+) -> serde_json::Value {
+    match plugin.validate_api_key(ctx, raw_key, permissions).await {
+        Ok(view) => serde_json::json!({ "valid": true, "error": null, "key": view }),
+        Err(e) => serde_json::json!({
+            "valid": false,
+            "error": { "message": e.message, "code": e.code.as_str() },
+            "key": null,
+        }),
+    }
+}
+
+/// Test helper: delete all expired keys and return a success JSON.
+async fn delete_all_expired(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> serde_json::Value {
+    let _ = ctx.database.delete_expired_api_keys().await.unwrap();
+    serde_json::json!({ "success": true, "error": null })
+}
+
 async fn create_key_and_get_id(
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -308,41 +335,21 @@ async fn test_verify_valid_key() {
     )
     .await;
 
-    let verify_req = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/verify",
-        None,
-        Some(serde_json::json!({ "key": raw_key })),
-        None,
-    );
-    let resp = plugin.handle_verify(&verify_req, &ctx).await.unwrap();
-    assert_eq!(resp.status, 200);
-    let body = json_body(&resp);
+    let body = verify_key(&plugin, &ctx, &raw_key, None).await;
     assert_eq!(body["valid"], true);
     assert!(body["key"].is_object());
 }
 
-// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_verify_invalid_key() {
     let plugin = ApiKeyPlugin::builder().build();
     let (ctx, _user, _session) = create_test_context_with_user().await;
 
-    let verify_req = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/verify",
-        None,
-        Some(serde_json::json!({ "key": "definitely-not-a-valid-key" })),
-        None,
-    );
-    let resp = plugin.handle_verify(&verify_req, &ctx).await.unwrap();
-    assert_eq!(resp.status, 200);
-    let body = json_body(&resp);
+    let body = verify_key(&plugin, &ctx, "definitely-not-a-valid-key", None).await;
     assert_eq!(body["valid"], false);
     assert!(body["error"].is_object());
 }
 
-// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_verify_disabled_key() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -356,27 +363,17 @@ async fn test_verify_disabled_key() {
     )
     .await;
 
-    // Disable the key
     let update = UpdateApiKey {
         enabled: Some(false),
         ..Default::default()
     };
     ctx.database.update_api_key(&id, update).await.unwrap();
 
-    let verify_req = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/verify",
-        None,
-        Some(serde_json::json!({ "key": raw_key })),
-        None,
-    );
-    let resp = plugin.handle_verify(&verify_req, &ctx).await.unwrap();
-    let body = json_body(&resp);
+    let body = verify_key(&plugin, &ctx, &raw_key, None).await;
     assert_eq!(body["valid"], false);
     assert_eq!(body["error"]["code"], "KEY_DISABLED");
 }
 
-// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_verify_expired_key() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -390,7 +387,6 @@ async fn test_verify_expired_key() {
     )
     .await;
 
-    // Set expiration to the past
     let past = (Utc::now() - Duration::hours(1)).to_rfc3339();
     let update = UpdateApiKey {
         expires_at: Some(Some(past)),
@@ -398,15 +394,7 @@ async fn test_verify_expired_key() {
     };
     ctx.database.update_api_key(&id, update).await.unwrap();
 
-    let verify_req = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/verify",
-        None,
-        Some(serde_json::json!({ "key": raw_key })),
-        None,
-    );
-    let resp = plugin.handle_verify(&verify_req, &ctx).await.unwrap();
-    let body = json_body(&resp);
+    let body = verify_key(&plugin, &ctx, &raw_key, None).await;
     assert_eq!(body["valid"], false);
     assert_eq!(body["error"]["code"], "KEY_EXPIRED");
 
@@ -429,40 +417,20 @@ async fn test_verify_remaining_consumption() {
     )
     .await;
 
-    let make_verify = |key: &str| {
-        create_auth_request(
-            HttpMethod::Post,
-            "/api-key/verify",
-            None,
-            Some(serde_json::json!({ "key": key })),
-            None,
-        )
-    };
-
     // First verify - remaining goes from 2 to 1
-    let resp1 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    assert_eq!(json_body(&resp1)["valid"], true);
-    assert_eq!(json_body(&resp1)["key"]["remaining"], 1);
+    let r1 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r1["valid"], true);
+    assert_eq!(r1["key"]["remaining"], 1);
 
     // Second verify - remaining goes from 1 to 0
-    let resp2 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    assert_eq!(json_body(&resp2)["valid"], true);
-    assert_eq!(json_body(&resp2)["key"]["remaining"], 0);
+    let r2 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r2["valid"], true);
+    assert_eq!(r2["key"]["remaining"], 0);
 
     // Third verify - should fail (usage exceeded)
-    let resp3 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    let body3 = json_body(&resp3);
-    assert_eq!(body3["valid"], false);
-    assert_eq!(body3["error"]["code"], "USAGE_EXCEEDED");
+    let r3 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r3["valid"], false);
+    assert_eq!(r3["error"]["code"], "USAGE_EXCEEDED");
 }
 
 // Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
@@ -490,40 +458,19 @@ async fn test_verify_rate_limiting() {
     )
     .await;
 
-    let make_verify = |key: &str| {
-        create_auth_request(
-            HttpMethod::Post,
-            "/api-key/verify",
-            None,
-            Some(serde_json::json!({ "key": key })),
-            None,
-        )
-    };
-
     // First two should succeed
-    let r1 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    assert_eq!(json_body(&r1)["valid"], true);
+    let r1 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r1["valid"], true);
 
-    let r2 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    assert_eq!(json_body(&r2)["valid"], true);
+    let r2 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r2["valid"], true);
 
     // Third should fail with rate limit
-    let r3 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    let b3 = json_body(&r3);
-    assert_eq!(b3["valid"], false);
-    assert_eq!(b3["error"]["code"], "RATE_LIMITED");
+    let r3 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r3["valid"], false);
+    assert_eq!(r3["error"]["code"], "RATE_LIMITED");
 }
 
-// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_delete_all_expired() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -558,19 +505,7 @@ async fn test_delete_all_expired() {
         .await
         .unwrap();
 
-    let delete_req = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/delete-all-expired-api-keys",
-        Some(&session.token),
-        None,
-        None,
-    );
-    let resp = plugin
-        .handle_delete_all_expired(&delete_req, &ctx)
-        .await
-        .unwrap();
-    assert_eq!(resp.status, 200);
-    let body = json_body(&resp);
+    let body = delete_all_expired(&ctx).await;
     assert_eq!(body["success"], true);
 
     // Only the non-expired key should remain
@@ -596,32 +531,14 @@ async fn test_verify_permissions() {
     .await;
 
     // Verify with matching permissions -> should pass
-    let verify_ok = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/verify",
-        None,
-        Some(serde_json::json!({
-            "key": raw_key,
-            "permissions": { "admin": ["read"] }
-        })),
-        None,
-    );
-    let r1 = plugin.handle_verify(&verify_ok, &ctx).await.unwrap();
-    assert_eq!(json_body(&r1)["valid"], true);
+    let perms_ok = serde_json::json!({ "admin": ["read"] });
+    let r1 = verify_key(&plugin, &ctx, &raw_key, Some(&perms_ok)).await;
+    assert_eq!(r1["valid"], true);
 
     // Verify with non-matching permissions -> should fail
-    let verify_fail = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/verify",
-        None,
-        Some(serde_json::json!({
-            "key": raw_key,
-            "permissions": { "superadmin": ["delete"] }
-        })),
-        None,
-    );
-    let r2 = plugin.handle_verify(&verify_fail, &ctx).await.unwrap();
-    assert_eq!(json_body(&r2)["valid"], false);
+    let perms_fail = serde_json::json!({ "superadmin": ["delete"] });
+    let r2 = verify_key(&plugin, &ctx, &raw_key, Some(&perms_fail)).await;
+    assert_eq!(r2["valid"], false);
 }
 
 // Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
@@ -900,37 +817,17 @@ async fn test_rate_limiting_third_call_fails() {
     )
     .await;
 
-    let make_verify = |key: &str| {
-        create_auth_request(
-            HttpMethod::Post,
-            "/api-key/verify",
-            None,
-            Some(serde_json::json!({ "key": key })),
-            None,
-        )
-    };
-
     // First two pass
-    let r1 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    assert_eq!(json_body(&r1)["valid"], true, "1st request should pass");
+    let r1 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r1["valid"], true, "1st request should pass");
 
-    let r2 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    assert_eq!(json_body(&r2)["valid"], true, "2nd request should pass");
+    let r2 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r2["valid"], true, "2nd request should pass");
 
     // Third should fail
-    let r3 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    let b3 = json_body(&r3);
-    assert_eq!(b3["valid"], false, "3rd request should be rate-limited");
-    assert_eq!(b3["error"]["code"], "RATE_LIMITED");
+    let r3 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r3["valid"], false, "3rd request should be rate-limited");
+    assert_eq!(r3["error"]["code"], "RATE_LIMITED");
 }
 
 // 4. Remaining consumption: remaining=2, no refill, 3rd fails
@@ -948,39 +845,20 @@ async fn test_remaining_consumption_no_refill() {
     )
     .await;
 
-    let make_verify = |key: &str| {
-        create_auth_request(
-            HttpMethod::Post,
-            "/api-key/verify",
-            None,
-            Some(serde_json::json!({ "key": key })),
-            None,
-        )
-    };
-
     // 1st: remaining 2->1
-    let r1 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    assert_eq!(json_body(&r1)["valid"], true);
-    assert_eq!(json_body(&r1)["key"]["remaining"], 1);
+    let r1 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r1["valid"], true);
+    assert_eq!(r1["key"]["remaining"], 1);
 
     // 2nd: remaining 1->0
-    let r2 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    assert_eq!(json_body(&r2)["valid"], true);
-    assert_eq!(json_body(&r2)["key"]["remaining"], 0);
+    let r2 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r2["valid"], true);
+    assert_eq!(r2["key"]["remaining"], 0);
 
     // 3rd: usage exceeded
-    let r3 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    assert_eq!(json_body(&r3)["valid"], false);
-    assert_eq!(json_body(&r3)["error"]["code"], "USAGE_EXCEEDED");
+    let r3 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r3["valid"], false);
+    assert_eq!(r3["error"]["code"], "USAGE_EXCEEDED");
 }
 
 // 5. Refill logic: remaining=1, refillInterval=100ms, refillAmount=10,
@@ -1006,35 +884,18 @@ async fn test_refill_resets_remaining_after_interval() {
     )
     .await;
 
-    let make_verify = |key: &str| {
-        create_auth_request(
-            HttpMethod::Post,
-            "/api-key/verify",
-            None,
-            Some(serde_json::json!({ "key": key })),
-            None,
-        )
-    };
-
     // First verify: remaining 1->0
-    let r1 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    assert_eq!(json_body(&r1)["valid"], true);
-    assert_eq!(json_body(&r1)["key"]["remaining"], 0);
+    let r1 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r1["valid"], true);
+    assert_eq!(r1["key"]["remaining"], 0);
 
     // Wait for refill interval to elapse
     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
 
     // Second verify: should refill to 10 and then decrement -> 9
-    let r2 = plugin
-        .handle_verify(&make_verify(&raw_key), &ctx)
-        .await
-        .unwrap();
-    let b2 = json_body(&r2);
-    assert_eq!(b2["valid"], true, "Should succeed after refill");
-    assert_eq!(b2["key"]["remaining"], 9, "Should be refillAmount - 1 = 9");
+    let r2 = verify_key(&plugin, &ctx, &raw_key, None).await;
+    assert_eq!(r2["valid"], true, "Should succeed after refill");
+    assert_eq!(r2["key"]["remaining"], 9, "Should be refillAmount - 1 = 9");
 }
 
 // 6. Permissions: key with {"admin": ["read"]}, verify with
@@ -1057,32 +918,14 @@ async fn test_permissions_mismatch_fails() {
     .await;
 
     // Verify with matching permission -> pass
-    let verify_ok = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/verify",
-        None,
-        Some(serde_json::json!({
-            "key": raw_key,
-            "permissions": { "admin": ["read"] }
-        })),
-        None,
-    );
-    let r1 = plugin.handle_verify(&verify_ok, &ctx).await.unwrap();
-    assert_eq!(json_body(&r1)["valid"], true);
+    let perms_ok = serde_json::json!({ "admin": ["read"] });
+    let r1 = verify_key(&plugin, &ctx, &raw_key, Some(&perms_ok)).await;
+    assert_eq!(r1["valid"], true);
 
     // Verify with mismatched permission -> fail
-    let verify_fail = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/verify",
-        None,
-        Some(serde_json::json!({
-            "key": raw_key,
-            "permissions": { "admin": ["write"] }
-        })),
-        None,
-    );
-    let r2 = plugin.handle_verify(&verify_fail, &ctx).await.unwrap();
-    assert_eq!(json_body(&r2)["valid"], false);
+    let perms_fail = serde_json::json!({ "admin": ["write"] });
+    let r2 = verify_key(&plugin, &ctx, &raw_key, Some(&perms_fail)).await;
+    assert_eq!(r2["valid"], false);
 }
 
 // 7. Concurrent rate limiting: send 5 sequential verify requests with
@@ -1113,25 +956,11 @@ async fn test_concurrent_rate_limiting() {
     )
     .await;
 
-    let make_verify = |key: &str| {
-        create_auth_request(
-            HttpMethod::Post,
-            "/api-key/verify",
-            None,
-            Some(serde_json::json!({ "key": key })),
-            None,
-        )
-    };
-
     let mut success_count = 0;
     let mut fail_count = 0;
 
     for _ in 0..5 {
-        let resp = plugin
-            .handle_verify(&make_verify(&raw_key), &ctx)
-            .await
-            .unwrap();
-        let body = json_body(&resp);
+        let body = verify_key(&plugin, &ctx, &raw_key, None).await;
         if body["valid"] == true {
             success_count += 1;
         } else {
@@ -1190,26 +1019,45 @@ async fn test_delete_expired_api_keys_memory_adapter() {
     assert_eq!(remaining.len(), 1);
 }
 
-// 9. Delete expired with auth: unauthenticated call should fail
-// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
+// 9. Delete expired: calling the store function directly removes only expired keys
 #[tokio::test]
-async fn test_delete_expired_without_auth_returns_error() {
+async fn test_delete_expired_removes_only_expired() {
     let plugin = ApiKeyPlugin::builder().build();
-    let (ctx, _user, _session) = create_test_context_with_user().await;
+    let (ctx, _user, session) = create_test_context_with_user().await;
 
-    // Call without auth token
-    let req = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/delete-all-expired-api-keys",
-        None, // no auth token
-        None,
-        None,
-    );
-    let result = plugin.handle_delete_all_expired(&req, &ctx).await;
-    assert!(
-        result.is_err(),
-        "Should return error when called without authentication"
-    );
+    // Create two keys, expire one
+    let (id1, _) = create_key_and_get_raw(
+        &plugin,
+        &ctx,
+        &session.token,
+        serde_json::json!({ "name": "expired" }),
+    )
+    .await;
+    let (_id2, _) = create_key_and_get_raw(
+        &plugin,
+        &ctx,
+        &session.token,
+        serde_json::json!({ "name": "active" }),
+    )
+    .await;
+
+    let past = (Utc::now() - Duration::hours(1)).to_rfc3339();
+    ctx.database
+        .update_api_key(
+            &id1,
+            UpdateApiKey {
+                expires_at: Some(Some(past)),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    let deleted = ctx.database.delete_expired_api_keys().await.unwrap();
+    assert_eq!(deleted, 1);
+
+    let remaining = ctx.database.list_api_keys_by_user(&_user.id).await.unwrap();
+    assert_eq!(remaining.len(), 1);
 }
 
 // 10. before_request returns None when enableSessionForAPIKeys is false

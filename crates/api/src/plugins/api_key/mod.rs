@@ -21,7 +21,7 @@ use types::*;
 // Error codes -- mirrors the TypeScript `API_KEY_ERROR_CODES`
 // ---------------------------------------------------------------------------
 
-/// Dedicated API Key error codes aligned with the TypeScript implementation.
+/// Dedicated API Key error codes aligned with the TypeScript `API_KEY_ERROR_CODES`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApiKeyErrorCode {
     InvalidApiKey,
@@ -48,8 +48,7 @@ pub enum ApiKeyErrorCode {
 }
 
 impl ApiKeyErrorCode {
-    #[cfg(test)]
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::InvalidApiKey => "INVALID_API_KEY",
             Self::KeyDisabled => "KEY_DISABLED",
@@ -113,9 +112,13 @@ fn api_key_error(code: ApiKeyErrorCode) -> AuthError {
 }
 
 /// Structured error returned by `validate_api_key`.
-struct ApiKeyValidationError {
-    code: ApiKeyErrorCode,
-    message: String,
+pub(super) struct ApiKeyValidationError {
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "read by the test module's verify_key helper")
+    )]
+    pub(super) code: ApiKeyErrorCode,
+    pub(super) message: String,
 }
 
 impl ApiKeyValidationError {
@@ -445,7 +448,7 @@ impl ApiKeyPlugin {
     }
 
     // -----------------------------------------------------------------------
-    // Route handlers (old -- delegate to core functions)
+    // Route handlers
     // -----------------------------------------------------------------------
 
     async fn handle_create(
@@ -514,14 +517,14 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    /// Core validation logic used by `before_request`.
+    /// Core validation logic used by `before_request` and tests.
     ///
     /// Validation chain: exists -> disabled -> expired -> permissions ->
     /// remaining/refill -> rate limit.
     ///
     /// Returns `Ok(ApiKeyView)` on success, or `Err(ApiKeyValidationError)` with
-    /// a structured error code (no fragile string matching needed).
-    async fn validate_api_key(
+    /// a structured error code.
+    pub(super) async fn validate_api_key(
         &self,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         raw_key: &str,
@@ -607,49 +610,10 @@ impl ApiKeyPlugin {
             new_remaining = Some(current_remaining - 1);
         }
 
-        // 5. Counter-based rate limiting (matches TS isRateLimited)
-        let now = chrono::Utc::now();
-        let now_str = now.to_rfc3339();
-        let new_last_request: Option<String>;
-        let mut new_request_count: Option<i64> = None;
-
-        if self.config.rate_limit.enabled && api_key.rate_limit_enabled() {
-            let time_window = api_key.rate_limit_time_window();
-            let max_requests = api_key.rate_limit_max();
-
-            if let (Some(tw), Some(max)) = (time_window, max_requests) {
-                let last_request = api_key.last_request();
-                let request_count = api_key.request_count().unwrap_or(0);
-
-                if last_request.is_none() {
-                    // First request
-                    new_last_request = Some(now_str.clone());
-                    new_request_count = Some(1);
-                } else if let Some(lr_str) = last_request
-                    && let Ok(lr_dt) = chrono::DateTime::parse_from_rfc3339(lr_str)
-                {
-                    let elapsed_ms = (now - lr_dt.with_timezone(&chrono::Utc)).num_milliseconds();
-                    if elapsed_ms > tw {
-                        // Window expired, reset
-                        new_last_request = Some(now_str.clone());
-                        new_request_count = Some(1);
-                    } else if request_count >= max {
-                        return Err(ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited));
-                    } else {
-                        new_last_request = Some(now_str.clone());
-                        new_request_count = Some(request_count + 1);
-                    }
-                } else {
-                    new_last_request = Some(now_str.clone());
-                    new_request_count = Some(1);
-                }
-            } else {
-                // No time window or max — just track the request
-                new_last_request = Some(now_str.clone());
-            }
-        } else {
-            // Rate limiting disabled — still track lastRequest
-            new_last_request = Some(now_str.clone());
+        // 5. Counter-based rate limiting (mirrors TS `isRateLimited`)
+        let rate_limit_result = is_rate_limited(&api_key, &self.config.rate_limit);
+        if !rate_limit_result.allowed {
+            return Err(ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited));
         }
 
         // 6. Build update
@@ -660,10 +624,10 @@ impl ApiKeyPlugin {
         if new_last_refill_at != api_key.last_refill_at().map(|s| s.to_string()) {
             update.last_refill_at = Some(new_last_refill_at);
         }
-        if let Some(lr) = new_last_request {
+        if let Some(lr) = rate_limit_result.last_request {
             update.last_request = Some(Some(lr));
         }
-        if let Some(rc) = new_request_count {
+        if let Some(rc) = rate_limit_result.request_count {
             update.request_count = Some(rc);
         }
 
@@ -678,49 +642,111 @@ impl ApiKeyPlugin {
 
         Ok(ApiKeyView::from(&updated))
     }
+}
 
-    // -- Test-only handlers (not exposed as HTTP routes) ---------------------
+// ---------------------------------------------------------------------------
+// Counter-based rate limiting (mirrors TS `isRateLimited`)
+// ---------------------------------------------------------------------------
 
-    #[cfg(test)]
-    async fn handle_verify(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    ) -> AuthResult<AuthResponse> {
-        use types::VerifyKeyRequest;
+struct RateLimitResult {
+    allowed: bool,
+    last_request: Option<String>,
+    request_count: Option<i64>,
+}
 
-        let verify_req: VerifyKeyRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
+/// Determine whether a request should be allowed based on the API key's
+/// rate-limit counters and the global defaults.
+///
+/// Mirrors the TypeScript `isRateLimited` function: uses a fixed window
+/// tracked by `lastRequest` / `requestCount` in the database, resetting
+/// the counter when `rateLimitTimeWindow` elapses.
+fn is_rate_limited(api_key: &impl AuthApiKey, defaults: &RateLimitDefaults) -> RateLimitResult {
+    let now = chrono::Utc::now();
+    let now_str = now.to_rfc3339();
+
+    if !defaults.enabled {
+        return RateLimitResult {
+            allowed: true,
+            last_request: Some(now_str),
+            request_count: None,
         };
-
-        let result = self
-            .validate_api_key(ctx, &verify_req.key, verify_req.permissions.as_ref())
-            .await;
-
-        let response = match result {
-            Ok(view) => serde_json::json!({ "valid": true, "error": null, "key": view }),
-            Err(e) => serde_json::json!({
-                "valid": false,
-                "error": { "message": e.message, "code": e.code.as_str() },
-                "key": null,
-            }),
-        };
-        Ok(AuthResponse::json(200, &response)?)
     }
 
-    #[cfg(test)]
-    async fn handle_delete_all_expired(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    ) -> AuthResult<AuthResponse> {
-        let (_user, _session) = ctx.require_session(req).await?;
-        let _ = ctx.database.delete_expired_api_keys().await?;
-        Ok(AuthResponse::json(
-            200,
-            &serde_json::json!({ "success": true, "error": null }),
-        )?)
+    if !api_key.rate_limit_enabled() {
+        return RateLimitResult {
+            allowed: true,
+            last_request: Some(now_str),
+            request_count: None,
+        };
+    }
+
+    let time_window = match api_key.rate_limit_time_window() {
+        Some(tw) => tw,
+        None => {
+            return RateLimitResult {
+                allowed: true,
+                last_request: None,
+                request_count: None,
+            };
+        }
+    };
+    let max_requests = match api_key.rate_limit_max() {
+        Some(m) => m,
+        None => {
+            return RateLimitResult {
+                allowed: true,
+                last_request: None,
+                request_count: None,
+            };
+        }
+    };
+
+    let last_request = api_key.last_request();
+    let request_count = api_key.request_count().unwrap_or(0);
+
+    // No previous requests — allow and start counting.
+    if last_request.is_none() {
+        return RateLimitResult {
+            allowed: true,
+            last_request: Some(now_str),
+            request_count: Some(1),
+        };
+    }
+
+    if let Some(lr_str) = last_request
+        && let Ok(lr_dt) = chrono::DateTime::parse_from_rfc3339(lr_str)
+    {
+        let elapsed_ms = (now - lr_dt.with_timezone(&chrono::Utc)).num_milliseconds();
+
+        if elapsed_ms > time_window {
+            // Window expired — reset counter.
+            return RateLimitResult {
+                allowed: true,
+                last_request: Some(now_str),
+                request_count: Some(1),
+            };
+        }
+
+        if request_count >= max_requests {
+            return RateLimitResult {
+                allowed: false,
+                last_request: None,
+                request_count: None,
+            };
+        }
+
+        return RateLimitResult {
+            allowed: true,
+            last_request: Some(now_str),
+            request_count: Some(request_count + 1),
+        };
+    }
+
+    // Unparseable lastRequest — treat as first request.
+    RateLimitResult {
+        allowed: true,
+        last_request: Some(now_str),
+        request_count: Some(1),
     }
 }
 
