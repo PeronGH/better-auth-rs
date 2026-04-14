@@ -88,8 +88,19 @@ The OAuth plugin exposes the following endpoints. For full request/response deta
 | `/link-social` | POST | Link a social account to an existing user |
 | `/get-access-token` | POST | Retrieve stored OAuth access token |
 | `/refresh-token` | POST | Refresh the OAuth access token |
+| `/account-info` | GET | Retrieve provider user info for a linked account |
 | `/list-accounts` | GET | List all linked accounts |
 | `/unlink-account` | POST | Unlink a social account |
+
+## Provider Account Info
+
+Use `GET /account-info` to fetch provider-specific user info for a linked account.
+Pass the provider account id as the `accountId` query parameter.
+
+```http
+GET /account-info?accountId=provider-account-id
+Authorization: Bearer <token>
+```
 
 ## How It Works
 

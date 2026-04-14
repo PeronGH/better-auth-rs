@@ -57,6 +57,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
             AuthRoute::post("/link-social", "link_social"),
             AuthRoute::post("/get-access-token", "get_access_token"),
             AuthRoute::post("/refresh-token", "refresh_token"),
+            AuthRoute::get("/account-info", "account_info"),
         ]
     }
 
@@ -83,6 +84,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
             )),
             (HttpMethod::Post, "/refresh-token") => Ok(Some(
                 handlers::handle_refresh_token(&self.config, req, ctx).await?,
+            )),
+            (HttpMethod::Get, "/account-info") => Ok(Some(
+                handlers::handle_account_info(&self.config, req, ctx).await?,
             )),
             _ => Ok(None),
         }

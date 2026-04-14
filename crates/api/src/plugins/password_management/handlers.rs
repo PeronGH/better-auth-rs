@@ -281,6 +281,30 @@ pub(crate) async fn change_password_core(
     Ok((response, new_token))
 }
 
+pub(crate) async fn verify_password_core(
+    body: &VerifyPasswordRequest,
+    user: &impl AuthUser,
+    config: &PasswordManagementConfig,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<StatusResponse> {
+    let stored_hash = get_credential_password_hash(ctx, user)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Invalid password"))?;
+
+    password_utils::verify_password(
+        config.password_hasher.as_ref(),
+        &body.password,
+        &stored_hash,
+    )
+    .await
+    .map_err(|error| match error {
+        AuthError::InvalidCredentials => AuthError::bad_request("Invalid password"),
+        other => other,
+    })?;
+
+    Ok(StatusResponse { status: true })
+}
+
 fn validate_redirect_target(
     target: &str,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,

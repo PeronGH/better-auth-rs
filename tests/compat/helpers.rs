@@ -13,18 +13,25 @@ use better_auth::{
         AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, EmailPasswordPlugin,
         EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
         PasswordManagementPlugin, SessionManagementPlugin, TwoFactorPlugin, UserManagementPlugin,
-        oauth::{OAuthProvider, OAuthUserInfo},
+        oauth::{
+            OAuthProvider, OAuthUserInfo, OAuthUserInfoHandler, OAuthUserInfoRequest,
+            OAuthUserInfoResponse,
+        },
         password_management::SendResetPassword,
     },
     prelude::{AuthRequest, HttpMethod},
 };
 use better_auth_seaorm::{Database, DatabaseConnection, SeaOrmStore};
+use reqwest::Url;
 use serde_json::Value;
 
 type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 type TestAuth = BetterAuth<TestSchema>;
 
 static LOCAL_PROXY_BYPASS: Once = Once::new();
+static MOCK_OAUTH_SERVER: Once = Once::new();
+
+const MOCK_OAUTH_BASE_URL: &str = "http://127.0.0.1:3110";
 
 fn ensure_local_proxy_bypass() {
     LOCAL_PROXY_BYPASS.call_once(|| {
@@ -35,6 +42,94 @@ fn ensure_local_proxy_bypass() {
         // before issuing any mock OAuth localhost requests.
         unsafe { std::env::set_var("no_proxy", "localhost,127.0.0.1") };
     });
+}
+
+fn ensure_mock_oauth_server() {
+    ensure_local_proxy_bypass();
+    MOCK_OAUTH_SERVER.call_once(|| {
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:3110")
+                .await
+                .expect("mock OAuth server should bind to 127.0.0.1:3110");
+
+            loop {
+                let (mut stream, _) = listener
+                    .accept()
+                    .await
+                    .expect("mock OAuth server should accept connections");
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let read_len = stream.read(&mut buf).await.unwrap_or(0);
+                    let request = String::from_utf8_lossy(&buf[..read_len]);
+
+                    let response = if request.starts_with("GET /__test/oauth/authorize") {
+                        let path = request
+                            .lines()
+                            .next()
+                            .and_then(|line| line.split_whitespace().nth(1))
+                            .unwrap_or("/");
+                        let url = Url::parse(&format!("{MOCK_OAUTH_BASE_URL}{path}"))
+                            .expect("mock OAuth authorize URL should parse");
+                        let redirect_uri = url
+                            .query_pairs()
+                            .find(|(key, _)| key == "redirect_uri")
+                            .map(|(_, value)| value.into_owned())
+                            .unwrap_or_else(|| "http://localhost:3000/callback".to_string());
+                        let state = url
+                            .query_pairs()
+                            .find(|(key, _)| key == "state")
+                            .map(|(_, value)| value.into_owned())
+                            .unwrap_or_else(|| "missing-state".to_string());
+                        let location =
+                            format!("{redirect_uri}?code=compat-code&state={state}");
+                        format!(
+                            "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        )
+                    } else if request.starts_with("POST /__test/oauth/token") {
+                        let body = serde_json::json!({
+                            "access_token": "mock-access-token",
+                            "refresh_token": "mock-refresh-token",
+                            "token_type": "Bearer",
+                            "expires_in": 3600,
+                            "scope": "openid email profile"
+                        })
+                        .to_string();
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    } else if request.starts_with("GET /__test/oauth/userinfo") {
+                        let body = serde_json::json!({
+                            "sub": "mock-user-id-123",
+                            "email": "mock@example.com",
+                            "name": "Mock OAuth User",
+                            "email_verified": true
+                        })
+                        .to_string();
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    } else {
+                        let body = serde_json::json!({"error": "not found"}).to_string();
+                        format!(
+                            "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    };
+
+                    let _ = stream.write_all(response.as_bytes()).await;
+                    let _ = stream.flush().await;
+                });
+            }
+        });
+    });
+    std::thread::sleep(std::time::Duration::from_millis(25));
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -119,14 +214,41 @@ pub fn test_config() -> AuthConfig {
 }
 
 fn mock_oauth_plugin() -> OAuthPlugin {
+    struct MockUserInfoHandler;
+
+    #[async_trait::async_trait]
+    impl OAuthUserInfoHandler for MockUserInfoHandler {
+        async fn get_user_info(
+            &self,
+            _request: OAuthUserInfoRequest,
+        ) -> Result<OAuthUserInfoResponse, String> {
+            Ok(OAuthUserInfoResponse {
+                user: OAuthUserInfo {
+                    id: "mock-account-id".to_string(),
+                    email: "mock@example.com".to_string(),
+                    name: Some("Mock OAuth User".to_string()),
+                    image: None,
+                    email_verified: true,
+                },
+                data: serde_json::json!({
+                    "id": "mock-account-id",
+                    "email": "mock@example.com",
+                    "name": "Mock OAuth User",
+                    "image": null,
+                    "emailVerified": true,
+                }),
+            })
+        }
+    }
+
     OAuthPlugin::new().add_provider(
         "mock",
         OAuthProvider {
             client_id: "mock-client-id".to_string(),
             client_secret: "mock-client-secret".to_string(),
-            auth_url: "http://127.0.0.1:3100/__test/oauth/authorize".to_string(),
-            token_url: "http://127.0.0.1:3100/__test/oauth/token".to_string(),
-            user_info_url: Some("http://127.0.0.1:3100/__test/oauth/userinfo".to_string()),
+            auth_url: format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/authorize"),
+            token_url: format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/token"),
+            user_info_url: Some(format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/userinfo")),
             scopes: vec![
                 "openid".to_string(),
                 "email".to_string(),
@@ -142,7 +264,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
                     email_verified: true,
                 })
             }),
-            get_user_info: None,
+            get_user_info: Some(Arc::new(MockUserInfoHandler)),
             refresh_access_token: None,
             verify_id_token: None,
             disable_implicit_sign_up: false,

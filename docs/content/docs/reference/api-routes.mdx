@@ -48,6 +48,7 @@ For interactive API documentation with request/response schemas, see the [OpenAP
 | POST | `/reset-password` | No | Reset password with token |
 | GET | `/reset-password/{token}` | No | Validate a reset token |
 | POST | `/change-password` | Yes | Change password (requires current) |
+| POST | `/verify-password` | Yes | Verify the current user's password |
 
 ## Email Verification (EmailVerificationPlugin)
 
@@ -72,6 +73,7 @@ For interactive API documentation with request/response schemas, see the [OpenAP
 | POST | `/link-social` | Yes | Link a social account to current user |
 | POST | `/get-access-token` | Yes | Get stored OAuth access token |
 | POST | `/refresh-token` | Yes | Refresh OAuth access token |
+| GET | `/account-info` | Yes | Get provider account info for a linked account |
 
 ## Two-Factor Authentication (TwoFactorPlugin)
 

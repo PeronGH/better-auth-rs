@@ -64,6 +64,8 @@ impl OAuthStatePayload {
 pub(crate) struct AccountCookiePayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    #[serde(rename = "userId")]
+    pub user_id: String,
     #[serde(rename = "providerId")]
     pub provider_id: String,
     #[serde(rename = "accountId")]
@@ -92,6 +94,7 @@ impl AccountCookiePayload {
     pub(crate) fn from_account(account: &impl AuthAccount) -> Self {
         Self {
             id: Some(account.id().to_string()),
+            user_id: account.user_id().to_string(),
             provider_id: account.provider_id().to_string(),
             account_id: account.account_id().to_string(),
             access_token: account.access_token().map(str::to_string),

@@ -80,6 +80,12 @@ pub(crate) struct RefreshTokenRequest {
     pub user_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub(crate) struct AccountInfoQuery {
+    #[serde(rename = "accountId")]
+    pub account_id: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub(crate) struct SocialSignInResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -121,4 +127,21 @@ pub(crate) struct RefreshTokenResponse {
     pub provider_id: String,
     #[serde(rename = "accountId")]
     pub account_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct AccountInfoUser {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub email: String,
+    pub image: Option<String>,
+    #[serde(rename = "emailVerified")]
+    pub email_verified: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct AccountInfoResponse {
+    pub user: AccountInfoUser,
+    pub data: serde_json::Value,
 }

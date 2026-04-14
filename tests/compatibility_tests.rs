@@ -84,6 +84,7 @@ fn completed_phase_reference_surface(
         "/reset-password",
         "/reset-password/{token}",
         "/change-password",
+        "/verify-password",
         "/update-user",
         "/delete-user",
         "/delete-user/callback",
@@ -94,6 +95,7 @@ fn completed_phase_reference_surface(
         "/link-social",
         "/list-accounts",
         "/unlink-account",
+        "/account-info",
         "/device/code",
         "/device/token",
         "/device",
@@ -343,7 +345,7 @@ async fn test_completed_phase_surface_matches_reference_exactly() {
     );
 }
 
-/// Verify that the corrected completed Phase 0-5 endpoints exist at all.
+/// Verify that the completed pre-stage-8 endpoints covered by the main surface test exist at all.
 #[tokio::test]
 async fn test_completed_phase_endpoints_present() {
     let auth = create_full_auth().await;
@@ -361,6 +363,7 @@ async fn test_completed_phase_endpoints_present() {
         ("post", "/request-password-reset"),
         ("post", "/reset-password"),
         ("post", "/change-password"),
+        ("post", "/verify-password"),
         ("post", "/send-verification-email"),
         ("get", "/verify-email"),
         ("get", "/list-sessions"),
@@ -373,6 +376,7 @@ async fn test_completed_phase_endpoints_present() {
         ("post", "/link-social"),
         ("get", "/list-accounts"),
         ("post", "/unlink-account"),
+        ("get", "/account-info"),
         ("post", "/change-email"),
         ("get", "/delete-user/callback"),
         ("post", "/device/code"),
@@ -431,6 +435,14 @@ async fn test_generated_openapi_has_core_routes() {
     assert!(
         spec.paths.contains_key("/sign-in/email"),
         "OpenAPI spec missing /sign-in/email"
+    );
+    assert!(
+        spec.paths.contains_key("/verify-password"),
+        "OpenAPI spec missing /verify-password"
+    );
+    assert!(
+        spec.paths.contains_key("/account-info"),
+        "OpenAPI spec missing /account-info"
     );
 }
 

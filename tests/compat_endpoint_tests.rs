@@ -13,6 +13,8 @@ mod compat;
 
 use std::collections::HashSet;
 
+use better_auth::prelude::CreateAccount;
+
 use compat::helpers::*;
 use compat::schema::extract_success_schema;
 use compat::shapes::check_camel_case_fields;
@@ -152,6 +154,20 @@ async fn test_spec_driven_endpoint_validation() {
     .await;
     validator.validate_endpoint("/change-password", "post", status, &body);
 
+    // --- POST /verify-password ---
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/verify-password",
+            serde_json::json!({
+                "password": "newpassword456"
+            }),
+            &pw_token,
+        ),
+    )
+    .await;
+    validator.validate_endpoint("/verify-password", "post", status, &body);
+
     // --- POST /update-user ---
     let (upd_token, _) = signup_user(&auth, "upd@example.com", "password123", "UPD User").await;
     let (status, body) = send_request(
@@ -237,6 +253,39 @@ async fn test_spec_driven_endpoint_validation() {
             camel_case_violations: vec![],
         });
     }
+
+    // --- GET /account-info ---
+    let (ai_token, ai_signup_body) =
+        signup_user(&auth, "ai@example.com", "password123", "AI User").await;
+    let ai_user_id = ai_signup_body["user"]["id"]
+        .as_str()
+        .expect("sign-up should return user id");
+    _ = auth
+        .store()
+        .create_account(CreateAccount {
+            user_id: ai_user_id.to_string(),
+            account_id: "mock-account-id".to_string(),
+            provider_id: "mock".to_string(),
+            access_token: Some("mock-access-token".to_string()),
+            refresh_token: Some("mock-refresh-token".to_string()),
+            id_token: None,
+            access_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
+            refresh_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(2)),
+            scope: Some("openid,email,profile".to_string()),
+            password: None,
+        })
+        .await
+        .expect("account-info test account should be created");
+    let (status, body) = send_request(
+        &auth,
+        get_with_auth_and_query(
+            "/account-info",
+            &ai_token,
+            vec![("accountId", "mock-account-id")],
+        ),
+    )
+    .await;
+    validator.validate_endpoint("/account-info", "get", status, &body);
 
     // --- GET /reference/openapi.json ---
     let (status, body) = send_request(&auth, get_request("/reference/openapi.json")).await;

@@ -94,6 +94,14 @@ pub mod core_paths {
         opacity: 0.8;
       }
 
+      h1 {
+        margin: 0;
+        font-size: inherit;
+        font-weight: inherit;
+        color: inherit;
+        letter-spacing: -0.02em;
+      }
+
       @media (prefers-color-scheme: dark) {
         :root,
         :host {
@@ -231,19 +239,12 @@ pub mod core_paths {
                 display: inline-block;
                 border: 2px solid var(--destructive);
                 padding: 0.375rem 1rem;
+                font-size: var(--text-6xl);
+                font-weight: var(--font-weight-semibold);
+                color: var(--foreground);
               "
             >
-              <h1
-                style="
-                  font-size: var(--text-6xl);
-                  font-weight: var(--font-weight-semibold);
-                  color: var(--foreground);
-                  letter-spacing: -0.02em;
-                  margin: 0;
-                "
-              >
-                ERROR
-              </h1>
+              <h1>ERROR</h1>
             </div>
             <div
               style="
@@ -271,34 +272,18 @@ pub mod core_paths {
             style="
                 display: inline-flex;
                 align-items: center;
-                gap: 0.5rem;
                 border: 2px solid var(--border);
                 background-color: var(--muted);
                 padding: 0.375rem 0.75rem;
                 margin: 0 0 1rem;
                 flex-wrap: wrap;
                 justify-content: center;
-            "
-            >
-            <span
-                style="
-                font-size: 0.75rem;
-                color: var(--muted-foreground);
-                font-weight: var(--font-weight-semibold);
-                "
-            >
-                CODE:
-            </span>
-            <span
-                style="
                 font-size: var(--text-sm);
                 font-family: var(--default-mono-font-family, monospace);
                 color: var(--foreground);
-                word-break: break-all;
-                "
+            "
             >
-                __CODE__
-            </span>
+                CODE: __CODE__
             </div>
 
           <p

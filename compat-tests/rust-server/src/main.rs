@@ -1085,10 +1085,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/__test/oauth/userinfo",
             get(|| async {
                 Json(serde_json::json!({
-                    "sub": "mock-account-id",
+                    "id": "mock-account-id",
                     "email": "mock@example.com",
                     "name": "Mock OAuth User",
-                    "email_verified": true,
+                    "image": serde_json::Value::Null,
+                    "emailVerified": true,
                 }))
             }),
         )

@@ -109,6 +109,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for PasswordManagementPlugin
             AuthRoute::post("/reset-password", "reset_password"),
             AuthRoute::get("/reset-password/{token}", "reset_password_token"),
             AuthRoute::post("/change-password", "change_password"),
+            AuthRoute::post("/verify-password", "verify_password"),
         ]
     }
 
@@ -126,6 +127,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for PasswordManagementPlugin
             }
             (HttpMethod::Post, "/change-password") => {
                 Ok(Some(self.handle_change_password(req, ctx).await?))
+            }
+            (HttpMethod::Post, "/verify-password") => {
+                Ok(Some(self.handle_verify_password(req, ctx).await?))
             }
             (HttpMethod::Get, path) if path.starts_with("/reset-password/") => {
                 let token = path.get(16..).unwrap_or(""); // Remove "/reset-password/" prefix
@@ -199,6 +203,24 @@ impl PasswordManagementPlugin {
         } else {
             Ok(auth_response)
         }
+    }
+
+    async fn handle_verify_password(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<AuthResponse> {
+        let body: VerifyPasswordRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+
+        let user = self.get_current_user(req, ctx).await?;
+        let Some(user) = user else {
+            return Ok(AuthResponse::new(401).with_header("content-type", "application/json"));
+        };
+        let response = verify_password_core(&body, &user, &self.config, ctx).await?;
+        Ok(AuthResponse::json(200, &response)?)
     }
 
     async fn handle_reset_password_token(

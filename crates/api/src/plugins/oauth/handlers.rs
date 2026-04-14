@@ -24,8 +24,9 @@ use super::state::{
     filter_additional_state_data, get_cookie, state_cookie_name,
 };
 use super::types::{
-    AccessTokenResponse, GetAccessTokenRequest, LinkSocialRequest, OAuthIdTokenRequest,
-    RefreshTokenRequest, RefreshTokenResponse, SocialSignInRequest, SocialSignInResponse,
+    AccessTokenResponse, AccountInfoQuery, AccountInfoResponse, AccountInfoUser,
+    GetAccessTokenRequest, LinkSocialRequest, OAuthIdTokenRequest, RefreshTokenRequest,
+    RefreshTokenResponse, SocialSignInRequest, SocialSignInResponse,
 };
 use better_auth_core::wire::{SessionView, UserView};
 
@@ -66,6 +67,35 @@ fn find_account_for_provider<'a, A: AuthAccount>(
             }
         })
         .ok_or_else(|| AuthError::bad_request("Account not found"))
+}
+
+fn find_account_for_provider_account_id<'a, A: AuthAccount>(
+    accounts: &'a [A],
+    provider_account_id: &str,
+) -> Option<&'a A> {
+    accounts
+        .iter()
+        .find(|account| account.account_id() == provider_account_id)
+}
+
+fn parse_query<T: Default + serde::de::DeserializeOwned>(
+    query: &std::collections::HashMap<String, String>,
+) -> T {
+    let value = serde_json::to_value(query)
+        .unwrap_or_else(|_| serde_json::Value::Object(Default::default()));
+    serde_json::from_value(value).unwrap_or_default()
+}
+
+fn code_message_response(status: u16, message: impl Into<String>) -> AuthResult<AuthResponse> {
+    let message = message.into();
+    AuthResponse::json(
+        status,
+        &better_auth_core::types::ErrorCodeMessageResponse {
+            code: AuthError::code_from_message(&message),
+            message,
+        },
+    )
+    .map_err(AuthError::from)
 }
 
 fn generate_pkce() -> (String, String) {
@@ -503,6 +533,16 @@ pub(crate) struct RefreshTokenCoreResult {
     account_cookie: Option<AccountCookiePayload>,
 }
 
+pub(crate) struct AccountInfoCoreResult {
+    response: AccountInfoResponse,
+    account_cookie: Option<AccountCookiePayload>,
+}
+
+struct AccountInfoTarget {
+    provider_id: String,
+    token_account_id: Option<String>,
+}
+
 struct InitiatedOAuthFlow {
     response: SocialSignInResponse,
     state: String,
@@ -628,6 +668,7 @@ async fn process_oauth_sign_in(
                 .store_account_cookie
                 .then(|| AccountCookiePayload {
                     id: Some(existing_account.id().to_string()),
+                    user_id: existing_account.user_id().to_string(),
                     provider_id: provider_name.to_string(),
                     account_id: existing_account.account_id().to_string(),
                     access_token: token_bundle
@@ -1514,6 +1555,111 @@ pub(crate) async fn refresh_token_core(
     })
 }
 
+async fn resolve_account_info_target(
+    query: &AccountInfoQuery,
+    req: &AuthRequest,
+    session: &impl AuthSession,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<Option<AccountInfoTarget>> {
+    let provided_account_id = query
+        .account_id
+        .as_deref()
+        .filter(|value| !value.is_empty());
+
+    if let Some(provider_account_id) = provided_account_id {
+        let accounts = ctx.database.get_user_accounts(&session.user_id()).await?;
+        return Ok(
+            find_account_for_provider_account_id(&accounts, provider_account_id).map(|account| {
+                AccountInfoTarget {
+                    provider_id: account.provider_id().to_string(),
+                    token_account_id: Some(account.id().to_string()),
+                }
+            }),
+        );
+    }
+
+    if !ctx.config.account.store_account_cookie {
+        return Ok(None);
+    }
+
+    Ok(decode_account_cookie(req, &ctx.config, &ctx.config.secret)?
+        .filter(|account| account.user_id == session.user_id())
+        .map(|account| AccountInfoTarget {
+            provider_id: account.provider_id,
+            token_account_id: account.id,
+        }))
+}
+
+pub(crate) async fn account_info_core(
+    query: &AccountInfoQuery,
+    config: &OAuthConfig,
+    req: &AuthRequest,
+    session: &impl AuthSession,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<Option<AccountInfoCoreResult>> {
+    let Some(target) = resolve_account_info_target(query, req, session, ctx).await? else {
+        return Ok(None);
+    };
+
+    let provider = config.providers.get(&target.provider_id);
+    let Some(provider) = provider else {
+        return Err(AuthError::internal(format!(
+            "Provider account provider is {} but it is not configured",
+            target.provider_id
+        )));
+    };
+
+    let token_result = get_access_token_core(
+        &GetAccessTokenRequest {
+            provider_id: target.provider_id.clone(),
+            account_id: target.token_account_id,
+            user_id: None,
+        },
+        config,
+        req,
+        session,
+        ctx,
+    )
+    .await?;
+
+    let Some(access_token) = token_result.response.access_token.clone() else {
+        return Err(AuthError::bad_request("Access token not found"));
+    };
+
+    let access_token_expires_at = token_result
+        .response
+        .access_token_expires_at
+        .as_deref()
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+        .map(|value| value.with_timezone(&Utc));
+
+    let user_info = fetch_user_info_from_provider(
+        provider,
+        OAuthUserInfoRequest {
+            access_token: Some(access_token),
+            access_token_expires_at,
+            scopes: token_result.response.scopes.clone(),
+            id_token: token_result.response.id_token.clone(),
+            ..Default::default()
+        },
+    )
+    .await?;
+
+    Ok(Some(AccountInfoCoreResult {
+        response: AccountInfoResponse {
+            user: AccountInfoUser {
+                id: user_info.user.id,
+                name: user_info.user.name,
+                email: user_info.user.email,
+                image: user_info.user.image,
+                email_verified: user_info.user.email_verified,
+            },
+            data: user_info.data,
+        },
+        account_cookie: token_result.account_cookie,
+    }))
+}
+
 /// Shared logic for social sign-in and link-social flows.
 ///
 /// Both flows build a verification payload, store it, construct the
@@ -1987,6 +2133,34 @@ pub(crate) async fn handle_refresh_token(
         Err(resp) => return Ok(resp),
     };
     let result = refresh_token_core(&body, req, &session, config, ctx).await?;
+    let mut response = AuthResponse::json(200, &result.response).map_err(AuthError::from)?;
+    if let Some(account_cookie) = result.account_cookie.as_ref() {
+        response = response.with_appended_header(
+            "Set-Cookie",
+            create_account_cookie_header(&ctx.config, &ctx.config.secret, account_cookie)?,
+        );
+    }
+    Ok(response)
+}
+
+pub(crate) async fn handle_account_info(
+    config: &OAuthConfig,
+    req: &AuthRequest,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<AuthResponse> {
+    let session = require_session(req, ctx).await?;
+    let query = parse_query::<AccountInfoQuery>(&req.query);
+    let result = match account_info_core(&query, config, req, &session, ctx).await {
+        Ok(Some(result)) => result,
+        Ok(None) => return code_message_response(400, "Account not found"),
+        Err(AuthError::Internal(message))
+            if message.starts_with("Provider account provider is ") =>
+        {
+            return code_message_response(500, message);
+        }
+        Err(error) => return Err(error),
+    };
+
     let mut response = AuthResponse::json(200, &result.response).map_err(AuthError::from)?;
     if let Some(account_cookie) = result.account_cookie.as_ref() {
         response = response.with_appended_header(

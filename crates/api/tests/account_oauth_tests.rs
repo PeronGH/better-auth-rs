@@ -191,6 +191,8 @@ impl OAuthRefreshTokenHandler for RotatingRefreshHandler {
 struct TestAccountCookieClaims<'a> {
     #[serde(rename = "id", skip_serializing_if = "Option::is_none")]
     id: Option<String>,
+    #[serde(rename = "userId")]
+    user_id: String,
     #[serde(rename = "providerId")]
     provider_id: &'a str,
     #[serde(rename = "accountId")]
@@ -228,6 +230,7 @@ fn encode_account_cookie(
         &Header::default(),
         &TestAccountCookieClaims {
             id: Some(account.id().to_string()),
+            user_id: account.user_id().to_string(),
             provider_id: account.provider_id(),
             account_id: account.account_id(),
             access_token,
@@ -729,6 +732,248 @@ async fn test_get_access_token_refresh_persists_rotated_tokens_for_cookie_matche
             .any(|value| value.starts_with("better-auth.account_data=")),
         "get-access-token refresh path should refresh the account_data cookie when it is the source of truth"
     );
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/account.ts :: accountInfo resolves
+// query.accountId by provider account id, then reuses getAccessToken for provider user info.
+#[tokio::test]
+async fn test_account_info_returns_provider_user_info_for_provider_account_id() {
+    let mock_url = start_mock_oauth_server("account-info@example.com").await;
+    let config = Arc::new(test_config());
+    let db = create_test_database().await;
+
+    let (_, session_token) = setup_user_with_account(
+        &db,
+        &config,
+        "owner@example.com",
+        "google",
+        Some("stored-access-token".to_string()),
+        Some("stored-refresh-token".to_string()),
+    )
+    .await;
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+    let mut oauth_config = OAuthConfig::default();
+    oauth_config
+        .providers
+        .insert("google".to_string(), make_test_provider(&mock_url));
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+
+    let mut req = AuthRequest::new(HttpMethod::Get, "/account-info");
+    req.query
+        .insert("accountId".to_string(), "google-account-id".to_string());
+    req.headers.insert(
+        "cookie".to_string(),
+        format!("better-auth.session_token={}", session_token),
+    );
+
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+    let resp = match result {
+        Ok(Some(resp)) => resp,
+        other => panic!("account-info should succeed, got {other:?}"),
+    };
+
+    assert_eq!(resp.status, 200);
+    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert_eq!(body["user"]["id"], "mock-user-id-123");
+    assert_eq!(body["user"]["email"], "account-info@example.com");
+    assert_eq!(body["user"]["name"], "Mock OAuth User");
+    assert_eq!(body["user"]["emailVerified"], true);
+    assert_eq!(body["data"]["email"], "account-info@example.com");
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/account.ts :: accountInfo without
+// query.accountId only uses the account cookie, not the database account list.
+#[tokio::test]
+async fn test_account_info_without_cookie_returns_account_not_found() {
+    let mock_url = start_mock_oauth_server("missing-cookie@example.com").await;
+    let config = Arc::new(test_config());
+    let db = create_test_database().await;
+
+    let (_, session_token) = setup_user_with_account(
+        &db,
+        &config,
+        "owner@example.com",
+        "google",
+        Some("stored-access-token".to_string()),
+        Some("stored-refresh-token".to_string()),
+    )
+    .await;
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+    let mut oauth_config = OAuthConfig::default();
+    oauth_config
+        .providers
+        .insert("google".to_string(), make_test_provider(&mock_url));
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+
+    let mut req = AuthRequest::new(HttpMethod::Get, "/account-info");
+    req.headers.insert(
+        "cookie".to_string(),
+        format!("better-auth.session_token={}", session_token),
+    );
+
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+    let resp = match result {
+        Ok(Some(resp)) => resp,
+        other => panic!("account-info should return a 400 response, got {other:?}"),
+    };
+
+    assert_eq!(resp.status, 400);
+    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert_eq!(body["message"], "Account not found");
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/account.ts :: accountInfo verifies the
+// account belongs to the current session user before using the account cookie.
+#[tokio::test]
+async fn test_account_info_rejects_cookie_for_the_wrong_user() {
+    let mock_url = start_mock_oauth_server("cookie-owner@example.com").await;
+    let config = Arc::new(test_config_with_account_cookie());
+    let db = create_test_database().await;
+
+    let (cookie_user_id, _) = setup_user_with_account(
+        &db,
+        &config,
+        "cookie-owner@example.com",
+        "google",
+        Some("stored-access-token".to_string()),
+        Some("stored-refresh-token".to_string()),
+    )
+    .await;
+    let cookie_account = db
+        .get_user_accounts(&cookie_user_id)
+        .await
+        .unwrap()
+        .remove(0);
+
+    let other_user = db
+        .create_user(
+            CreateUser::new()
+                .with_email("other@example.com")
+                .with_name("Other User")
+                .with_email_verified(true),
+        )
+        .await
+        .unwrap();
+    let other_session = SessionManager::new(config.clone(), db.clone())
+        .create_session(&other_user, None, None)
+        .await
+        .unwrap();
+
+    let account_cookie = encode_account_cookie(
+        &cookie_account,
+        cookie_account.access_token(),
+        cookie_account.refresh_token(),
+        cookie_account.access_token_expires_at(),
+    );
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+    let mut oauth_config = OAuthConfig::default();
+    oauth_config
+        .providers
+        .insert("google".to_string(), make_test_provider(&mock_url));
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+
+    let mut req = AuthRequest::new(HttpMethod::Get, "/account-info");
+    set_session_and_account_cookies(&mut req, other_session.token(), &account_cookie);
+
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+    let resp = match result {
+        Ok(Some(resp)) => resp,
+        other => panic!("account-info should return a 400 response, got {other:?}"),
+    };
+
+    assert_eq!(resp.status, 400);
+    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert_eq!(body["message"], "Account not found");
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/account.ts :: accountInfo returns a
+// specific 500 when the resolved account's provider is not configured.
+#[tokio::test]
+async fn test_account_info_returns_provider_not_configured_message() {
+    let config = Arc::new(test_config());
+    let db = create_test_database().await;
+
+    let (_, session_token) = setup_user_with_account(
+        &db,
+        &config,
+        "owner@example.com",
+        "ghost",
+        Some("stored-access-token".to_string()),
+        Some("stored-refresh-token".to_string()),
+    )
+    .await;
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+    let oauth_plugin = OAuthPlugin::with_config(OAuthConfig::default());
+
+    let mut req = AuthRequest::new(HttpMethod::Get, "/account-info");
+    req.query
+        .insert("accountId".to_string(), "ghost-account-id".to_string());
+    req.headers.insert(
+        "cookie".to_string(),
+        format!("better-auth.session_token={}", session_token),
+    );
+
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+    let resp = match result {
+        Ok(Some(resp)) => resp,
+        other => panic!("account-info should return a 500 response, got {other:?}"),
+    };
+
+    assert_eq!(resp.status, 500);
+    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert_eq!(
+        body["message"],
+        "Provider account provider is ghost but it is not configured"
+    );
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/account.ts :: accountInfo returns
+// "Access token not found" when token resolution succeeds but yields no access token.
+#[tokio::test]
+async fn test_account_info_rejects_missing_access_token() {
+    let mock_url = start_mock_oauth_server("missing-token@example.com").await;
+    let config = Arc::new(test_config());
+    let db = create_test_database().await;
+
+    let (_, session_token) = setup_user_with_account(
+        &db,
+        &config,
+        "owner@example.com",
+        "google",
+        None,
+        Some("stored-refresh-token".to_string()),
+    )
+    .await;
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+    let mut oauth_config = OAuthConfig::default();
+    oauth_config
+        .providers
+        .insert("google".to_string(), make_test_provider(&mock_url));
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+
+    let mut req = AuthRequest::new(HttpMethod::Get, "/account-info");
+    req.query
+        .insert("accountId".to_string(), "google-account-id".to_string());
+    req.headers.insert(
+        "cookie".to_string(),
+        format!("better-auth.session_token={}", session_token),
+    );
+
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+    match result {
+        Err(error) => assert_eq!(error.to_string(), "Access token not found"),
+        Ok(Some(resp)) => {
+            assert_eq!(resp.status, 400);
+            let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+            assert_eq!(body["message"], "Access token not found");
+        }
+        Ok(None) => panic!("Expected an account-info error response"),
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

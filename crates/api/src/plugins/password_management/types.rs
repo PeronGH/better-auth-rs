@@ -36,6 +36,12 @@ pub(crate) struct ChangePasswordRequest {
     pub(crate) revoke_other_sessions: Option<bool>,
 }
 
+/// Request body for `POST /verify-password`.
+#[derive(Debug, Deserialize, Validate)]
+pub(crate) struct VerifyPasswordRequest {
+    pub(crate) password: String,
+}
+
 /// Query parameters for `GET /reset-password/{token}`.
 #[derive(Debug, Deserialize)]
 pub(crate) struct ResetPasswordTokenQuery {
