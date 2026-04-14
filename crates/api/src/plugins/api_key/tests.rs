@@ -733,51 +733,9 @@ async fn test_update_with_expires_in() {
     assert!(body["expiresAt"].is_string());
 }
 
-// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
-#[tokio::test]
-async fn test_on_request_dispatches_verify() {
-    let plugin = ApiKeyPlugin::builder().build();
-    let (ctx, _user, session) = create_test_context_with_user().await;
-
-    let (_id, raw_key) = create_key_and_get_raw(
-        &plugin,
-        &ctx,
-        &session.token,
-        serde_json::json!({ "name": "dispatch-test" }),
-    )
-    .await;
-
-    let verify_req = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/verify",
-        None,
-        Some(serde_json::json!({ "key": raw_key })),
-        None,
-    );
-    let resp = plugin.on_request(&verify_req, &ctx).await.unwrap();
-    assert!(resp.is_some());
-    let body = json_body(&resp.unwrap());
-    assert_eq!(body["valid"], true);
-}
-
-// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
-#[tokio::test]
-async fn test_on_request_dispatches_delete_all_expired() {
-    let plugin = ApiKeyPlugin::builder().build();
-    let (ctx, _user, session) = create_test_context_with_user().await;
-
-    let req = create_auth_request(
-        HttpMethod::Post,
-        "/api-key/delete-all-expired-api-keys",
-        Some(&session.token),
-        None,
-        None,
-    );
-    let resp = plugin.on_request(&req, &ctx).await.unwrap();
-    assert!(resp.is_some());
-    let body = json_body(&resp.unwrap());
-    assert_eq!(body["success"], true);
-}
+// Note: /api-key/verify and /api-key/delete-all-expired-api-keys are
+// server-only in TS (no HTTP routes), so the Rust plugin does not expose
+// them either. Route dispatch tests for these have been removed.
 
 // Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]

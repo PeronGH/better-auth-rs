@@ -58,6 +58,7 @@ pub(crate) struct DeleteKeyRequest {
     pub key_id: String,
 }
 
+#[cfg(test)]
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct VerifyKeyRequest {
     pub key: String,
@@ -73,18 +74,4 @@ pub(crate) struct CreateKeyResponse {
     pub key: String,
     #[serde(flatten)]
     pub api_key: ApiKeyView,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct VerifyKeyResponse {
-    pub valid: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<VerifyErrorBody>,
-    pub key: Option<ApiKeyView>,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct VerifyErrorBody {
-    pub message: String,
-    pub code: String,
 }
