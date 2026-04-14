@@ -307,6 +307,7 @@ pub(crate) async fn leave_organization_core(
     body: &LeaveOrganizationRequest,
     user: &impl AuthUser,
     session: &impl AuthSession,
+    config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<MemberResponse> {
     let member = ctx
@@ -315,14 +316,14 @@ pub(crate) async fn leave_organization_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
-    if has_role(&member, "owner") {
+    if has_role(&member, &config.creator_role) {
         let all_members = ctx
             .database
             .list_organization_members(&body.organization_id)
             .await?;
         let owner_count = all_members
             .iter()
-            .filter(|candidate| has_role(*candidate, "owner"))
+            .filter(|candidate| has_role(*candidate, &config.creator_role))
             .count();
 
         if owner_count <= 1 {
@@ -452,18 +453,6 @@ pub async fn handle_set_active_organization(
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    if matches!(body.organization_id, NullableStringField::Null) {
-        let _ = ctx
-            .database
-            .update_session_active_organization(session.token(), None)
-            .await?;
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
-        return Ok(
-            AuthResponse::json(200, &Option::<OrganizationResponse>::None)?
-                .with_header("Set-Cookie", cookie_header),
-        );
-    }
-
     let organization = set_active_organization_core(&body, &user, &session, ctx).await?;
     let cookie_header = create_session_cookie(session.token(), &ctx.config);
     Ok(AuthResponse::json(200, &organization)?.with_header("Set-Cookie", cookie_header))
@@ -473,13 +462,14 @@ pub async fn handle_set_active_organization(
 pub async fn handle_leave_organization(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let body: LeaveOrganizationRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    let response = leave_organization_core(&body, &user, &session, ctx).await?;
+    let response = leave_organization_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 

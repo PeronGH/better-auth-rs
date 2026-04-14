@@ -447,6 +447,7 @@ pub async fn create_default_test_auth() -> TestAuth {
 pub async fn create_test_auth_with_reset_sender(mode: ResetSenderMode) -> TestAuth {
     create_test_auth_with_options(TestAuthOptions {
         reset_sender_mode: mode,
+        ..Default::default()
     })
     .await
 }

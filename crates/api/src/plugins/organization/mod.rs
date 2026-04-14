@@ -126,7 +126,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
                 handlers::org::handle_set_active_organization(req, ctx).await?,
             )),
             (HttpMethod::Post, "/organization/leave") => Ok(Some(
-                handlers::org::handle_leave_organization(req, ctx).await?,
+                handlers::org::handle_leave_organization(req, ctx, &self.config).await?,
             )),
             // Member management
             (HttpMethod::Get, "/organization/get-active-member") => Ok(Some(
