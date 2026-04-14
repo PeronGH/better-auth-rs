@@ -19,6 +19,7 @@ pub struct FieldDef {
     /// e.g. `"Option<String>"`, `"bool"`, `"DateTimeUtc"`, `"Json"`.
     pub ty: &'static str,
     pub is_primary_key: bool,
+    pub column_name: Option<&'static str>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -43,6 +44,7 @@ macro_rules! f {
             name: $name,
             ty: $ty,
             is_primary_key: false,
+            column_name: None,
         }
     };
 }
@@ -53,6 +55,18 @@ macro_rules! pk {
             name: $name,
             ty: $ty,
             is_primary_key: true,
+            column_name: None,
+        }
+    };
+}
+
+macro_rules! f_col {
+    ($name:expr, $ty:expr, $column_name:expr) => {
+        FieldDef {
+            name: $name,
+            ty: $ty,
+            is_primary_key: false,
+            column_name: Some($column_name),
         }
     };
 }
@@ -135,6 +149,28 @@ static PLUGINS: &[PluginSchema] = &[
         extra_entities: &[],
     },
     PluginSchema {
+        name: "device-authorization",
+        user_fields: &[],
+        session_fields: &[],
+        extra_entities: &[ExtraEntitySchema {
+            mod_name: "device_code",
+            table_name: "device_code",
+            role: None,
+            fields: &[
+                pk!("id", "String"),
+                f!("device_code", "String"),
+                f!("user_code", "String"),
+                f!("user_id", "Option<String>"),
+                f!("expires_at", "DateTimeUtc"),
+                f!("status", "String"),
+                f!("last_polled_at", "Option<DateTimeUtc>"),
+                f!("polling_interval", "Option<i64>"),
+                f!("client_id", "Option<String>"),
+                f!("scope", "Option<String>"),
+            ],
+        }],
+    },
+    PluginSchema {
         name: "admin",
         user_fields: &[
             f!("role", "Option<String>"),
@@ -150,7 +186,82 @@ static PLUGINS: &[PluginSchema] = &[
         name: "organization",
         user_fields: &[],
         session_fields: &[f!("active_organization_id", "Option<String>")],
-        extra_entities: &[],
+        extra_entities: &[
+            ExtraEntitySchema {
+                mod_name: "organization",
+                table_name: "organization",
+                role: None,
+                fields: &[
+                    pk!("id", "String"),
+                    f!("name", "String"),
+                    f!("slug", "String"),
+                    f!("logo", "Option<String>"),
+                    f!("metadata", "Json"),
+                    f!("created_at", "DateTimeUtc"),
+                    f!("updated_at", "DateTimeUtc"),
+                ],
+            },
+            ExtraEntitySchema {
+                mod_name: "member",
+                table_name: "member",
+                role: None,
+                fields: &[
+                    pk!("id", "String"),
+                    f!("organization_id", "String"),
+                    f!("user_id", "String"),
+                    f!("role", "String"),
+                    f!("created_at", "DateTimeUtc"),
+                ],
+            },
+            ExtraEntitySchema {
+                mod_name: "invitation",
+                table_name: "invitation",
+                role: None,
+                fields: &[
+                    pk!("id", "String"),
+                    f!("organization_id", "String"),
+                    f!("email", "String"),
+                    f!("role", "String"),
+                    f!("status", "String"),
+                    f!("inviter_id", "String"),
+                    f!("expires_at", "DateTimeUtc"),
+                    f!("created_at", "DateTimeUtc"),
+                ],
+            },
+        ],
+    },
+    PluginSchema {
+        name: "api-key",
+        user_fields: &[],
+        session_fields: &[],
+        extra_entities: &[ExtraEntitySchema {
+            mod_name: "api_key",
+            table_name: "api_keys",
+            role: None,
+            fields: &[
+                pk!("id", "String"),
+                f!("name", "Option<String>"),
+                f!("start", "Option<String>"),
+                f!("prefix", "Option<String>"),
+                f_col!("key_hash", "String", "key"),
+                f!("user_id", "String"),
+                f!("refill_interval", "Option<i32>"),
+                f!("refill_amount", "Option<i32>"),
+                f!("last_refill_at", "Option<DateTimeUtc>"),
+                f!("enabled", "bool"),
+                f!("rate_limit_enabled", "bool"),
+                f!("rate_limit_time_window", "Option<i32>"),
+                f!("rate_limit_max", "Option<i32>"),
+                f!("request_count", "Option<i32>"),
+                f!("remaining", "Option<i32>"),
+                f!("last_request", "Option<DateTimeUtc>"),
+                f!("expires_at", "Option<DateTimeUtc>"),
+                f!("created_at", "DateTimeUtc"),
+                f!("updated_at", "DateTimeUtc"),
+                f!("permissions", "Option<String>"),
+                f!("metadata", "Option<String>"),
+            ],
+        }],
     },
     PluginSchema {
         name: "passkey",
