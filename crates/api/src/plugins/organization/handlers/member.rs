@@ -127,29 +127,41 @@ pub(crate) async fn list_members_core(
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
+    let needs_full_materialization = query.sort_by.is_some() || query.filter_field.is_some();
     let members_raw = ctx.database.list_organization_members(&org_id).await?;
-    let mut members = Vec::with_capacity(members_raw.len());
-    for member in &members_raw {
+    let members_page: Vec<_> = if needs_full_materialization {
+        members_raw
+    } else {
+        let offset = query.offset.unwrap_or(0);
+        let limit = query.limit.unwrap_or(50).min(100);
+        members_raw.into_iter().skip(offset).take(limit).collect()
+    };
+
+    let mut members = Vec::with_capacity(members_page.len());
+    for member in &members_page {
         if let Some(user_info) = ctx.database.get_user_by_id(&member.user_id()).await? {
             members.push(MemberResponse::from_member_and_user(member, &user_info));
         }
     }
 
-    members.retain(|member| member_matches_filter(member, query));
+    if needs_full_materialization {
+        members.retain(|member| member_matches_filter(member, query));
 
-    if let Some(sort_by) = query.sort_by.as_deref() {
-        members.sort_by(|left, right| compare_member_field(left, right, sort_by));
-        if matches!(query.sort_direction.as_deref(), Some("desc")) {
-            members.reverse();
+        if let Some(sort_by) = query.sort_by.as_deref() {
+            members.sort_by(|left, right| compare_member_field(left, right, sort_by));
+            if matches!(query.sort_direction.as_deref(), Some("desc")) {
+                members.reverse();
+            }
         }
+
+        let total = members.len();
+        let offset = query.offset.unwrap_or(0);
+        let limit = query.limit.unwrap_or(50).min(100);
+        let members = members.into_iter().skip(offset).take(limit).collect();
+        return Ok(ListMembersResponse { members, total });
     }
 
-    let total = members.len();
-
-    let offset = query.offset.unwrap_or(0);
-    let limit = query.limit.unwrap_or(50).min(100);
-    let members = members.into_iter().skip(offset).take(limit).collect();
-
+    let total = ctx.database.count_organization_members(&org_id).await? as usize;
     Ok(ListMembersResponse { members, total })
 }
 
@@ -251,11 +263,11 @@ pub(crate) async fn remove_member_core(
         ));
     }
 
-    if has_role(&target_member, "owner") {
+    if has_role(&target_member, &config.creator_role) {
         let all_members = ctx.database.list_organization_members(&org_id).await?;
         let owner_count = all_members
             .iter()
-            .filter(|candidate| has_role(*candidate, "owner"))
+            .filter(|candidate| has_role(*candidate, &config.creator_role))
             .count();
 
         if owner_count <= 1 {

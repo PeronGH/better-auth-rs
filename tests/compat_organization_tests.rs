@@ -596,3 +596,134 @@ async fn test_organization_member_endpoints() {
             .join("\n")
     );
 }
+
+#[tokio::test]
+async fn test_custom_creator_role_protection() {
+    let auth = create_test_auth_with_options(TestAuthOptions {
+        creator_role: Some("founder".to_string()),
+        ..Default::default()
+    })
+    .await;
+
+    let (founder_token, _) =
+        signup_user(&auth, "founder@example.com", "password123", "Founder").await;
+
+    let (status, create_body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/organization/create",
+            serde_json::json!({
+                "name": "Founder Org",
+                "slug": "founder-org"
+            }),
+            &founder_token,
+        ),
+    )
+    .await;
+    assert_eq!(status, 200, "create org failed: {}", create_body);
+
+    let founder_member_id = create_body["members"][0]["id"]
+        .as_str()
+        .expect("founder member id")
+        .to_string();
+    assert_eq!(
+        create_body["members"][0]["role"].as_str(),
+        Some("founder"),
+        "creator role should use custom founder role",
+    );
+
+    let (status, remove_body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/organization/remove-member",
+            serde_json::json!({
+                "memberIdOrEmail": founder_member_id,
+                "organizationId": create_body["id"].as_str().expect("org id"),
+            }),
+            &founder_token,
+        ),
+    )
+    .await;
+    assert_eq!(
+        status, 400,
+        "remove-member should reject removing last founder: {}",
+        remove_body
+    );
+
+    let (status, leave_body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/organization/leave",
+            serde_json::json!({
+                "organizationId": create_body["id"].as_str().expect("org id"),
+            }),
+            &founder_token,
+        ),
+    )
+    .await;
+    assert_eq!(
+        status, 400,
+        "leave should reject last founder: {}",
+        leave_body
+    );
+}
+
+#[tokio::test]
+async fn test_invite_member_rejects_empty_role_inputs() {
+    let auth = create_test_auth().await;
+    let (owner_token, _) =
+        signup_user(&auth, "role-owner@example.com", "password123", "Owner").await;
+    let (invitee_token, _) =
+        signup_user(&auth, "role-invitee@example.com", "password123", "Invitee").await;
+    let _ = invitee_token;
+
+    let (status, create_body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/organization/create",
+            serde_json::json!({
+                "name": "Role Org",
+                "slug": "role-org"
+            }),
+            &owner_token,
+        ),
+    )
+    .await;
+    assert_eq!(status, 200, "create org failed: {}", create_body);
+
+    let org_id = create_body["id"].as_str().expect("org id");
+
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/organization/invite-member",
+            serde_json::json!({
+                "organizationId": org_id,
+                "email": "role-invitee@example.com",
+                "role": ""
+            }),
+            &owner_token,
+        ),
+    )
+    .await;
+    assert_eq!(
+        status, 400,
+        "empty string role should be rejected: {}",
+        body
+    );
+
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/organization/invite-member",
+            serde_json::json!({
+                "organizationId": org_id,
+                "email": "role-invitee@example.com",
+                "role": []
+            }),
+            &owner_token,
+        ),
+    )
+    .await;
+    assert_eq!(status, 400, "empty array role should be rejected: {}", body);
+}

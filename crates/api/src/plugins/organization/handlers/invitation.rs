@@ -57,6 +57,10 @@ pub(crate) async fn invite_member_core(
     }
 
     let roles = requested_roles(&body.role);
+    if roles.is_empty() {
+        return Err(AuthError::bad_request("Role is required"));
+    }
+
     let mut valid_roles = vec![config.creator_role.as_str(), "admin", "member"];
     valid_roles.extend(config.roles.keys().map(String::as_str));
 

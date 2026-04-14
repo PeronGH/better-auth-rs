@@ -47,6 +47,7 @@ pub enum ResetSenderMode {
 #[derive(Debug, Clone, Default)]
 pub struct TestAuthOptions {
     pub reset_sender_mode: ResetSenderMode,
+    pub creator_role: Option<String>,
 }
 
 struct TestResetSender {
@@ -173,6 +174,11 @@ pub async fn create_test_auth() -> TestAuth {
 pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth {
     let config = test_config();
     let store = test_store(&config).await;
+    let organization_plugin = if let Some(creator_role) = options.creator_role.clone() {
+        OrganizationPlugin::new().creator_role(creator_role)
+    } else {
+        OrganizationPlugin::new()
+    };
 
     AuthBuilder::<TestSchema>::new(config)
         .store(store)
@@ -196,7 +202,7 @@ pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth
         .plugin(ApiKeyPlugin::builder().build())
         .plugin(mock_oauth_plugin())
         .plugin(TwoFactorPlugin::new())
-        .plugin(OrganizationPlugin::new())
+        .plugin(organization_plugin)
         .plugin(
             PasskeyPlugin::new()
                 .rp_id("localhost")
