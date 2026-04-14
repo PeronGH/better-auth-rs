@@ -31,7 +31,8 @@ pub struct CreateTwoFactor {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Passkey {
     pub id: String,
-    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     #[serde(rename = "publicKey")]
     pub public_key: String,
     #[serde(rename = "userId")]
@@ -47,25 +48,42 @@ pub struct Passkey {
     pub transports: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aaguid: Option<String>,
+    #[serde(skip_serializing, skip_deserializing, default)]
+    pub credential: String,
 }
 
 /// Input for creating a new passkey.
 #[derive(Debug, Clone)]
 pub struct CreatePasskey {
     pub user_id: String,
-    pub name: String,
+    pub name: Option<String>,
     pub credential_id: String,
     pub public_key: String,
     pub counter: u64,
     pub device_type: String,
     pub backed_up: bool,
     pub transports: Option<String>,
+    pub credential: String,
+    pub aaguid: Option<String>,
 }
 
 /// Input for updating a passkey.
 #[derive(Debug, Clone)]
 pub struct UpdatePasskey {
     pub name: Option<String>,
+}
+
+/// Input for updating stored passkey credential state after authentication.
+#[derive(Debug, Clone)]
+pub struct UpdatePasskeyAuthentication {
+    pub credential: String,
+    pub counter: u64,
+    pub backed_up: bool,
+    pub device_type: String,
 }
 
 /// Device authorization code storage shape.
@@ -334,8 +352,8 @@ impl AuthPasskey for Passkey {
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
     }
-    fn name(&self) -> &str {
-        &self.name
+    fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
     fn public_key(&self) -> &str {
         &self.public_key
@@ -361,13 +379,22 @@ impl AuthPasskey for Passkey {
     fn created_at(&self) -> DateTime<Utc> {
         self.created_at
     }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+    fn aaguid(&self) -> Option<&str> {
+        self.aaguid.as_deref()
+    }
+    fn credential(&self) -> &str {
+        &self.credential
+    }
 }
 
 impl<T: AuthPasskey> From<&T> for Passkey {
     fn from(passkey: &T) -> Self {
         Self {
             id: passkey.id().into_owned(),
-            name: passkey.name().to_owned(),
+            name: passkey.name().map(str::to_owned),
             public_key: passkey.public_key().to_owned(),
             user_id: passkey.user_id().into_owned(),
             credential_id: passkey.credential_id().to_owned(),
@@ -376,6 +403,9 @@ impl<T: AuthPasskey> From<&T> for Passkey {
             backed_up: passkey.backed_up(),
             transports: passkey.transports().map(str::to_owned),
             created_at: passkey.created_at(),
+            updated_at: passkey.updated_at(),
+            aaguid: passkey.aaguid().map(str::to_owned),
+            credential: passkey.credential().to_owned(),
         }
     }
 }

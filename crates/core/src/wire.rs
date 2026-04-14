@@ -426,7 +426,8 @@ impl<T: AuthInvitation> From<&T> for InvitationView {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PasskeyView {
     pub id: String,
-    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     #[serde(rename = "credentialID")]
     pub credential_id: String,
     #[serde(rename = "userId")]
@@ -442,13 +443,17 @@ pub struct PasskeyView {
     pub transports: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aaguid: Option<String>,
 }
 
 impl<T: AuthPasskey> From<&T> for PasskeyView {
     fn from(pk: &T) -> Self {
         Self {
             id: pk.id().into_owned(),
-            name: pk.name().to_owned(),
+            name: pk.name().map(str::to_owned),
             credential_id: pk.credential_id().to_owned(),
             user_id: pk.user_id().into_owned(),
             public_key: pk.public_key().to_owned(),
@@ -457,6 +462,8 @@ impl<T: AuthPasskey> From<&T> for PasskeyView {
             backed_up: pk.backed_up(),
             transports: pk.transports().map(str::to_owned),
             created_at: pk.created_at().to_rfc3339(),
+            updated_at: pk.updated_at().to_rfc3339(),
+            aaguid: pk.aaguid().map(str::to_owned),
         }
     }
 }

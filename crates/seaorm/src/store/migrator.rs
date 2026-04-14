@@ -712,7 +712,7 @@ async fn create_passkeys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                         .not_null()
                         .primary_key(),
                 )
-                .col(ColumnDef::new(passkey::Column::Name).string().not_null())
+                .col(ColumnDef::new(passkey::Column::Name).string())
                 .col(
                     ColumnDef::new(passkey::Column::PublicKey)
                         .string()
@@ -744,7 +744,18 @@ async fn create_passkeys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                 )
                 .col(ColumnDef::new(passkey::Column::Transports).string())
                 .col(
+                    ColumnDef::new(passkey::Column::Credential)
+                        .text()
+                        .not_null(),
+                )
+                .col(ColumnDef::new(passkey::Column::Aaguid).string())
+                .col(
                     ColumnDef::new(passkey::Column::CreatedAt)
+                        .timestamp_with_time_zone()
+                        .not_null(),
+                )
+                .col(
+                    ColumnDef::new(passkey::Column::UpdatedAt)
                         .timestamp_with_time_zone()
                         .not_null(),
                 )

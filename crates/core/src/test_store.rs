@@ -17,7 +17,7 @@ use crate::types::{
     CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
     CreateVerification, DeviceCode, Invitation, InvitationStatus, ListUsersParams, Member,
     Organization, Passkey, TwoFactor, UpdateAccount, UpdateApiKey, UpdateDeviceCode,
-    UpdateOrganization, UpdateUser,
+    UpdateOrganization, UpdatePasskeyAuthentication, UpdateUser,
 };
 use crate::wire::{AccountView, SessionView, UserView, VerificationView};
 
@@ -624,7 +624,11 @@ impl PasskeyStore for MemoryStore {
     async fn list_passkeys_by_user(&self, _user_id: &str) -> AuthResult<Vec<Passkey>> {
         Ok(Vec::new())
     }
-    async fn update_passkey_counter(&self, _id: &str, _counter: u64) -> AuthResult<Passkey> {
+    async fn update_passkey_authentication(
+        &self,
+        _id: &str,
+        _update: UpdatePasskeyAuthentication,
+    ) -> AuthResult<Passkey> {
         Err(AuthError::internal("unsupported test-store operation"))
     }
     async fn update_passkey_name(&self, _id: &str, _name: &str) -> AuthResult<Passkey> {

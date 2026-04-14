@@ -329,8 +329,7 @@ pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth
             PasskeyPlugin::new()
                 .rp_id("localhost")
                 .rp_name("Better Auth Test")
-                .origin("http://localhost:3000")
-                .allow_insecure_unverified_assertion(true),
+                .origin("http://localhost:3000"),
         )
         .plugin(AdminPlugin::new())
         .build()

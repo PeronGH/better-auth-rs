@@ -13,7 +13,7 @@ pub use super::types_org::{
 };
 pub use super::types_plugin::{
     ApiKey, CreateApiKey, CreateDeviceCode, CreatePasskey, CreateTwoFactor, DeviceCode, Passkey,
-    TwoFactor, UpdateApiKey, UpdateDeviceCode, UpdatePasskey,
+    TwoFactor, UpdateApiKey, UpdateDeviceCode, UpdatePasskey, UpdatePasskeyAuthentication,
 };
 
 /// HTTP method enumeration

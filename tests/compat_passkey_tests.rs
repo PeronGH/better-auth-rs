@@ -42,14 +42,10 @@ async fn test_passkey_option_generation_endpoints() {
     );
     validator.validate_endpoint("/passkey/generate-register-options", "get", status, &body);
 
-    // --- POST /passkey/generate-authenticate-options ---
+    // --- GET /passkey/generate-authenticate-options ---
     let (status, body) = send_request(
         &auth,
-        post_json_with_auth(
-            "/passkey/generate-authenticate-options",
-            serde_json::json!({}),
-            &token,
-        ),
+        get_with_auth("/passkey/generate-authenticate-options", &token),
     )
     .await;
     assert_eq!(
@@ -63,7 +59,7 @@ async fn test_passkey_option_generation_endpoints() {
     );
     validator.validate_endpoint(
         "/passkey/generate-authenticate-options",
-        "post",
+        "get",
         status,
         &body,
     );

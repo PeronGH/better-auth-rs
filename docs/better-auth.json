@@ -219,6 +219,13 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "aaguid": {
+            "type": "string"
           }
         }
       },
@@ -6484,16 +6491,11 @@
       }
     },
     "/passkey/generate-authenticate-options": {
-      "post": {
+      "get": {
         "tags": [
           "Passkey"
         ],
         "description": "Generate authentication options for a passkey",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
         "parameters": [],
         "responses": {
           "200": {
@@ -6814,11 +6816,6 @@
           "Passkey"
         ],
         "description": "Verify authentication of a passkey",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -6848,9 +6845,6 @@
                   "properties": {
                     "session": {
                       "$ref": "#/components/schemas/Session"
-                    },
-                    "user": {
-                      "$ref": "#/components/schemas/User"
                     }
                   }
                 }

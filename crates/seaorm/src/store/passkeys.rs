@@ -9,7 +9,7 @@ use better_auth_core::store::PasskeyStore;
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
-use crate::types::{CreatePasskey, Passkey};
+use crate::types::{CreatePasskey, Passkey, UpdatePasskeyAuthentication};
 
 use super::entities::passkey::{ActiveModel, Column, Entity};
 use super::{SeaOrmStore, map_db_err};
@@ -33,7 +33,10 @@ where
             device_type: Set(input.device_type),
             backed_up: Set(input.backed_up),
             transports: Set(input.transports),
+            credential: Set(input.credential),
+            aaguid: Set(input.aaguid),
             created_at: Set(Utc::now()),
+            updated_at: Set(Utc::now()),
         }
         .insert(self.connection())
         .await
@@ -71,7 +74,11 @@ where
             .map_err(map_db_err)
     }
 
-    async fn update_passkey_counter(&self, id: &str, counter: u64) -> AuthResult<Passkey> {
+    async fn update_passkey_authentication(
+        &self,
+        id: &str,
+        update: UpdatePasskeyAuthentication,
+    ) -> AuthResult<Passkey> {
         let Some(model) = Entity::find_by_id(id.to_owned())
             .one(self.connection())
             .await
@@ -81,8 +88,12 @@ where
         };
 
         let mut active = model.into_active_model();
-        active.counter = Set(i64::try_from(counter)
+        active.counter = Set(i64::try_from(update.counter)
             .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?);
+        active.backed_up = Set(update.backed_up);
+        active.device_type = Set(update.device_type);
+        active.credential = Set(update.credential);
+        active.updated_at = Set(Utc::now());
         active
             .update(self.connection())
             .await
@@ -100,7 +111,8 @@ where
         };
 
         let mut active = model.into_active_model();
-        active.name = Set(name.to_owned());
+        active.name = Set(Some(name.to_owned()));
+        active.updated_at = Set(Utc::now());
         active
             .update(self.connection())
             .await

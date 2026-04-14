@@ -185,4 +185,9 @@ export const RAW_DIFF_ALLOWLIST: RawDiffAllowance[] = [
     path: /responseHeaders\.location/,
     reason: "PKCE code_challenge is per-run entropy inside the provider redirect URL and is not client-visible",
   },
+  {
+    scenario: /passkey client surface matches TS for options and management errors/i,
+    path: /(registerOptions|authenticateOptions)\.data\.challenge/,
+    reason: "WebAuthn challenges are per-run entropy and not client-semantic beyond round-tripping",
+  },
 ];

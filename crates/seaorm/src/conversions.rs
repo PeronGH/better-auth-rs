@@ -104,6 +104,9 @@ impl From<&entities::passkey::Model> for Passkey {
             backed_up: model.backed_up,
             transports: model.transports.clone(),
             created_at: model.created_at,
+            updated_at: model.updated_at,
+            aaguid: model.aaguid.clone(),
+            credential: model.credential.clone(),
         }
     }
 }

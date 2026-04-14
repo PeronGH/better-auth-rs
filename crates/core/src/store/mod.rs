@@ -12,7 +12,7 @@ use crate::types::{
     CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
     CreateVerification, DeviceCode, Invitation, InvitationStatus, ListUsersParams, Member,
     Organization, Passkey, TwoFactor, UpdateAccount, UpdateApiKey, UpdateDeviceCode,
-    UpdateOrganization, UpdateUser,
+    UpdateOrganization, UpdatePasskeyAuthentication, UpdateUser,
 };
 
 pub use cache::{CacheAdapter, MemoryCacheAdapter};
@@ -245,7 +245,11 @@ pub trait PasskeyStore: Send + Sync {
         credential_id: &str,
     ) -> AuthResult<Option<Passkey>>;
     async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>>;
-    async fn update_passkey_counter(&self, id: &str, counter: u64) -> AuthResult<Passkey>;
+    async fn update_passkey_authentication(
+        &self,
+        id: &str,
+        update: UpdatePasskeyAuthentication,
+    ) -> AuthResult<Passkey>;
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey>;
     async fn delete_passkey(&self, id: &str) -> AuthResult<()>;
 }

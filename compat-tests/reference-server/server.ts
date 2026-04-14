@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { Database } from "bun:sqlite";
+import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
 import { apiKey, deviceAuthorization } from "better-auth/plugins";
@@ -317,6 +318,7 @@ const authOptions = {
     apiKey({ enableMetadata: true }),
     deviceAuthorization(),
     organization(),
+    passkey(),
     genericOAuth({
       config: [
         {

@@ -159,7 +159,7 @@ pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
 /// Trait representing a passkey entity.
 pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
     fn id(&self) -> Cow<'_, str>;
-    fn name(&self) -> &str;
+    fn name(&self) -> Option<&str>;
     fn public_key(&self) -> &str;
     fn user_id(&self) -> Cow<'_, str>;
     fn credential_id(&self) -> &str;
@@ -168,6 +168,9 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     fn backed_up(&self) -> bool;
     fn transports(&self) -> Option<&str>;
     fn created_at(&self) -> DateTime<Utc>;
+    fn updated_at(&self) -> DateTime<Utc>;
+    fn aaguid(&self) -> Option<&str>;
+    fn credential(&self) -> &str;
 }
 
 /// Minimal user info for member-related API responses.
