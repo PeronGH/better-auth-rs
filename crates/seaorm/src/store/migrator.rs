@@ -657,7 +657,7 @@ async fn create_api_keys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                     ColumnDef::new(api_key::Column::RateLimitEnabled)
                         .boolean()
                         .not_null()
-                        .default(false),
+                        .default(true),
                 )
                 .col(ColumnDef::new(api_key::Column::RateLimitTimeWindow).integer())
                 .col(ColumnDef::new(api_key::Column::RateLimitMax).integer())

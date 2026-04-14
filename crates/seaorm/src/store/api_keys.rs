@@ -159,27 +159,11 @@ where
     }
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
-        let now = Utc::now();
-        let expired_ids: Vec<String> = Entity::find()
-            .filter(Column::ExpiresAt.is_not_null())
-            .all(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .into_iter()
-            .filter_map(|model| {
-                model
-                    .expires_at
-                    .filter(|expires_at| *expires_at <= now)
-                    .map(|_| model.id)
-            })
-            .collect();
-
-        if expired_ids.is_empty() {
-            return Ok(0);
-        }
-
+        // Single query: DELETE FROM api_keys WHERE expires_at IS NOT NULL AND expires_at < NOW()
+        // Matches TS: adapter.deleteMany({ where: [{ field: "expiresAt", operator: "lt", value: new Date() }, ...] })
         Entity::delete_many()
-            .filter(Column::Id.is_in(expired_ids))
+            .filter(Column::ExpiresAt.is_not_null())
+            .filter(Column::ExpiresAt.lt(Utc::now()))
             .exec(self.connection())
             .await
             .map(|result| result.rows_affected as usize)
