@@ -54,7 +54,6 @@ Test suites, scripts, and source comments reference these phase numbers
 `/organization/list`, `/organization/list-members`,
 `/organization/get-active-member`,
 `/organization/get-active-member-role`,
-`/organization/add-member`,
 `/organization/update-member-role`,
 `/organization/remove-member`, `/organization/leave`,
 `/organization/invite-member`,

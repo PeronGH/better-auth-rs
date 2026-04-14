@@ -1,7 +1,7 @@
 import { compatScenario } from "../../support/scenario";
 import { asArray, asRecord, signUpUser } from "./helpers";
 
-compatScenario("organization member queries cover add member and active member endpoints", async (ctx) => {
+compatScenario("organization member queries reflect non-public add-member and active member endpoints", async (ctx) => {
   const owner = await signUpUser(ctx, "owner", "phase6-members-owner", "Owner");
   const member = await signUpUser(ctx, "member", "phase6-members-user", "Member");
   const multiRoleMember = await signUpUser(
