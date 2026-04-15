@@ -101,6 +101,89 @@ async fn wire_signout_clears_session_cookie() {
 }
 
 #[tokio::test]
+async fn wire_is_username_available_not_taken() {
+    let _lock = serial_lock().await;
+    if !ensure_reference_server_or_skip().await {
+        return;
+    }
+
+    let auth = create_default_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let body = serde_json::json!({ "username": "fresh_user_xyz" });
+
+    let rust = rust_send(&auth, post_json("/is-username-available", body.clone())).await;
+    let reference = ref_client
+        .post_full("/is-username-available", &body)
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full(
+        "POST /is-username-available (not taken)",
+        &rust,
+        &reference,
+    ));
+}
+
+#[tokio::test]
+async fn wire_is_username_available_taken() {
+    let _lock = serial_lock().await;
+    if !ensure_reference_server_or_skip().await {
+        return;
+    }
+
+    let auth = create_default_test_auth().await;
+    let mut ref_client = RefClient::new();
+
+    // Sign up a user with a username on both servers
+    let email = unique_email("wire_uname_taken");
+    let signup_body = serde_json::json!({
+        "name": "Username User",
+        "email": email,
+        "password": "password123",
+        "username": "taken_user",
+    });
+    let _ = rust_send(&auth, post_json("/sign-up/email", signup_body.clone())).await;
+    let _ = ref_client.post_full("/sign-up/email", &signup_body).await;
+
+    let body = serde_json::json!({ "username": "taken_user" });
+    let rust = rust_send(&auth, post_json("/is-username-available", body.clone())).await;
+    let reference = ref_client
+        .post_full("/is-username-available", &body)
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full(
+        "POST /is-username-available (taken)",
+        &rust,
+        &reference,
+    ));
+}
+
+#[tokio::test]
+async fn wire_is_username_available_too_short() {
+    let _lock = serial_lock().await;
+    if !ensure_reference_server_or_skip().await {
+        return;
+    }
+
+    let auth = create_default_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let body = serde_json::json!({ "username": "ab" });
+
+    let rust = rust_send(&auth, post_json("/is-username-available", body.clone())).await;
+    let reference = ref_client
+        .post_full("/is-username-available", &body)
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full(
+        "POST /is-username-available (too short)",
+        &rust,
+        &reference,
+    ));
+}
+
+#[tokio::test]
 async fn wire_list_sessions_no_auth() {
     let _lock = serial_lock().await;
     if !ensure_reference_server_or_skip().await {

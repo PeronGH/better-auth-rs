@@ -20,6 +20,7 @@ Test suites, scripts, and source comments reference these phase numbers
 
 **Phase 0 — Core auth flow:**
 `/sign-up/email`, `/sign-in/email`, `/sign-in/username`,
+`/is-username-available`,
 `/get-session`, `/sign-out`,
 `/ok`, `/error`
 

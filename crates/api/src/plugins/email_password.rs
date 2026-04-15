@@ -118,6 +118,16 @@ pub(crate) struct SignInUsernameRequest {
     callback_url: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Validate)]
+struct IsUsernameAvailableRequest {
+    username: String,
+}
+
+#[derive(Debug, Serialize)]
+struct IsUsernameAvailableResponse {
+    available: bool,
+}
+
 #[derive(Debug, Serialize)]
 pub(crate) struct SignUpResponse<U: Serialize> {
     token: Option<String>,
@@ -379,6 +389,51 @@ impl EmailPasswordPlugin {
             }
             Err(SignInUsernameFailure::Auth(error)) => Err(error),
         }
+    }
+
+    async fn handle_is_username_available(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<AuthResponse> {
+        let body: IsUsernameAvailableRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+
+        match validate_username(&body.username) {
+            Ok(()) => {}
+            Err(UsernameValidationError::TooShort) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_TOO_SHORT",
+                    MESSAGE_USERNAME_TOO_SHORT,
+                );
+            }
+            Err(UsernameValidationError::TooLong) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_IS_TOO_LONG",
+                    MESSAGE_USERNAME_TOO_LONG,
+                );
+            }
+            Err(UsernameValidationError::Invalid) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_IS_INVALID",
+                    MESSAGE_INVALID_USERNAME,
+                );
+            }
+        }
+
+        let normalized = normalize_username(&body.username);
+        let user = ctx.database.get_user_by_username(&normalized).await?;
+        let available = user.is_none();
+
+        Ok(AuthResponse::json(
+            200,
+            &IsUsernameAvailableResponse { available },
+        )?)
     }
 }
 
@@ -687,6 +742,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
         let mut routes = vec![
             AuthRoute::post("/sign-in/email", "sign_in_email"),
             AuthRoute::post("/sign-in/username", "sign_in_username"),
+            AuthRoute::post("/is-username-available", "is_username_available"),
         ];
 
         if self.config.enable_signup {
@@ -708,6 +764,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
             (HttpMethod::Post, "/sign-in/email") => Ok(Some(self.handle_sign_in(req, ctx).await?)),
             (HttpMethod::Post, "/sign-in/username") => {
                 Ok(Some(self.handle_sign_in_username(req, ctx).await?))
+            }
+            (HttpMethod::Post, "/is-username-available") => {
+                Ok(Some(self.handle_is_username_available(req, ctx).await?))
             }
             _ => Ok(None),
         }
@@ -964,5 +1023,121 @@ mod tests {
             .unwrap();
         assert_eq!(signin_response.status, 200);
         assert_eq!(verify_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_is_username_available_route_registered() {
+        let plugin = EmailPasswordPlugin::new();
+        let routes =
+            <EmailPasswordPlugin as better_auth_core::AuthPlugin<TestSchema>>::routes(&plugin);
+        assert!(
+            routes.iter().any(|r| r.path == "/is-username-available"),
+            "route /is-username-available should be registered"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_is_username_available_fresh() {
+        let plugin = EmailPasswordPlugin::new();
+        let ctx = create_test_context().await;
+
+        let body = serde_json::json!({ "username": "fresh_user" });
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/is-username-available".to_string(),
+            HashMap::new(),
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let response = plugin
+            .handle_is_username_available(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(json["available"], true);
+    }
+
+    #[tokio::test]
+    async fn test_is_username_available_taken() {
+        let plugin = EmailPasswordPlugin::new();
+        let ctx = create_test_context().await;
+
+        // Sign up a user with a username
+        let signup_body = serde_json::json!({
+            "name": "Taken User",
+            "email": "taken@example.com",
+            "password": "Password123!",
+            "username": "taken_user",
+        });
+        let signup_req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-up/email".to_string(),
+            HashMap::new(),
+            Some(signup_body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let resp = plugin.handle_sign_up(&signup_req, &ctx).await.unwrap();
+        assert_eq!(resp.status, 200);
+
+        let body = serde_json::json!({ "username": "taken_user" });
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/is-username-available".to_string(),
+            HashMap::new(),
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let response = plugin
+            .handle_is_username_available(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(json["available"], false);
+    }
+
+    #[tokio::test]
+    async fn test_is_username_available_too_short() {
+        let plugin = EmailPasswordPlugin::new();
+        let ctx = create_test_context().await;
+
+        let body = serde_json::json!({ "username": "ab" });
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/is-username-available".to_string(),
+            HashMap::new(),
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let response = plugin
+            .handle_is_username_available(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 422);
+        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(json["code"], "USERNAME_TOO_SHORT");
+    }
+
+    #[tokio::test]
+    async fn test_is_username_available_invalid_chars() {
+        let plugin = EmailPasswordPlugin::new();
+        let ctx = create_test_context().await;
+
+        let body = serde_json::json!({ "username": "bad user!" });
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/is-username-available".to_string(),
+            HashMap::new(),
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let response = plugin
+            .handle_is_username_available(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 422);
+        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(json["code"], "USERNAME_IS_INVALID");
     }
 }
