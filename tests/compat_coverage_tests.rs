@@ -56,7 +56,6 @@ async fn test_route_coverage_analysis() {
     for (path, method) in &[
         ("/ok", "get"),
         ("/error", "get"),
-        ("/reference/openapi.json", "get"),
         ("/update-user", "post"),
         ("/delete-user", "post"),
         ("/change-email", "post"),

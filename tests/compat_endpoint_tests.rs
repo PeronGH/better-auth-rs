@@ -287,8 +287,8 @@ async fn test_spec_driven_endpoint_validation() {
     .await;
     validator.validate_endpoint("/account-info", "get", status, &body);
 
-    // --- GET /reference/openapi.json ---
-    let (status, body) = send_request(&auth, get_request("/reference/openapi.json")).await;
+    // --- GET /__test/openapi.json ---
+    let (status, body) = send_request(&auth, get_request("/__test/openapi.json")).await;
     assert_eq!(status, 200, "OpenAPI endpoint should return 200");
     assert!(body["openapi"].is_string(), "Should have openapi version");
     assert!(body["paths"].is_object(), "Should have paths");

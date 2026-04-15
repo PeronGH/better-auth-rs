@@ -5,13 +5,7 @@ description: Auto-generated OpenAPI specification.
 
 Better Auth generates an OpenAPI 3.0 specification from its registered plugins and routes.
 
-## Accessing the Spec
-
-When using the Axum integration, the spec is available at:
-
-```
-GET /auth/reference/openapi.json
-```
+There is no public HTTP route for the spec. The internal test harness mounts a private endpoint at `GET /auth/__test/openapi.json`, but production integrations should use the programmatic API.
 
 ## Programmatic Access
 

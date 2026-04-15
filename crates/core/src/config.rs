@@ -13,7 +13,7 @@ pub mod core_paths {
     pub const OK: &str = "/ok";
     pub const ERROR: &str = "/error";
     pub const HEALTH: &str = "/health";
-    pub const OPENAPI_SPEC: &str = "/reference/openapi.json";
+    pub const OPENAPI_SPEC: &str = "/__test/openapi.json";
     pub const UPDATE_USER: &str = "/update-user";
     pub const DELETE_USER: &str = "/delete-user";
     pub const CHANGE_EMAIL: &str = "/change-email";

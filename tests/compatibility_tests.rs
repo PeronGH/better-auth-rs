@@ -174,12 +174,7 @@ fn collect_implemented_routes(auth: &BetterAuth<TestSchema>) -> BTreeMap<String,
     let mut routes: BTreeMap<String, HashSet<String>> = BTreeMap::new();
 
     // Core routes (from handle_core_request)
-    let core = vec![
-        ("/ok", "get"),
-        ("/error", "get"),
-        ("/reference/openapi.json", "get"),
-        ("/update-user", "post"),
-    ];
+    let core = vec![("/ok", "get"), ("/error", "get"), ("/update-user", "post")];
     for (path, method) in core {
         let _ = routes
             .entry(path.to_string())
@@ -668,12 +663,12 @@ async fn test_contract_validation_error_shape() {
     );
 }
 
-/// GET /reference/openapi.json should return valid OpenAPI spec
+/// GET /__test/openapi.json should return valid OpenAPI spec
 #[tokio::test]
 async fn test_contract_openapi_endpoint() {
     let auth = create_full_auth().await;
     let (status, body) =
-        send_json_request(&auth, HttpMethod::Get, "/reference/openapi.json", None).await;
+        send_json_request(&auth, HttpMethod::Get, "/__test/openapi.json", None).await;
 
     assert_eq!(status, 200);
     assert!(
