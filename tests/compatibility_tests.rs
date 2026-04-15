@@ -503,8 +503,28 @@ async fn test_contract_error_endpoint() {
     let (status, body) = send_json_request(&auth, HttpMethod::Get, "/error", None).await;
     assert_eq!(status, 200);
     let html = body.as_str().expect("/error should return HTML text");
-    assert!(html.contains("<h1>ERROR</h1>"));
-    assert!(html.contains("CODE: UNKNOWN"));
+    // The HTML page uses inline-styled elements matching the TS template
+    // (not plain `<h1>ERROR</h1>` — both TS and Rust use styled tags).
+    assert!(
+        html.contains("<title>Error</title>"),
+        "error page should contain <title>Error</title>"
+    );
+    assert!(
+        html.contains("ERROR"),
+        "error page should contain ERROR heading"
+    );
+    assert!(
+        html.contains("UNKNOWN"),
+        "error page should contain the UNKNOWN error code"
+    );
+    assert!(
+        html.contains("CODE:"),
+        "error page should contain CODE: label"
+    );
+    assert!(
+        html.contains("Ask AI"),
+        "error page should contain Ask AI button"
+    );
 }
 
 /// POST /sign-up/email should return { token, user: { id, email, name, ... } }
