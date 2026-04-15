@@ -18,6 +18,7 @@ use better_auth::plugins::{
     },
     password_management::SendResetPassword,
 };
+use better_auth::__private_core::AuthContext as InternalAuthContext;
 use better_auth::wire::UserView;
 use better_auth::{AuthBuilder, AuthConfig};
 use better_auth_seaorm::sea_orm::{DatabaseConnection, DbErr, EntityTrait};
@@ -327,6 +328,12 @@ struct EmailQuery {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UserIdQuery {
+    user_id: String,
+}
+
+#[derive(Deserialize)]
 struct ModeRequest {
     mode: String,
 }
@@ -505,6 +512,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let social_id_token_valid = Arc::new(Mutex::new(true));
 
     let store = SeaOrmStore::<TestSchema>::new(config.clone(), database);
+    let two_factor_plugin =
+        TwoFactorPlugin::new().custom_send_otp(Arc::new(CompatTwoFactorOtpSender {
+            outbox: two_factor_otp_outbox.clone(),
+        }));
     let auth = Arc::new(
         AuthBuilder::<TestSchema>::new(config)
             .store(store)
@@ -538,11 +549,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .delete_user_enabled(true)
                     .require_delete_verification(false),
             )
-            .plugin(TwoFactorPlugin::new().custom_send_otp(Arc::new(
-                CompatTwoFactorOtpSender {
-                    outbox: two_factor_otp_outbox.clone(),
-                },
-            )))
+            .plugin(two_factor_plugin.clone())
             .plugin(mock_oauth_plugin(
                 port,
                 social_profile.clone(),
@@ -583,6 +590,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth_for_remove_credential = auth.clone();
     let auth_for_oauth_seed = auth.clone();
     let auth_for_promote_admin = auth.clone();
+    let auth_for_view_backup_codes = auth.clone();
+    let two_factor_plugin_for_view_backup_codes = two_factor_plugin.clone();
 
     let app = Router::new()
         .route("/__health", get(health_check))
@@ -657,6 +666,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         None => (
                             axum::http::StatusCode::NOT_FOUND,
                             Json(serde_json::json!({ "message": "Not found" })),
+                        ),
+                    }
+                }
+            }),
+        )
+        .route(
+            "/__test/view-backup-codes",
+            get(move |Query(query): Query<UserIdQuery>| {
+                let auth = auth_for_view_backup_codes.clone();
+                let two_factor_plugin = two_factor_plugin_for_view_backup_codes.clone();
+                async move {
+                    let ctx = InternalAuthContext::new(
+                        Arc::new(auth.config().clone()),
+                        auth.store().clone(),
+                    );
+                    match two_factor_plugin
+                        .view_backup_codes(&query.user_id, &ctx)
+                        .await
+                    {
+                        Ok(backup_codes) => (
+                            axum::http::StatusCode::OK,
+                            Json(serde_json::json!({
+                                "status": true,
+                                "backupCodes": backup_codes,
+                            })),
+                        ),
+                        Err(error) => (
+                            axum::http::StatusCode::from_u16(error.status_code())
+                                .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+                            Json(serde_json::json!({
+                                "message": error.to_string(),
+                            })),
                         ),
                     }
                 }

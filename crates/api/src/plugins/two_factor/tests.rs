@@ -1,5 +1,6 @@
 use super::*;
 use crate::plugins::test_helpers;
+use better_auth_core::AuthPlugin;
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{CreateAccount, CreateUser};
 use chrono::Duration;
@@ -229,5 +230,62 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
             .unwrap()
             .is_some(),
         "the new session token should be persisted",
+    );
+}
+
+#[tokio::test]
+async fn test_view_backup_codes_returns_decrypted_codes() {
+    let plugin = TwoFactorPlugin::new();
+    let (ctx, user, _session) =
+        create_test_context_with_credential_user("view-codes@example.com", true).await;
+
+    let expected_codes = vec!["ABCDE-12345".to_string(), "FGHIJ-67890".to_string()];
+    let encrypted = encrypt_value(
+        &ctx.config.secret,
+        &serde_json::to_string(&expected_codes).unwrap(),
+    )
+    .unwrap();
+    _ = ctx
+        .database
+        .create_two_factor(better_auth_core::CreateTwoFactor {
+            user_id: user.id.clone(),
+            secret: encrypt_value(&ctx.config.secret, "totp-secret").unwrap(),
+            backup_codes: encrypted,
+        })
+        .await
+        .unwrap();
+
+    let backup_codes = plugin.view_backup_codes(&user.id, &ctx).await.unwrap();
+    assert_eq!(backup_codes, expected_codes);
+}
+
+#[tokio::test]
+async fn test_view_backup_codes_rejects_invalid_stored_json() {
+    let plugin = TwoFactorPlugin::new();
+    let (ctx, user, _session) =
+        create_test_context_with_credential_user("invalid-view-codes@example.com", true).await;
+
+    _ = ctx
+        .database
+        .create_two_factor(better_auth_core::CreateTwoFactor {
+            user_id: user.id.clone(),
+            secret: encrypt_value(&ctx.config.secret, "totp-secret").unwrap(),
+            backup_codes: encrypt_value(&ctx.config.secret, "\"not-an-array\"").unwrap(),
+        })
+        .await
+        .unwrap();
+
+    let err = plugin.view_backup_codes(&user.id, &ctx).await.unwrap_err();
+    assert_eq!(err.to_string(), "Invalid backup code");
+}
+
+#[test]
+fn test_routes_do_not_expose_view_backup_codes() {
+    let plugin = TwoFactorPlugin::new();
+    assert!(
+        <TwoFactorPlugin as AuthPlugin<TestSchema>>::routes(&plugin)
+            .iter()
+            .all(|route| route.path != "/two-factor/view-backup-codes"),
+        "view-backup-codes must stay server-only",
     );
 }

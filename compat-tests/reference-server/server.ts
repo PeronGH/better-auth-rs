@@ -440,6 +440,25 @@ const server = Bun.serve({
           : jsonResponse({ message: "Not found" }, { status: 404 });
       }
 
+      if (url.pathname === "/__test/view-backup-codes" && request.method === "GET") {
+        const userId = url.searchParams.get("userId");
+        if (!userId) {
+          return jsonResponse({ message: "userId is required" }, { status: 400 });
+        }
+
+        try {
+          const result = await auth.api.viewBackupCodes({
+            body: {
+              userId,
+            },
+          });
+          return jsonResponse(result);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unknown error";
+          return jsonResponse({ message }, { status: 500 });
+        }
+      }
+
       if (url.pathname === "/__test/set-reset-password-mode" && request.method === "POST") {
         const body = (await readJson(request)) as { mode?: string } | null;
         resetPasswordMode = body?.mode === "throw" ? "throw" : "capture";

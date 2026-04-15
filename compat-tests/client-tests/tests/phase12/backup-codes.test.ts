@@ -38,6 +38,26 @@ function redactBackupCodePayload<T>(value: T): T {
   return clone as T;
 }
 
+function redactRawBackupCodeResponse<T>(value: T): T {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const clone = structuredClone(value as object) as Record<string, unknown>;
+  if (
+    clone.body &&
+    typeof clone.body === "object" &&
+    !Array.isArray(clone.body)
+  ) {
+    const body = clone.body as Record<string, unknown>;
+    if (Array.isArray(body.backupCodes)) {
+      body.backupCodes = body.backupCodes.map(() => "<backup-code>");
+    }
+  }
+
+  return clone as T;
+}
+
 function decodeBase32(secret: string) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   const normalized = secret.toUpperCase().replace(/=+$/g, "");
@@ -156,5 +176,59 @@ compatScenario("two-factor verify-backup-code signs the user in and consumes the
     verifyBackupCode: ctx.snapshot(verifyBackupCode),
     session: ctx.snapshot(session),
     reusedBackupCode: ctx.snapshot(reusedBackupCode),
+  };
+});
+
+compatScenario("two-factor server-only backup code retrieval returns parsed arrays", async (ctx) => {
+  const client = twoFactorActor(ctx);
+  const email = ctx.uniqueEmail("phase12-view");
+  const password = "password123";
+
+  const signup = await client.signUp.email({
+    email,
+    password,
+    name: "Phase 12 View",
+  });
+
+  const enable = await client.twoFactor.enable({ password });
+  const setupCode = await generateCurrentTotp(enable.data!.totpURI);
+  await client.twoFactor.verifyTotp({ code: setupCode });
+  const generated = await client.twoFactor.generateBackupCodes({ password });
+
+  const viewBackupCodes = await ctx.rawRequest({
+    path: `/__test/view-backup-codes?userId=${encodeURIComponent(signup.data!.user.id)}`,
+  });
+
+  return {
+    generated: ctx.snapshot(redactBackupCodePayload(generated)),
+    viewBackupCodes: ctx.snapshot(redactRawBackupCodeResponse(viewBackupCodes)),
+  };
+});
+
+compatScenario("two-factor view-backup-codes stays unexposed as a public HTTP route", async (ctx) => {
+  const client = twoFactorActor(ctx);
+  const email = ctx.uniqueEmail("phase12-no-route");
+  const password = "password123";
+
+  const signup = await client.signUp.email({
+    email,
+    password,
+    name: "Phase 12 No Route",
+  });
+
+  const enable = await client.twoFactor.enable({ password });
+  const setupCode = await generateCurrentTotp(enable.data!.totpURI);
+  await client.twoFactor.verifyTotp({ code: setupCode });
+
+  const publicRoute = await ctx.rawRequest({
+    path: "/api/auth/two-factor/view-backup-codes",
+    method: "POST",
+    json: {
+      userId: signup.data!.user.id,
+    },
+  });
+
+  return {
+    publicRoute: ctx.snapshot(publicRoute),
   };
 });

@@ -88,7 +88,11 @@ The 2FA plugin exposes the following endpoints. For full request/response detail
 | `/two-factor/verify-backup-code` | POST | Verify a backup code during sign-in |
 
 <Callout type="warn">
-Backup codes are shown only once during enrollment or regeneration. Store them securely — they cannot be retrieved later.
+Backup codes are shown only once during enrollment or regeneration on the public HTTP surface. Store them securely.
+</Callout>
+
+<Callout>
+For TS compatibility, Rust keeps backup-code retrieval as a server-only capability. Use `TwoFactorPlugin::view_backup_codes(...)` from trusted server code when you need to read the currently stored codes. There is no public HTTP route for this.
 </Callout>
 
 ## Security Details

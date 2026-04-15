@@ -64,6 +64,7 @@ pub trait SendTwoFactorOtp: Send + Sync {
 }
 
 /// Two-factor authentication plugin providing TOTP, OTP, and backup code flows.
+#[derive(Clone)]
 pub struct TwoFactorPlugin {
     config: TwoFactorConfig,
 }
@@ -342,6 +343,19 @@ impl TwoFactorPlugin {
     pub fn custom_send_otp(mut self, sender: Arc<dyn SendTwoFactorOtp>) -> Self {
         self.config.send_otp = Some(sender);
         self
+    }
+
+    /// Read the currently stored backup codes for a user.
+    ///
+    /// This is the Rust server-side equivalent of the TypeScript
+    /// `auth.api.viewBackupCodes` capability. It is intentionally not exposed
+    /// as a public HTTP route.
+    pub async fn view_backup_codes<S: better_auth_core::AuthSchema>(
+        &self,
+        user_id: &str,
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<Vec<String>> {
+        view_backup_codes_core(user_id, ctx).await
     }
 }
 
@@ -825,7 +839,11 @@ async fn verify_backup_code_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Backup codes aren't enabled"))?;
 
-    let mut backup_codes = decrypt_backup_codes(two_factor.backup_codes(), &ctx.config.secret)?;
+    let Some(mut backup_codes) =
+        decrypt_backup_codes(two_factor.backup_codes(), &ctx.config.secret)?
+    else {
+        return Err(AuthError::authentication_failed("Invalid backup code"));
+    };
     let Some(index) = backup_codes
         .iter()
         .position(|candidate| candidate == &body.code)
@@ -865,6 +883,22 @@ async fn verify_backup_code_core(
             .await
         }
     }
+}
+
+async fn view_backup_codes_core<S: better_auth_core::AuthSchema>(
+    user_id: &str,
+    ctx: &AuthContext<S>,
+) -> AuthResult<Vec<String>> {
+    let two_factor = ctx
+        .database
+        .get_two_factor_by_user_id(user_id)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Backup codes aren't enabled"))?;
+    let Some(backup_codes) = decrypt_backup_codes(two_factor.backup_codes(), &ctx.config.secret)?
+    else {
+        return Err(AuthError::bad_request("Invalid backup code"));
+    };
+    Ok(backup_codes)
 }
 
 async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
@@ -1075,10 +1109,11 @@ fn generate_backup_codes() -> Vec<String> {
         .collect()
 }
 
-fn decrypt_backup_codes(backup_codes: &str, secret: &str) -> AuthResult<Vec<String>> {
+fn decrypt_backup_codes(backup_codes: &str, secret: &str) -> AuthResult<Option<Vec<String>>> {
     let decrypted = decrypt_value(secret, backup_codes)?;
     serde_json::from_str(&decrypted)
-        .map_err(|error| AuthError::internal(format!("Failed to parse backup codes: {}", error)))
+        .ok()
+        .map_or(Ok(None), |codes| Ok(Some(codes)))
 }
 
 fn otp_verification_identifier(key: &str) -> String {
