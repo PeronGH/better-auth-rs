@@ -14,12 +14,13 @@ use better_auth_core::{
 use super::email_verification::EmailVerificationPlugin;
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
+use better_auth_core::utils::username::{
+    UsernameValidationError, normalize_username, normalize_username_fields, validate_username,
+};
 use better_auth_core::wire::UserView;
 
 use crate::plugins::helpers::apply_default_role;
 
-const USERNAME_MIN_LENGTH: usize = 3;
-const USERNAME_MAX_LENGTH: usize = 30;
 const MESSAGE_INVALID_USERNAME_OR_PASSWORD: &str = "Invalid username or password";
 const MESSAGE_EMAIL_NOT_VERIFIED: &str = "Email not verified";
 const MESSAGE_USERNAME_TOO_SHORT: &str = "Username is too short";
@@ -35,16 +36,6 @@ fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult
         },
     )
     .map_err(AuthError::from)
-}
-
-fn normalize_username(username: &str) -> String {
-    username.to_lowercase()
-}
-
-fn username_is_valid(username: &str) -> bool {
-    username
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '.')
 }
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
@@ -223,10 +214,44 @@ impl EmailPasswordPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let signup_req: SignUpRequest = match better_auth_core::validate_request_body(req) {
+        let mut signup_req: SignUpRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
+
+        let (username, display_username) = normalize_username_fields(
+            signup_req.username.take(),
+            signup_req.display_username.take(),
+        );
+        signup_req.username = username;
+        signup_req.display_username = display_username;
+
+        if let Some(username) = signup_req.username.as_deref() {
+            match validate_username(username) {
+                Ok(()) => {}
+                Err(UsernameValidationError::TooShort) => {
+                    return username_error_response(
+                        400,
+                        "USERNAME_TOO_SHORT",
+                        MESSAGE_USERNAME_TOO_SHORT,
+                    );
+                }
+                Err(UsernameValidationError::TooLong) => {
+                    return username_error_response(
+                        400,
+                        "USERNAME_IS_TOO_LONG",
+                        MESSAGE_USERNAME_TOO_LONG,
+                    );
+                }
+                Err(UsernameValidationError::Invalid) => {
+                    return username_error_response(
+                        400,
+                        "USERNAME_IS_INVALID",
+                        MESSAGE_INVALID_USERNAME,
+                    );
+                }
+            }
+        }
 
         let meta = RequestMeta::from_request(req);
         let (response, session_token) = sign_up_core(&signup_req, &self.config, &meta, ctx).await?;
@@ -296,16 +321,29 @@ impl EmailPasswordPlugin {
 
         let username = normalize_username(&signin_req.username);
 
-        if username.len() < USERNAME_MIN_LENGTH {
-            return username_error_response(422, "USERNAME_TOO_SHORT", MESSAGE_USERNAME_TOO_SHORT);
-        }
-
-        if username.len() > USERNAME_MAX_LENGTH {
-            return username_error_response(422, "USERNAME_IS_TOO_LONG", MESSAGE_USERNAME_TOO_LONG);
-        }
-
-        if !username_is_valid(&username) {
-            return username_error_response(422, "USERNAME_IS_INVALID", MESSAGE_INVALID_USERNAME);
+        match validate_username(&username) {
+            Ok(()) => {}
+            Err(UsernameValidationError::TooShort) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_TOO_SHORT",
+                    MESSAGE_USERNAME_TOO_SHORT,
+                );
+            }
+            Err(UsernameValidationError::TooLong) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_IS_TOO_LONG",
+                    MESSAGE_USERNAME_TOO_LONG,
+                );
+            }
+            Err(UsernameValidationError::Invalid) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_IS_INVALID",
+                    MESSAGE_INVALID_USERNAME,
+                );
+            }
         }
 
         let meta = RequestMeta::from_request(req);
@@ -403,7 +441,15 @@ pub(crate) async fn sign_up_core(
     better_auth_core::store::transaction(database.as_ref(), move |tx| {
         let _database = transaction_database.clone();
         Box::pin(async move {
-            let user = tx.create_user(create_user).await?;
+            let user = match tx.create_user(create_user).await {
+                Ok(user) => user,
+                Err(AuthError::Database(_)) => {
+                    return Err(AuthError::UnprocessableEntity(
+                        "Failed to create user".to_string(),
+                    ));
+                }
+                Err(error) => return Err(error),
+            };
 
             let _ = tx
                 .create_account(CreateAccount {

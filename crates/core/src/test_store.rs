@@ -127,32 +127,12 @@ impl UserStore<BundledSchema> for MemoryStore {
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserView>> {
         let normalized = username.to_lowercase();
-        let users = self.lock();
-
-        Ok(users
+        Ok(self
+            .lock()
             .users
             .values()
             .find(|user| user.username.as_deref() == Some(&normalized))
-            .cloned()
-            .or_else(|| {
-                if normalized != username {
-                    users
-                        .users
-                        .values()
-                        .find(|user| user.username.as_deref() == Some(username))
-                        .cloned()
-                } else {
-                    None
-                }
-            })
-            .or_else(|| {
-                users.users.values().find_map(|user| {
-                    user.username
-                        .as_deref()
-                        .filter(|stored| stored.eq_ignore_ascii_case(username))
-                        .map(|_| user.clone())
-                })
-            }))
+            .cloned())
     }
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
