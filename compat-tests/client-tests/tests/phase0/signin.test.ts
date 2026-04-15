@@ -131,3 +131,25 @@ compatScenario("sign in with nonexistent username returns error", async (ctx) =>
     signin: ctx.snapshot(signin),
   };
 });
+
+compatScenario("sign in with differently cased username returns user and token", async (ctx) => {
+  const primary = ctx.actor();
+  const username = usernameActor(ctx);
+  const email = ctx.uniqueEmail("phase0-signin-username-case");
+  const signup = await primary.client.signUp.email({
+    email,
+    password: "password123",
+    name: "Username User",
+    username: "Phase0_Case_User",
+  });
+
+  const signin = await username.signIn.username({
+    username: "PHASE0_CASE_USER",
+    password: "password123",
+  });
+
+  return {
+    signup: ctx.snapshot(signup),
+    signin: ctx.snapshot(signin),
+  };
+});

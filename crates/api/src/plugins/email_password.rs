@@ -454,29 +454,37 @@ pub(crate) async fn sign_up_core(
     .await
 }
 
-/// Shared sign-in logic after user lookup: verify password, check 2FA, create session.
-async fn sign_in_with_user_core(
-    user: impl AuthUser,
-    password: &str,
-    config: &EmailPasswordConfig,
-    email_verification: Option<&EmailVerificationPlugin>,
-    callback_url: Option<&str>,
-    meta: &RequestMeta,
+async fn load_credential_password_hash(
+    user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<SignInCoreResult<UserView>> {
-    // Verify password
-    let stored_hash = ctx
-        .database
+) -> AuthResult<String> {
+    ctx.database
         .get_user_accounts(&user.id())
         .await?
         .into_iter()
         .find(|account| account.provider_id() == "credential" && account.password().is_some())
         .and_then(|account| account.password().map(str::to_string))
-        .ok_or(AuthError::InvalidCredentials)?;
+        .ok_or(AuthError::InvalidCredentials)
+}
 
-    password_utils::verify_password(config.password_hasher.as_ref(), password, &stored_hash)
-        .await?;
+async fn verify_user_password(
+    user: &impl AuthUser,
+    password: &str,
+    config: &EmailPasswordConfig,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<()> {
+    let stored_hash = load_credential_password_hash(user, ctx).await?;
+    password_utils::verify_password(config.password_hasher.as_ref(), password, &stored_hash).await
+}
 
+/// Shared sign-in finalization logic after user lookup and credential verification.
+async fn finalize_sign_in_with_user_core(
+    user: impl AuthUser,
+    email_verification: Option<&EmailVerificationPlugin>,
+    callback_url: Option<&str>,
+    meta: &RequestMeta,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<SignInCoreResult<UserView>> {
     // Check if 2FA is enabled
     if user.two_factor_enabled() {
         let pending_token = format!("2fa_{}", uuid::Uuid::new_v4());
@@ -537,10 +545,10 @@ pub(crate) async fn sign_in_core(
         .await?
         .ok_or(AuthError::InvalidCredentials)?;
 
-    sign_in_with_user_core(
+    verify_user_password(&user, &body.password, config, ctx).await?;
+
+    finalize_sign_in_with_user_core(
         user,
-        &body.password,
-        config,
         email_verification,
         body.callback_url.as_deref(),
         meta,
@@ -570,26 +578,12 @@ pub(crate) async fn sign_in_username_core(
         return Err(SignInUsernameFailure::InvalidUsernameOrPassword);
     };
 
-    let stored_hash = ctx
-        .database
-        .get_user_accounts(&user.id())
+    verify_user_password(&user, &body.password, config, ctx)
         .await
-        .map_err(SignInUsernameFailure::Auth)?
-        .into_iter()
-        .find(|account| account.provider_id() == "credential" && account.password().is_some())
-        .and_then(|account| account.password().map(str::to_string))
-        .ok_or(SignInUsernameFailure::InvalidUsernameOrPassword)?;
-
-    password_utils::verify_password(
-        config.password_hasher.as_ref(),
-        &body.password,
-        &stored_hash,
-    )
-    .await
-    .map_err(|error| match error {
-        AuthError::InvalidCredentials => SignInUsernameFailure::InvalidUsernameOrPassword,
-        other => SignInUsernameFailure::Auth(other),
-    })?;
+        .map_err(|error| match error {
+            AuthError::InvalidCredentials => SignInUsernameFailure::InvalidUsernameOrPassword,
+            other => SignInUsernameFailure::Auth(other),
+        })?;
 
     if let Some(ev) = email_verification
         && ev.is_verification_required()
@@ -607,10 +601,8 @@ pub(crate) async fn sign_in_username_core(
         return Err(SignInUsernameFailure::EmailNotVerified);
     }
 
-    sign_in_with_user_core(
+    finalize_sign_in_with_user_core(
         user,
-        &body.password,
-        config,
         email_verification,
         body.callback_url.as_deref(),
         meta,
@@ -693,6 +685,7 @@ mod tests {
     use better_auth_core::config::AuthConfig;
     use std::collections::HashMap;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     type TestSchema =
         better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
@@ -862,5 +855,68 @@ mod tests {
         );
         let err = plugin.handle_sign_in(&bad_req, &ctx).await.unwrap_err();
         assert_eq!(err.to_string(), AuthError::InvalidCredentials.to_string());
+    }
+
+    // Upstream reference: packages/better-auth/src/plugins/username/index.ts :: sign-in path verifies the password once before creating a session; adapted to ensure the Rust username path does not duplicate expensive password verification.
+    #[tokio::test]
+    async fn test_sign_in_username_verifies_password_once() {
+        struct CountingHasher {
+            verify_calls: Arc<AtomicUsize>,
+        }
+
+        #[async_trait]
+        impl PasswordHasher for CountingHasher {
+            async fn hash(&self, password: &str) -> AuthResult<String> {
+                Ok(format!("hashed:{password}"))
+            }
+
+            async fn verify(&self, hash: &str, password: &str) -> AuthResult<bool> {
+                self.verify_calls.fetch_add(1, Ordering::SeqCst);
+                Ok(hash == format!("hashed:{password}"))
+            }
+        }
+
+        let verify_calls = Arc::new(AtomicUsize::new(0));
+        let hasher: Arc<dyn PasswordHasher> = Arc::new(CountingHasher {
+            verify_calls: verify_calls.clone(),
+        });
+        let plugin = EmailPasswordPlugin::new().password_hasher(hasher);
+        let ctx = create_test_context().await;
+
+        let signup_body = serde_json::json!({
+            "email": "username-counter@example.com",
+            "password": "Password123!",
+            "name": "Counter User",
+            "username": "Counter_User",
+        });
+        let signup_req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-up/email".to_string(),
+            HashMap::new(),
+            Some(signup_body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let signup_response = plugin.handle_sign_up(&signup_req, &ctx).await.unwrap();
+        assert_eq!(signup_response.status, 200);
+
+        verify_calls.store(0, Ordering::SeqCst);
+
+        let signin_body = serde_json::json!({
+            "username": "COUNTER_USER",
+            "password": "Password123!",
+        });
+        let signin_req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-in/username".to_string(),
+            HashMap::new(),
+            Some(signin_body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let signin_response = plugin
+            .handle_sign_in_username(&signin_req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(signin_response.status, 200);
+        assert_eq!(verify_calls.load(Ordering::SeqCst), 1);
     }
 }
