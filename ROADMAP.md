@@ -82,21 +82,21 @@ Test suites, scripts, and source comments reference these phase numbers
 `/admin/set-user-password`, `/admin/set-role`,
 `/admin/has-permission`
 
-**Phase 10 — Two-factor core:**
-`/two-factor/enable`, `/two-factor/disable`,
-`/two-factor/get-totp-uri`, `/two-factor/verify-totp`,
-`/two-factor/send-otp`, `/two-factor/verify-otp`
-
-**Phase 11 — Two-factor recovery:**
-`/two-factor/generate-backup-codes`,
-`/two-factor/view-backup-codes`,
-`/two-factor/verify-backup-code`
-
-**Phase 12 — Admin stateful flows:**
+**Phase 10 — Admin stateful flows:**
 `/admin/ban-user`, `/admin/unban-user`,
 `/admin/impersonate-user`, `/admin/stop-impersonating`,
 `/admin/list-user-sessions`, `/admin/revoke-user-session`,
 `/admin/revoke-user-sessions`
+
+**Phase 11 — Two-factor core:**
+`/two-factor/enable`, `/two-factor/disable`,
+`/two-factor/get-totp-uri`, `/two-factor/verify-totp`,
+`/two-factor/send-otp`, `/two-factor/verify-otp`
+
+**Phase 12 — Two-factor recovery:**
+`/two-factor/generate-backup-codes`,
+`/two-factor/view-backup-codes`,
+`/two-factor/verify-backup-code`
 
 **Phase 13 — JWT surface:**
 When `jwt()` is enabled:
