@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use better_auth_core::entity::AuthUser;
 use better_auth_core::utils::cookie_utils::create_session_cookie;
-use better_auth_core::utils::username::{
-    UsernameValidationError, normalize_username_fields, validate_username,
-};
+use better_auth_core::utils::username::{UsernameValidationError, validate_username};
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, ErrorCodeMessageResponse,
@@ -209,14 +207,15 @@ impl AdminPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let (username, display_username) = normalize_username_fields(
-            body.data
-                .remove("username")
-                .and_then(|value| value.as_str().map(ToOwned::to_owned)),
-            body.data
-                .remove("displayUsername")
-                .and_then(|value| value.as_str().map(ToOwned::to_owned)),
-        );
+        let username = body
+            .data
+            .remove("username")
+            .and_then(|value| value.as_str().map(ToOwned::to_owned))
+            .map(|value| value.to_lowercase());
+        let display_username = body
+            .data
+            .remove("displayUsername")
+            .and_then(|value| value.as_str().map(ToOwned::to_owned));
 
         if let Some(username) = username.as_deref() {
             match validate_username(username) {
