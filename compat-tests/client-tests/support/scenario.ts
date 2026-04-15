@@ -6,6 +6,7 @@ import { RUST_BASE_URL, TS_BASE_URL, requireHealthy } from "./config";
 import {
   type GitHubEmailRecord,
   readChangeEmailConfirmation,
+  promoteAdmin,
   readVerificationEmail,
   removeCredentialAccount,
   resetServerState,
@@ -89,6 +90,9 @@ type ScenarioServerContext = {
     expiresAt: string;
   }): Promise<unknown>;
   removeCredentialAccount(args: {
+    email: string;
+  }): Promise<unknown>;
+  promoteAdmin(args: {
     email: string;
   }): Promise<unknown>;
 };
@@ -235,6 +239,9 @@ async function runScenario(
     },
     removeCredentialAccount(args) {
       return removeCredentialAccount(baseURL, args);
+    },
+    promoteAdmin(args) {
+      return promoteAdmin(baseURL, args);
     },
   };
 

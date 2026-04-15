@@ -310,6 +310,12 @@ pub(crate) async fn sign_up_core(
     let mut create_user = CreateUser::new()
         .with_email(&body.email)
         .with_name(&body.name);
+    if let Some(default_role) = ctx
+        .get_metadata("admin.default_role")
+        .and_then(|value| value.as_str())
+    {
+        create_user = create_user.with_role(default_role.to_string());
+    }
     if let Some(ref username) = body.username {
         create_user = create_user.with_username(username.clone());
     }

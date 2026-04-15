@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait,
-    IntoActiveModel, QueryFilter, QueryOrder, QuerySelect,
+    IntoActiveModel, QueryFilter,
 };
 
 use better_auth_core::store::UserStore;
@@ -180,71 +180,13 @@ where
     }
 
     async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)> {
-        let limit = params.limit.unwrap_or(100);
-        let offset = params.offset.unwrap_or(0);
-        let mut count_query = <S::User as SeaOrmUserModel>::Entity::find();
-        let mut query = <S::User as SeaOrmUserModel>::Entity::find();
-
-        if let (Some(field), Some(value)) = (
-            params.search_field.as_deref(),
-            params.search_value.as_deref(),
-        ) {
-            let predicate = match field {
-                "email" => <S::User as SeaOrmUserModel>::email_column().contains(value),
-                "name" => <S::User as SeaOrmUserModel>::name_column().contains(value),
-                "username" => {
-                    if let Some(col) = <S::User as SeaOrmUserModel>::username_column() {
-                        col.contains(value)
-                    } else {
-                        <S::User as SeaOrmUserModel>::email_column().contains(value)
-                    }
-                }
-                _ => <S::User as SeaOrmUserModel>::email_column().contains(value),
-            };
-            count_query = count_query.filter(predicate.clone());
-            query = query.filter(predicate);
-        }
-
-        let total = count_query
-            .all(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .len();
-        let query = match (params.sort_by.as_deref(), params.sort_direction.as_deref()) {
-            (Some("email"), Some("asc")) => {
-                query.order_by_asc(<S::User as SeaOrmUserModel>::email_column())
-            }
-            (Some("email"), _) => query.order_by_desc(<S::User as SeaOrmUserModel>::email_column()),
-            (Some("name"), Some("asc")) => {
-                query.order_by_asc(<S::User as SeaOrmUserModel>::name_column())
-            }
-            (Some("name"), _) => query.order_by_desc(<S::User as SeaOrmUserModel>::name_column()),
-            (Some("username"), Some("asc")) => {
-                if let Some(col) = <S::User as SeaOrmUserModel>::username_column() {
-                    query.order_by_asc(col)
-                } else {
-                    query.order_by_asc(<S::User as SeaOrmUserModel>::created_at_column())
-                }
-            }
-            (Some("username"), _) => {
-                if let Some(col) = <S::User as SeaOrmUserModel>::username_column() {
-                    query.order_by_desc(col)
-                } else {
-                    query.order_by_desc(<S::User as SeaOrmUserModel>::created_at_column())
-                }
-            }
-            (_, Some("asc")) => {
-                query.order_by_asc(<S::User as SeaOrmUserModel>::created_at_column())
-            }
-            _ => query.order_by_desc(<S::User as SeaOrmUserModel>::created_at_column()),
-        };
-        let models = query
-            .offset(offset as u64)
-            .limit(limit as u64)
+        let models = <S::User as SeaOrmUserModel>::Entity::find()
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
 
-        Ok((models, total))
+        Ok(better_auth_core::user_query::apply_list_users(
+            models, &params,
+        ))
     }
 }

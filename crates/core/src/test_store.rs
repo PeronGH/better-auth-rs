@@ -183,8 +183,7 @@ impl UserStore<BundledSchema> for MemoryStore {
 
     async fn list_users(&self, _params: ListUsersParams) -> AuthResult<(Vec<UserView>, usize)> {
         let users: Vec<_> = self.lock().users.values().cloned().collect();
-        let total = users.len();
-        Ok((users, total))
+        Ok(crate::user_query::apply_list_users(users, &_params))
     }
 }
 

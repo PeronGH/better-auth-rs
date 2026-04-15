@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
-import { apiKey, deviceAuthorization } from "better-auth/plugins";
+import { admin, apiKey, deviceAuthorization } from "better-auth/plugins";
 import { organization } from "better-auth/plugins/organization";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 
@@ -315,6 +315,7 @@ const authOptions = {
     },
   },
   plugins: [
+    admin(),
     apiKey({ enableMetadata: true }),
     deviceAuthorization(),
     organization(),
@@ -483,6 +484,26 @@ const server = Bun.serve({
             await authContext.internalAdapter.deleteAccount(account.id);
           }
         }
+
+        return jsonResponse({ status: true });
+      }
+
+      if (url.pathname === "/__test/promote-admin" && request.method === "POST") {
+        const body = (await readJson(request)) as { email?: string } | null;
+        const email = body?.email;
+        const user = email
+          ? await authContext.internalAdapter.findUserByEmail(email, {
+              includeAccounts: true,
+            })
+          : null;
+
+        if (!user?.user) {
+          return jsonResponse({ message: "User not found" }, { status: 404 });
+        }
+
+        await authContext.internalAdapter.updateUser(user.user.id, {
+          role: "admin",
+        });
 
         return jsonResponse({ status: true });
       }

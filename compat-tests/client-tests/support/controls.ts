@@ -137,6 +137,15 @@ export async function removeCredentialAccount(
   });
 }
 
+export async function promoteAdmin(
+  baseURL: string,
+  { email }: { email: string },
+) {
+  return postControl(baseURL, "/__test/promote-admin", {
+    email,
+  });
+}
+
 export async function setOAuthRefreshMode(baseURL: string, mode: OAuthRefreshMode) {
   return postControl(baseURL, "/__test/set-oauth-refresh-mode", { mode });
 }

@@ -2,64 +2,112 @@ use chrono::{Duration, Utc};
 
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::wire::{SessionView, UserView};
-use better_auth_core::{AuthContext, AuthError, AuthResult, ListUsersParams};
-use better_auth_core::{CreateAccount, CreateSession, UpdateUser};
+use better_auth_core::{
+    AuthContext, AuthError, AuthResult, CreateAccount, CreateSession, UpdateUser,
+};
 
 use crate::plugins::StatusResponse;
 
-use super::AdminConfig;
+use super::access::has_permission;
 use super::types::*;
+use super::{AdminConfig, target_is_admin};
 
-// ---------------------------------------------------------------------------
-// Core functions -- framework-agnostic business logic
-// ---------------------------------------------------------------------------
+const MESSAGE_USER_NOT_FOUND: &str = "User not found";
+const MESSAGE_NON_EXISTENT_ROLE: &str = "You are not allowed to set a non-existent role value";
+const MESSAGE_INVALID_ROLE_TYPE: &str = "Invalid role type";
+const MESSAGE_NO_DATA_TO_UPDATE: &str = "No data to update";
+const MESSAGE_CHANGE_ROLE: &str = "You are not allowed to change users role";
+const MESSAGE_CANNOT_IMPERSONATE_ADMINS: &str = "You cannot impersonate admins";
+
+fn joined_role(role: &RoleInput) -> String {
+    role.joined()
+}
+
+fn validate_role_input(role: &RoleInput, config: &AdminConfig) -> AuthResult<()> {
+    if role.is_empty() {
+        return Err(AuthError::bad_request("role is required"));
+    }
+
+    if config.roles.is_empty() {
+        return Ok(());
+    }
+
+    let unknown_roles: Vec<_> = role
+        .roles()
+        .into_iter()
+        .filter(|item| !config.roles.contains_key(*item))
+        .collect();
+
+    if unknown_roles.is_empty() {
+        Ok(())
+    } else {
+        Err(AuthError::bad_request(MESSAGE_NON_EXISTENT_ROLE))
+    }
+}
 
 pub(crate) async fn set_role_core(
     body: &SetRoleRequest,
+    config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<UserResponse<UserView>> {
+) -> AuthResult<UserResponse<AdminUserView>> {
     let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
         .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
+        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
+
+    validate_role_input(&body.role, config)?;
 
     let update = UpdateUser {
-        role: Some(body.role.clone()),
+        role: Some(joined_role(&body.role)),
         ..Default::default()
     };
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
     Ok(UserResponse {
-        user: UserView::from(&updated_user),
+        user: AdminUserView::from(&updated_user),
     })
+}
+
+pub(crate) async fn get_user_core(
+    query: &GetUserQuery,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<AdminUserView> {
+    let user = ctx
+        .database
+        .get_user_by_id(&query.id)
+        .await?
+        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
+    Ok(AdminUserView::from(&user))
 }
 
 pub(crate) async fn create_user_core(
     body: &CreateUserRequest,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<UserResponse<UserView>> {
+) -> AuthResult<UserResponse<AdminUserView>> {
     if ctx.database.get_user_by_email(&body.email).await?.is_some() {
-        return Err(AuthError::conflict("A user with this email already exists"));
+        return Err(AuthError::bad_request(
+            "User already exists. Use another email.",
+        ));
     }
 
     let role = body
         .role
-        .clone()
-        .unwrap_or_else(|| config.default_user_role.clone());
+        .as_ref()
+        .map(joined_role)
+        .unwrap_or_else(|| config.default_role.clone());
 
-    let metadata = if let Some(serde_json::Value::Object(obj)) = body.data.clone() {
-        serde_json::Value::Object(obj)
-    } else {
-        serde_json::json!({})
-    };
+    let metadata = body
+        .data
+        .clone()
+        .map(serde_json::Value::Object)
+        .unwrap_or_else(|| serde_json::json!({}));
 
     let create_user = better_auth_core::CreateUser::new()
         .with_email(&body.email)
         .with_name(&body.name)
         .with_role(role)
-        .with_email_verified(true)
         .with_metadata(metadata);
 
     let user = ctx.database.create_user(create_user).await?;
@@ -88,24 +136,104 @@ pub(crate) async fn create_user_core(
     }
 
     Ok(UserResponse {
-        user: UserView::from(&user),
+        user: AdminUserView::from(&user),
     })
+}
+
+pub(crate) async fn update_user_core(
+    body: &AdminUpdateUserRequest,
+    acting_user: &UserView,
+    config: &AdminConfig,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<AdminUserView> {
+    if body.data.is_empty() {
+        return Err(AuthError::bad_request(MESSAGE_NO_DATA_TO_UPDATE));
+    }
+
+    let mut update = UpdateUser::default();
+
+    if let Some(value) = body.data.get("role") {
+        let permissions =
+            std::collections::HashMap::from([("user".to_string(), vec!["set-role".to_string()])]);
+        if !has_permission(
+            Some(acting_user.id.as_str()),
+            acting_user.role.as_deref(),
+            config,
+            &permissions,
+        ) {
+            return Err(AuthError::forbidden(MESSAGE_CHANGE_ROLE));
+        }
+
+        let role = serde_json::from_value::<RoleInput>(value.clone())
+            .map_err(|_| AuthError::bad_request(MESSAGE_INVALID_ROLE_TYPE))?;
+        validate_role_input(&role, config)?;
+        update.role = Some(joined_role(&role));
+    }
+
+    if let Some(value) = body.data.get("email").and_then(|value| value.as_str()) {
+        update.email = Some(value.to_string());
+    }
+    if let Some(value) = body.data.get("name").and_then(|value| value.as_str()) {
+        update.name = Some(value.to_string());
+    }
+    if let Some(value) = body.data.get("image").and_then(|value| value.as_str()) {
+        update.image = Some(value.to_string());
+    }
+    if let Some(value) = body
+        .data
+        .get("emailVerified")
+        .and_then(|value| value.as_bool())
+    {
+        update.email_verified = Some(value);
+    }
+    if let Some(value) = body.data.get("username").and_then(|value| value.as_str()) {
+        update.username = Some(value.to_string());
+    }
+    if let Some(value) = body
+        .data
+        .get("displayUsername")
+        .and_then(|value| value.as_str())
+    {
+        update.display_username = Some(value.to_string());
+    }
+    if let Some(value) = body.data.get("banned").and_then(|value| value.as_bool()) {
+        update.banned = Some(value);
+    }
+    if let Some(value) = body.data.get("banReason").and_then(|value| value.as_str()) {
+        update.ban_reason = Some(value.to_string());
+    }
+    if let Some(value) = body.data.get("banExpires").and_then(|value| value.as_str()) {
+        let parsed = chrono::DateTime::parse_from_rfc3339(value)
+            .map_err(|_| AuthError::bad_request("Invalid banExpires"))?
+            .with_timezone(&Utc);
+        update.ban_expires = Some(parsed);
+    }
+    if let Some(value) = body
+        .data
+        .get("twoFactorEnabled")
+        .and_then(|value| value.as_bool())
+    {
+        update.two_factor_enabled = Some(value);
+    }
+    if let Some(value) = body
+        .data
+        .get("metadata")
+        .and_then(|value| value.as_object())
+    {
+        update.metadata = Some(serde_json::Value::Object(value.clone()));
+    }
+
+    let updated_user = ctx.database.update_user(&body.user_id, update).await?;
+    Ok(AdminUserView::from(&updated_user))
 }
 
 pub(crate) async fn list_users_core(
     query: &ListUsersQueryParams,
-    config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<ListUsersResponse<UserView>> {
-    let limit = query
-        .limit
-        .unwrap_or(config.default_page_limit)
-        .min(config.max_page_limit);
-    let offset = query.offset.unwrap_or(0);
-
-    let params = ListUsersParams {
-        limit: Some(limit),
-        offset: Some(offset),
+) -> AuthResult<ListUsersResponse<AdminUserView>> {
+    let params = better_auth_core::ListUsersParams {
+        limit: query.limit,
+        offset: query.offset,
         search_field: query.search_field.clone(),
         search_value: query.search_value.clone(),
         search_operator: query.search_operator.clone(),
@@ -116,13 +244,20 @@ pub(crate) async fn list_users_core(
         filter_operator: query.filter_operator.clone(),
     };
 
-    let (users, total) = ctx.database.list_users(params).await?;
-    Ok(ListUsersResponse {
-        users: users.iter().map(UserView::from).collect(),
-        total,
-        limit,
-        offset,
-    })
+    match ctx.database.list_users(params).await {
+        Ok((users, total)) => Ok(ListUsersResponse {
+            users: users.iter().map(AdminUserView::from).collect(),
+            total,
+            limit: query.limit.filter(|limit| *limit > 0),
+            offset: query.offset.filter(|offset| *offset > 0),
+        }),
+        Err(_) => Ok(ListUsersResponse {
+            users: Vec::new(),
+            total: 0,
+            limit: query.limit.filter(|limit| *limit > 0),
+            offset: query.offset.filter(|offset| *offset > 0),
+        }),
+    }
 }
 
 pub(crate) async fn list_user_sessions_core(
@@ -133,7 +268,7 @@ pub(crate) async fn list_user_sessions_core(
         .database
         .get_user_by_id(&body.user_id)
         .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
+        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
 
     let session_manager = ctx.session_manager();
     let sessions = session_manager.list_user_sessions(&body.user_id).await?;
@@ -147,54 +282,55 @@ pub(crate) async fn ban_user_core(
     admin_user_id: impl AsRef<str>,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<UserResponse<UserView>> {
+) -> AuthResult<UserResponse<AdminUserView>> {
     if body.user_id == admin_user_id.as_ref() {
         return Err(AuthError::bad_request("You cannot ban yourself"));
     }
 
-    let target = ctx
+    let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
         .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-    if !config.allow_ban_admin && target.role().unwrap_or("user") == config.admin_role {
-        return Err(AuthError::forbidden("Cannot ban an admin user"));
-    }
+        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
 
     let ban_expires = body
         .ban_expires_in
+        .or(config.default_ban_expires_in)
         .and_then(Duration::try_seconds)
-        .map(|d| Utc::now() + d);
+        .map(|duration| Utc::now() + duration);
 
     let update = UpdateUser {
         banned: Some(true),
-        ban_reason: body.ban_reason.clone(),
+        ban_reason: Some(
+            body.ban_reason
+                .clone()
+                .or_else(|| config.default_ban_reason.clone())
+                .unwrap_or_else(|| "No reason".to_string()),
+        ),
         ban_expires,
         ..Default::default()
     };
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
-
     let _ = ctx
         .session_manager()
         .revoke_all_user_sessions(&body.user_id)
         .await?;
 
     Ok(UserResponse {
-        user: UserView::from(&updated_user),
+        user: AdminUserView::from(&updated_user),
     })
 }
 
 pub(crate) async fn unban_user_core(
     body: &UserIdRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<UserResponse<UserView>> {
+) -> AuthResult<UserResponse<AdminUserView>> {
     let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
         .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
+        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
 
     let update = UpdateUser {
         banned: Some(false),
@@ -205,7 +341,7 @@ pub(crate) async fn unban_user_core(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
     Ok(UserResponse {
-        user: UserView::from(&updated_user),
+        user: AdminUserView::from(&updated_user),
     })
 }
 
@@ -214,6 +350,7 @@ pub(crate) async fn impersonate_user_core(
     admin_user_id: impl AsRef<str>,
     ip_address: Option<&str>,
     user_agent: Option<&str>,
+    config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(SessionUserResponse<SessionView, UserView>, String)> {
     if body.user_id == admin_user_id.as_ref() {
@@ -224,14 +361,21 @@ pub(crate) async fn impersonate_user_core(
         .database
         .get_user_by_id(&body.user_id)
         .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
+        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
 
-    let expires_at = Utc::now() + ctx.config.session.expires_in;
+    if !config.allow_impersonating_admins
+        && target_is_admin(Some(&body.user_id), target.role(), config)
+    {
+        return Err(AuthError::forbidden(MESSAGE_CANNOT_IMPERSONATE_ADMINS));
+    }
+
+    let expires_at =
+        Utc::now() + Duration::seconds(config.impersonation_session_duration.unwrap_or(60 * 60));
     let create_session = CreateSession {
         user_id: target.id().to_string(),
         expires_at,
-        ip_address: ip_address.map(|s| s.to_string()),
-        user_agent: user_agent.map(|s| s.to_string()),
+        ip_address: ip_address.map(|value| value.to_string()),
+        user_agent: user_agent.map(|value| value.to_string()),
         impersonated_by: Some(admin_user_id.as_ref().to_string()),
         active_organization_id: None,
     };
@@ -255,7 +399,7 @@ pub(crate) async fn stop_impersonating_core(
 ) -> AuthResult<(SessionUserResponse<SessionView, UserView>, String)> {
     let admin_id = session
         .impersonated_by()
-        .ok_or_else(|| AuthError::bad_request("Current session is not an impersonation session"))?
+        .ok_or_else(|| AuthError::bad_request("You are not impersonating anyone"))?
         .to_string();
 
     ctx.session_manager().delete_session(session_token).await?;
@@ -270,8 +414,8 @@ pub(crate) async fn stop_impersonating_core(
     let create_session = CreateSession {
         user_id: admin_id,
         expires_at,
-        ip_address: ip_address.map(|s| s.to_string()),
-        user_agent: user_agent.map(|s| s.to_string()),
+        ip_address: ip_address.map(|value| value.to_string()),
+        user_agent: user_agent.map(|value| value.to_string()),
         impersonated_by: None,
         active_organization_id: None,
     };
@@ -304,7 +448,7 @@ pub(crate) async fn revoke_user_sessions_core(
         .database
         .get_user_by_id(&body.user_id)
         .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
+        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
 
     let _ = ctx
         .session_manager()
@@ -327,7 +471,7 @@ pub(crate) async fn remove_user_core(
         .database
         .get_user_by_id(&body.user_id)
         .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
+        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
 
     ctx.database.delete_user_sessions(&body.user_id).await?;
 
@@ -345,10 +489,11 @@ pub(crate) async fn set_user_password_core(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     if body.new_password.len() < ctx.config.password.min_length {
-        return Err(AuthError::bad_request(format!(
-            "Password must be at least {} characters long",
-            ctx.config.password.min_length
-        )));
+        return Err(AuthError::bad_request("Password too short"));
+    }
+
+    if body.new_password.len() > 128 {
+        return Err(AuthError::bad_request("Password too long"));
     }
 
     let password_hash = better_auth_core::hash_password(None, &body.new_password).await?;
@@ -373,21 +518,20 @@ pub(crate) async fn set_user_password_core(
 
 pub(crate) fn has_permission_core(
     body: &HasPermissionRequest,
-    user: &impl AuthUser,
+    user: &UserView,
     config: &AdminConfig,
 ) -> AuthResult<PermissionResponse> {
-    let _permissions = body.permissions.clone().or(body.permission.clone());
+    let requested = body.requested_permissions().ok_or_else(|| {
+        AuthError::bad_request("invalid permission check. no permission(s) were passed.")
+    })?;
 
-    let is_admin = user.role().unwrap_or("user") == config.admin_role;
-
-    let (success, error) = if is_admin {
-        (true, None)
-    } else {
-        (
-            false,
-            Some("User does not have the required permissions".to_string()),
-        )
-    };
-
-    Ok(PermissionResponse { success, error })
+    Ok(PermissionResponse {
+        error: None,
+        success: has_permission(
+            Some(user.id.as_str()),
+            user.role.as_deref(),
+            config,
+            requested,
+        ),
+    })
 }

@@ -64,6 +64,7 @@ const profiles = {
   core: () => [requiredPlugin("openAPI")],
   "aligned-rs": () => [
     requiredPlugin("openAPI"),
+    requiredPlugin("admin"),
     requiredPlugin("apiKey"),
     requiredPlugin("twoFactor"),
     requiredPlugin("organization"),
