@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post},
 };
 use better_auth::integrations::axum::AxumIntegration;
+use better_auth::middleware::RateLimitConfig;
 use better_auth::prelude::{AuthAccount, AuthUser, CreateAccount, CreateVerification};
 use better_auth::plugins::{
     AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, DeviceAuthorizationPlugin, EmailPasswordPlugin,
@@ -519,6 +520,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth = Arc::new(
         AuthBuilder::<TestSchema>::new(config)
             .store(store)
+            .rate_limit(RateLimitConfig::new().enabled(false))
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(AccountManagementPlugin::new())
