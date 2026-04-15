@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -156,7 +156,7 @@ pub(crate) struct AdminUserView {
     #[serde(rename = "banReason")]
     pub ban_reason: Option<String>,
     #[serde(rename = "banExpires")]
-    pub ban_expires: Option<DateTime<Utc>>,
+    pub ban_expires: Option<String>,
 }
 
 impl<T: better_auth_core::entity::AuthUser> From<&T> for AdminUserView {
@@ -174,7 +174,9 @@ impl<T: better_auth_core::entity::AuthUser> From<&T> for AdminUserView {
             role: user.role().map(str::to_owned),
             banned: user.banned(),
             ban_reason: user.ban_reason().map(str::to_owned),
-            ban_expires: user.ban_expires(),
+            ban_expires: user
+                .ban_expires()
+                .map(|value| value.to_rfc3339_opts(SecondsFormat::Millis, true)),
         }
     }
 }

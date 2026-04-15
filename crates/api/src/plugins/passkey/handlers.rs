@@ -11,6 +11,7 @@ use webauthn_rs::prelude::{
 };
 
 use crate::plugins::StatusResponse;
+use crate::plugins::helpers::{SessionIssueError, issue_user_session};
 
 use super::PasskeyConfig;
 use super::types::{
@@ -432,12 +433,11 @@ pub(super) async fn verify_authentication_core(
         return passkey_authentication_failure();
     }
 
-    let session = match ctx
-        .session_manager()
-        .create_session(&user, ip_address, user_agent)
+    let session = match issue_user_session(ctx, &user.id(), ip_address, user_agent)
         .await
+        .map_err(SessionIssueError::into_auth_error)
     {
-        Ok(session) => session,
+        Ok(issued) => issued.session,
         Err(error) => return Err(error),
     };
 

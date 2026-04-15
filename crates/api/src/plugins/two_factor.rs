@@ -11,7 +11,9 @@ use better_auth_core::{
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
-use crate::plugins::helpers::get_credential_password_hash;
+use crate::plugins::helpers::{
+    SessionIssueError, get_credential_password_hash, issue_user_session,
+};
 
 use super::StatusResponse;
 
@@ -373,10 +375,10 @@ async fn verify_totp_core(
     }
 
     // Code valid — create session
-    let session = ctx
-        .session_manager()
-        .create_session(user, None, None)
-        .await?;
+    let session = issue_user_session(ctx, &user.id(), None, None)
+        .await
+        .map_err(SessionIssueError::into_auth_error)?
+        .session;
 
     // Delete the pending verification
     ctx.database.delete_verification(verification_id).await?;
@@ -446,10 +448,10 @@ async fn verify_otp_core(
     }
 
     // Valid — create session
-    let session = ctx
-        .session_manager()
-        .create_session(user, None, None)
-        .await?;
+    let session = issue_user_session(ctx, &user.id(), None, None)
+        .await
+        .map_err(SessionIssueError::into_auth_error)?
+        .session;
 
     // Clean up verifications
     ctx.database
@@ -514,10 +516,10 @@ async fn verify_backup_code_core(
         .await?;
 
     // Create session
-    let session = ctx
-        .session_manager()
-        .create_session(user, None, None)
-        .await?;
+    let session = issue_user_session(ctx, &user.id(), None, None)
+        .await
+        .map_err(SessionIssueError::into_auth_error)?
+        .session;
 
     // Clean up pending verification
     ctx.database.delete_verification(verification_id).await?;

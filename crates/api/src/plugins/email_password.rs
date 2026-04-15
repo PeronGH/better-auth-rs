@@ -19,7 +19,7 @@ use better_auth_core::utils::username::{
 };
 use better_auth_core::wire::UserView;
 
-use crate::plugins::helpers::apply_default_role;
+use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_user_session};
 
 const MESSAGE_INVALID_USERNAME_OR_PASSWORD: &str = "Invalid username or password";
 const MESSAGE_EMAIL_NOT_VERIFIED: &str = "Email not verified";
@@ -617,17 +617,22 @@ async fn finalize_sign_in_with_user_core(
         );
     }
 
-    let session = ctx
-        .session_manager()
-        .create_session(&user, meta.ip_address.clone(), meta.user_agent.clone())
-        .await?;
+    let issued = issue_user_session(
+        ctx,
+        &user.id(),
+        meta.ip_address.clone(),
+        meta.user_agent.clone(),
+    )
+    .await
+    .map_err(SessionIssueError::into_auth_error)?;
+    let session = issued.session;
     let token = session.token().to_string();
 
     let response = SignInResponse {
         redirect: false,
         token: token.clone(),
         url: None,
-        user: UserView::from(&user),
+        user: UserView::from(&issued.user),
     };
     Ok(SignInCoreResult::Success(response, token))
 }

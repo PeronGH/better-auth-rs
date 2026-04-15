@@ -30,7 +30,7 @@ use super::types::{
 };
 use better_auth_core::wire::{SessionView, UserView};
 
-use crate::plugins::helpers::apply_default_role;
+use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_user_session};
 
 // ---------------------------------------------------------------------------
 // Shared helpers (DRY)
@@ -507,7 +507,7 @@ fn build_redirect_url(
             let _ = pairs.append_pair(key, value);
         }
     }
-    Ok(url.to_string())
+    Ok(url.to_string().replace('+', "%20"))
 }
 
 fn auth_base_url(ctx: &AuthContext<impl better_auth_core::AuthSchema>) -> String {
@@ -523,6 +523,42 @@ struct ProcessOAuthUserResult {
     user: UserView,
     is_register: bool,
     account_cookie: Option<AccountCookiePayload>,
+}
+
+enum OAuthSignInError {
+    Generic(String),
+    Banned(String),
+}
+
+impl OAuthSignInError {
+    fn into_auth_error(self) -> AuthError {
+        match self {
+            Self::Generic(message) => AuthError::forbidden(message),
+            Self::Banned(message) => AuthError::banned_user(message),
+        }
+    }
+
+    fn redirect_parts(&self) -> (String, Option<&str>) {
+        match self {
+            Self::Generic(message) => (message.replace(' ', "_"), None),
+            Self::Banned(message) => ("banned".to_string(), Some(message.as_str())),
+        }
+    }
+}
+
+impl From<String> for OAuthSignInError {
+    fn from(value: String) -> Self {
+        Self::Generic(value)
+    }
+}
+
+impl From<SessionIssueError> for OAuthSignInError {
+    fn from(value: SessionIssueError) -> Self {
+        match value {
+            SessionIssueError::Auth(error) => Self::Generic(error.to_string()),
+            SessionIssueError::Banned { message } => Self::Banned(message),
+        }
+    }
 }
 
 pub(crate) struct AccessTokenCoreResult {
@@ -584,9 +620,9 @@ async fn process_oauth_sign_in(
     disable_sign_up: bool,
     meta: &better_auth_core::RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> Result<ProcessOAuthUserResult, String> {
+) -> Result<ProcessOAuthUserResult, OAuthSignInError> {
     if user_info.email.is_empty() {
-        return Err("email not found".to_string());
+        return Err(OAuthSignInError::Generic("email not found".to_string()));
     }
 
     let linked_account = ctx
@@ -670,11 +706,14 @@ async fn process_oauth_sign_in(
                 .map_err(|error| error.to_string())?;
         }
 
-        let session = ctx
-            .session_manager()
-            .create_session(&user, meta.ip_address.clone(), meta.user_agent.clone())
-            .await
-            .map_err(|error| error.to_string())?;
+        let issued = issue_user_session(
+            ctx,
+            &user.id(),
+            meta.ip_address.clone(),
+            meta.user_agent.clone(),
+        )
+        .await
+        .map_err(OAuthSignInError::from)?;
         let account_cookie =
             ctx.config
                 .account
@@ -705,8 +744,8 @@ async fn process_oauth_sign_in(
                 });
 
         return Ok(ProcessOAuthUserResult {
-            session: SessionView::from(&session),
-            user: UserView::from(&user),
+            session: SessionView::from(&issued.session),
+            user: UserView::from(&issued.user),
             is_register: false,
             account_cookie,
         });
@@ -729,7 +768,7 @@ async fn process_oauth_sign_in(
             || linking.disable_implicit_linking
             || (!trusted_provider && !user_info.email_verified)
         {
-            return Err("account not linked".to_string());
+            return Err(OAuthSignInError::Generic("account not linked".to_string()));
         }
 
         let mut linked_user = existing_user;
@@ -790,15 +829,14 @@ async fn process_oauth_sign_in(
                     .map_err(|error| error.to_string())?;
         }
 
-        let session = ctx
-            .session_manager()
-            .create_session(
-                &linked_user,
-                meta.ip_address.clone(),
-                meta.user_agent.clone(),
-            )
-            .await
-            .map_err(|error| error.to_string())?;
+        let issued = issue_user_session(
+            ctx,
+            &linked_user.id(),
+            meta.ip_address.clone(),
+            meta.user_agent.clone(),
+        )
+        .await
+        .map_err(OAuthSignInError::from)?;
         let account_cookie = ctx
             .config
             .account
@@ -806,14 +844,14 @@ async fn process_oauth_sign_in(
             .then(|| AccountCookiePayload::from_account(&created_account));
 
         Ok(ProcessOAuthUserResult {
-            session: SessionView::from(&session),
-            user: UserView::from(&linked_user),
+            session: SessionView::from(&issued.session),
+            user: UserView::from(&issued.user),
             is_register: false,
             account_cookie,
         })
     } else {
         if disable_sign_up {
-            return Err("signup disabled".to_string());
+            return Err(OAuthSignInError::Generic("signup disabled".to_string()));
         }
 
         let mut create_user = CreateUser::new()
@@ -846,15 +884,14 @@ async fn process_oauth_sign_in(
             .await
             .map_err(|_| "unable to create user".to_string())?;
 
-        let session = ctx
-            .session_manager()
-            .create_session(
-                &created_user,
-                meta.ip_address.clone(),
-                meta.user_agent.clone(),
-            )
-            .await
-            .map_err(|error| error.to_string())?;
+        let issued = issue_user_session(
+            ctx,
+            &created_user.id(),
+            meta.ip_address.clone(),
+            meta.user_agent.clone(),
+        )
+        .await
+        .map_err(OAuthSignInError::from)?;
         let account_cookie = ctx
             .config
             .account
@@ -862,8 +899,8 @@ async fn process_oauth_sign_in(
             .then(|| AccountCookiePayload::from_account(&created_account));
 
         Ok(ProcessOAuthUserResult {
-            session: SessionView::from(&session),
-            user: UserView::from(&created_user),
+            session: SessionView::from(&issued.session),
+            user: UserView::from(&issued.user),
             is_register: true,
             account_cookie,
         })
@@ -1009,7 +1046,7 @@ async fn sign_in_with_id_token_core(
         ctx,
     )
     .await
-    .map_err(AuthError::forbidden)?;
+    .map_err(OAuthSignInError::into_auth_error)?;
 
     Ok(SocialSignInResponse {
         url: None,
@@ -2044,7 +2081,10 @@ pub(crate) async fn handle_callback(
     .await
     {
         Ok(outcome) => outcome,
-        Err(error) => return Ok(redirect_on_error(&error.replace(' ', "_"), None)),
+        Err(error) => {
+            let (code, description) = error.redirect_parts();
+            return Ok(redirect_on_error(&code, description));
+        }
     };
 
     let redirect_target = if outcome.is_register {

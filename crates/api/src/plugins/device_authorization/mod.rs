@@ -7,6 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use url::Url;
 
+use crate::plugins::helpers::{SessionIssueError, issue_user_session};
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateDeviceCode, RequestMeta,
@@ -363,22 +364,26 @@ impl DeviceAuthorizationPlugin {
             }
 
             let meta = RequestMeta::from_request(req);
-            let session = match ctx
-                .session_manager()
-                .create_session(&user, meta.ip_address, meta.user_agent)
-                .await
-            {
-                Ok(session) => session,
-                Err(error) => {
-                    tracing::error!(
-                        error = %error,
-                        device_code_id = %device_code.id,
-                        user_id,
-                        "failed to create session after device code redemption"
-                    );
-                    return device_error_response(500, "server_error", FAILED_TO_CREATE_SESSION);
-                }
-            };
+            let session =
+                match issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
+                    .await
+                    .map_err(SessionIssueError::into_auth_error)
+                {
+                    Ok(issued) => issued.session,
+                    Err(error) => {
+                        tracing::error!(
+                            error = %error,
+                            device_code_id = %device_code.id,
+                            user_id,
+                            "failed to create session after device code redemption"
+                        );
+                        return device_error_response(
+                            500,
+                            "server_error",
+                            FAILED_TO_CREATE_SESSION,
+                        );
+                    }
+                };
 
             return Ok(AuthResponse::json(
                 200,

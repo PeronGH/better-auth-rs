@@ -1,4 +1,6 @@
 use chrono::{Duration, Utc};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use serde::{Deserialize, Serialize};
 
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::wire::{SessionView, UserView};
@@ -18,6 +20,63 @@ const MESSAGE_INVALID_ROLE_TYPE: &str = "Invalid role type";
 const MESSAGE_NO_DATA_TO_UPDATE: &str = "No data to update";
 const MESSAGE_CHANGE_ROLE: &str = "You are not allowed to change users role";
 const MESSAGE_CANNOT_IMPERSONATE_ADMINS: &str = "You cannot impersonate admins";
+const MESSAGE_NOT_IMPERSONATING: &str = "You are not impersonating anyone";
+const MESSAGE_FAILED_TO_FIND_USER: &str = "Failed to find user";
+const MESSAGE_FAILED_TO_FIND_ADMIN_SESSION: &str = "Failed to find admin session";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AdminSessionCookieClaims {
+    #[serde(rename = "sessionToken")]
+    session_token: String,
+    #[serde(rename = "dontRemember")]
+    dont_remember: bool,
+    exp: usize,
+    iat: usize,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct AdminSessionCookiePayload {
+    pub session_token: String,
+    pub dont_remember: bool,
+}
+
+pub(crate) fn create_admin_session_cookie_value(
+    secret: &str,
+    payload: &AdminSessionCookiePayload,
+    max_age: Duration,
+) -> AuthResult<String> {
+    let now = Utc::now();
+    let claims = AdminSessionCookieClaims {
+        session_token: payload.session_token.clone(),
+        dont_remember: payload.dont_remember,
+        exp: (now + max_age).timestamp() as usize,
+        iat: now.timestamp() as usize,
+    };
+    Ok(encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )?)
+}
+
+pub(crate) fn decode_admin_session_cookie_value(
+    secret: &str,
+    token: &str,
+) -> AuthResult<AdminSessionCookiePayload> {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.validate_exp = true;
+    let claims = decode::<AdminSessionCookieClaims>(
+        token,
+        &DecodingKey::from_secret(secret.as_bytes()),
+        &validation,
+    )?
+    .claims;
+
+    Ok(AdminSessionCookiePayload {
+        session_token: claims.session_token,
+        dont_remember: claims.dont_remember,
+    })
+}
 
 fn joined_role(role: &RoleInput) -> String {
     role.joined()
@@ -257,12 +316,6 @@ pub(crate) async fn list_user_sessions_core(
     body: &UserIdRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ListSessionsResponse<SessionView>> {
-    let _target = ctx
-        .database
-        .get_user_by_id(&body.user_id)
-        .await?
-        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
-
     let session_manager = ctx.session_manager();
     let sessions = session_manager.list_user_sessions(&body.user_id).await?;
     Ok(ListSessionsResponse {
@@ -350,7 +403,7 @@ pub(crate) async fn impersonate_user_core(
         return Err(AuthError::bad_request("Cannot impersonate yourself"));
     }
 
-    let target = ctx
+    let mut target = ctx
         .database
         .get_user_by_id(&body.user_id)
         .await?
@@ -360,6 +413,28 @@ pub(crate) async fn impersonate_user_core(
         && target_is_admin(Some(&body.user_id), target.role(), config)
     {
         return Err(AuthError::forbidden(MESSAGE_CANNOT_IMPERSONATE_ADMINS));
+    }
+
+    if target.banned() {
+        if target
+            .ban_expires()
+            .is_some_and(|expires| expires <= Utc::now())
+        {
+            target = ctx
+                .database
+                .update_user(
+                    &body.user_id,
+                    UpdateUser {
+                        banned: Some(false),
+                        ban_reason: None,
+                        ban_expires: None,
+                        ..Default::default()
+                    },
+                )
+                .await?;
+        } else {
+            return Err(AuthError::banned_user(config.banned_user_message.clone()));
+        }
     }
 
     let expires_at = Utc::now()
@@ -386,35 +461,34 @@ pub(crate) async fn impersonate_user_core(
 
 pub(crate) async fn stop_impersonating_core(
     session: &impl AuthSession,
-    session_token: &str,
-    ip_address: Option<&str>,
-    user_agent: Option<&str>,
+    admin_cookie: &AdminSessionCookiePayload,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(SessionUserResponse<SessionView, UserView>, String)> {
     let admin_id = session
         .impersonated_by()
-        .ok_or_else(|| AuthError::bad_request("You are not impersonating anyone"))?
+        .ok_or_else(|| AuthError::bad_request(MESSAGE_NOT_IMPERSONATING))?
         .to_string();
-
-    ctx.session_manager().delete_session(session_token).await?;
 
     let admin_user = ctx
         .database
         .get_user_by_id(&admin_id)
         .await?
-        .ok_or(AuthError::UserNotFound)?;
+        .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_USER))?;
 
-    let expires_at = Utc::now() + ctx.config.session.expires_in;
-    let create_session = CreateSession {
-        user_id: admin_id,
-        expires_at,
-        ip_address: ip_address.map(|value| value.to_string()),
-        user_agent: user_agent.map(|value| value.to_string()),
-        impersonated_by: None,
-        active_organization_id: None,
-    };
+    let admin_session = ctx
+        .database
+        .get_session(&admin_cookie.session_token)
+        .await?
+        .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?;
 
-    let admin_session = ctx.database.create_session(create_session).await?;
+    if admin_session.user_id() != admin_user.id() {
+        return Err(AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION));
+    }
+
+    ctx.session_manager()
+        .delete_session(session.token())
+        .await?;
+
     let token = admin_session.token().to_string();
     let response = SessionUserResponse {
         session: SessionView::from(&admin_session),
@@ -438,12 +512,6 @@ pub(crate) async fn revoke_user_sessions_core(
     body: &UserIdRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
-    let _target = ctx
-        .database
-        .get_user_by_id(&body.user_id)
-        .await?
-        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
-
     let _ = ctx
         .session_manager()
         .revoke_all_user_sessions(&body.user_id)

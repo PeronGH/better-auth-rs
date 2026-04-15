@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use better_auth_core::entity::AuthUser;
-use better_auth_core::utils::cookie_utils::create_session_cookie;
+use better_auth_core::utils::cookie_utils::{
+    create_clear_cookie, create_session_cookie_with_max_age, create_session_like_cookie,
+    related_cookie_name,
+};
 use better_auth_core::utils::username::{UsernameValidationError, validate_username};
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{
@@ -16,6 +19,7 @@ pub(super) mod types;
 #[cfg(test)]
 mod tests;
 
+use crate::plugins::helpers::{delete_session_cookie_headers, get_cookie};
 use access::{has_permission, is_admin_role, is_admin_user_id};
 use handlers::*;
 use types::*;
@@ -110,9 +114,14 @@ better_auth_core::impl_auth_plugin! {
             &self,
             ctx: &mut better_auth_core::AuthInitContext<S>,
         ) -> better_auth_core::AuthResult<()> {
+            ctx.set_metadata("admin.enabled", serde_json::Value::Bool(true));
             ctx.set_metadata(
                 "admin.default_role",
                 serde_json::Value::String(self.config.default_role.clone()),
+            );
+            ctx.set_metadata(
+                "admin.banned_user_message",
+                serde_json::Value::String(self.config.banned_user_message.clone()),
             );
             Ok(())
         }
@@ -343,7 +352,7 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = self.require_session(req, ctx).await?;
+        let (user, session) = self.require_session(req, ctx).await?;
         self.authorize(&user, "user", "impersonate", MESSAGE_IMPERSONATE_USERS)?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -360,8 +369,45 @@ impl AdminPlugin {
             ctx,
         )
         .await?;
-        let cookie_header = create_session_cookie(&token, &ctx.config);
-        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+        let dont_remember =
+            get_cookie(req, &related_cookie_name(&ctx.config, "dont_remember")).is_some();
+        let admin_cookie = create_admin_session_cookie_value(
+            &ctx.config.secret,
+            &AdminSessionCookiePayload {
+                session_token: session.token.clone(),
+                dont_remember,
+            },
+            ctx.config.session.expires_in,
+        )?;
+        let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
+
+        let mut auth_response = AuthResponse::json(200, &response)?;
+        for cookie in delete_session_cookie_headers(&ctx.config) {
+            auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
+        }
+        auth_response = auth_response.with_appended_header(
+            "Set-Cookie",
+            create_session_like_cookie(
+                &admin_cookie_name,
+                &admin_cookie,
+                Some(ctx.config.session.expires_in.num_seconds()),
+                &ctx.config,
+            ),
+        );
+        auth_response = auth_response.with_appended_header(
+            "Set-Cookie",
+            create_session_cookie_with_max_age(Some(&token), None, &ctx.config),
+        );
+        auth_response = auth_response.with_appended_header(
+            "Set-Cookie",
+            create_session_like_cookie(
+                &related_cookie_name(&ctx.config, "dont_remember"),
+                "true",
+                None,
+                &ctx.config,
+            ),
+        );
+        Ok(auth_response)
     }
 
     async fn handle_stop_impersonating(
@@ -378,18 +424,45 @@ impl AdminPlugin {
             .await?
             .ok_or(AuthError::Unauthenticated)?;
         let session = SessionView::from(&session);
-        let (response, new_token) = stop_impersonating_core(
-            &session,
-            &token,
-            req.headers
-                .get("x-forwarded-for")
-                .map(|value| value.as_str()),
-            req.headers.get("user-agent").map(|value| value.as_str()),
-            ctx,
-        )
-        .await?;
-        let cookie_header = create_session_cookie(&new_token, &ctx.config);
-        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+
+        let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
+        let admin_cookie_value = get_cookie(req, &admin_cookie_name)
+            .ok_or_else(|| AuthError::internal("Failed to find admin session"))?;
+        let admin_cookie =
+            decode_admin_session_cookie_value(&ctx.config.secret, &admin_cookie_value)
+                .map_err(|_| AuthError::internal("Failed to find admin session"))?;
+
+        let (response, new_token) = stop_impersonating_core(&session, &admin_cookie, ctx).await?;
+
+        let mut auth_response = AuthResponse::json(200, &response)?;
+        auth_response = auth_response.with_appended_header(
+            "Set-Cookie",
+            create_session_cookie_with_max_age(
+                Some(&new_token),
+                if admin_cookie.dont_remember {
+                    None
+                } else {
+                    Some(ctx.config.session.expires_in.num_seconds())
+                },
+                &ctx.config,
+            ),
+        );
+        if admin_cookie.dont_remember {
+            auth_response = auth_response.with_appended_header(
+                "Set-Cookie",
+                create_session_like_cookie(
+                    &related_cookie_name(&ctx.config, "dont_remember"),
+                    "true",
+                    None,
+                    &ctx.config,
+                ),
+            );
+        }
+        auth_response = auth_response.with_appended_header(
+            "Set-Cookie",
+            create_clear_cookie(&admin_cookie_name, &ctx.config),
+        );
+        Ok(auth_response)
     }
 
     async fn handle_revoke_user_session(

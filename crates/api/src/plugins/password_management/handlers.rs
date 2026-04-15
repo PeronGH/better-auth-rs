@@ -9,7 +9,9 @@ use better_auth_core::{
     CreateAccount, RequestMeta, UpdateAccount,
 };
 
-use crate::plugins::helpers::{get_credential_account, get_credential_password_hash};
+use crate::plugins::helpers::{
+    SessionIssueError, get_credential_account, get_credential_password_hash, issue_user_session,
+};
 
 use super::types::*;
 use super::{PasswordManagementConfig, StatusResponse};
@@ -259,10 +261,15 @@ pub(crate) async fn change_password_core(
 
     let new_token = if body.revoke_other_sessions == Some(true) {
         ctx.database.delete_user_sessions(&user.id()).await?;
-        let session = ctx
-            .session_manager()
-            .create_session(user, meta.ip_address.clone(), meta.user_agent.clone())
-            .await?;
+        let session = issue_user_session(
+            ctx,
+            &user.id(),
+            meta.ip_address.clone(),
+            meta.user_agent.clone(),
+        )
+        .await
+        .map_err(SessionIssueError::into_auth_error)?
+        .session;
         Some(session.token().to_string())
     } else {
         None

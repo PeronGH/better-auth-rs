@@ -1,6 +1,7 @@
 use super::*;
 use crate::plugins::test_helpers;
 use better_auth_core::entity::{AuthAccount, AuthSession};
+use better_auth_core::utils::cookie_utils::related_cookie_name;
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthPlugin, CreateSession, CreateUser, HttpMethod};
 use chrono::{Duration, Utc};
@@ -54,6 +55,16 @@ fn make_request(
 
 fn json_body(resp: &AuthResponse) -> serde_json::Value {
     serde_json::from_slice(&resp.body).unwrap()
+}
+
+fn set_cookie_value(resp: &AuthResponse, name: &str) -> Option<String> {
+    resp.headers.get_all("Set-Cookie").find_map(|header| {
+        let (cookie_name, remainder) = header.split_once('=')?;
+        if cookie_name != name {
+            return None;
+        }
+        Some(remainder.split(';').next().unwrap_or_default().to_string())
+    })
 }
 
 #[tokio::test]
@@ -213,6 +224,11 @@ async fn test_impersonation_session_tracks_admin_id() {
     );
 
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
+    let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
+    assert!(
+        set_cookie_value(&resp, &admin_cookie_name).is_some(),
+        "impersonation should emit an admin_session cookie"
+    );
     let token = json_body(&resp)["session"]["token"]
         .as_str()
         .unwrap()
@@ -240,17 +256,28 @@ async fn test_stop_impersonating_restores_admin_session() {
         .as_str()
         .unwrap()
         .to_string();
+    let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
+    let admin_cookie = set_cookie_value(&resp, &admin_cookie_name)
+        .expect("impersonation should set the admin_session cookie");
 
-    let req = make_request(
+    let mut req = make_request(
         HttpMethod::Post,
         "/admin/stop-impersonating",
         &impersonation_token,
         None,
     );
+    req.headers.insert(
+        "cookie".to_string(),
+        format!("{admin_cookie_name}={admin_cookie}"),
+    );
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     let body = json_body(&resp);
 
     let restored_token = body["session"]["token"].as_str().unwrap();
+    assert_eq!(
+        restored_token, admin_session.token,
+        "stop-impersonating should restore the original admin session token"
+    );
     let restored_session = ctx
         .database
         .get_session(restored_token)
@@ -266,6 +293,53 @@ async fn test_stop_impersonating_restores_admin_session() {
             .unwrap()
             .is_none()
     );
+    let cleared_admin_cookie = resp
+        .headers
+        .get_all("Set-Cookie")
+        .find(|header| header.starts_with(&format!("{admin_cookie_name}=")))
+        .expect("stop-impersonating should clear admin_session");
+    assert!(
+        cleared_admin_cookie.contains("Max-Age=0"),
+        "admin_session should be cleared after stop-impersonating"
+    );
+}
+
+#[tokio::test]
+async fn test_list_user_sessions_missing_user_returns_empty_array() {
+    let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
+    let plugin = AdminPlugin::new();
+
+    let req = make_request(
+        HttpMethod::Post,
+        "/admin/list-user-sessions",
+        &admin_session.token,
+        Some(serde_json::json!({
+            "userId": "missing-user",
+        })),
+    );
+    let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
+
+    assert_eq!(resp.status, 200);
+    assert_eq!(json_body(&resp), serde_json::json!({ "sessions": [] }));
+}
+
+#[tokio::test]
+async fn test_revoke_user_sessions_missing_user_still_succeeds() {
+    let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
+    let plugin = AdminPlugin::new();
+
+    let req = make_request(
+        HttpMethod::Post,
+        "/admin/revoke-user-sessions",
+        &admin_session.token,
+        Some(serde_json::json!({
+            "userId": "missing-user",
+        })),
+    );
+    let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
+
+    assert_eq!(resp.status, 200);
+    assert_eq!(json_body(&resp), serde_json::json!({ "success": true }));
 }
 
 #[tokio::test]

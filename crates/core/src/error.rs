@@ -28,6 +28,9 @@ pub enum AuthError {
     #[error("{0}")]
     Forbidden(String),
 
+    #[error("{0}")]
+    BannedUser(String),
+
     #[error("Insufficient permissions")]
     Unauthorized,
 
@@ -80,7 +83,7 @@ impl AuthError {
             // 401
             Self::InvalidCredentials | Self::Unauthenticated | Self::SessionNotFound => 401,
             // 403
-            Self::Forbidden(_) | Self::Unauthorized => 403,
+            Self::Forbidden(_) | Self::BannedUser(_) | Self::Unauthorized => 403,
             // 404
             Self::UserNotFound | Self::NotFound(_) => 404,
             // 409
@@ -119,14 +122,20 @@ impl AuthError {
     /// to avoid leaking details.
     pub fn error_payload(&self) -> (u16, String, String) {
         let status = self.status_code();
-        let message = match status {
-            500 => {
-                tracing::error!(error = %self, "Internal server error");
-                "Internal server error".to_string()
+        let (code, message) = match self {
+            Self::BannedUser(message) => ("BANNED_USER".to_string(), message.clone()),
+            _ => {
+                let message = match status {
+                    500 => {
+                        tracing::error!(error = %self, "Internal server error");
+                        "Internal server error".to_string()
+                    }
+                    _ => self.to_string(),
+                };
+                let code = Self::code_from_message(&message);
+                (code, message)
             }
-            _ => self.to_string(),
         };
-        let code = Self::code_from_message(&message);
         (status, code, message)
     }
 
@@ -153,6 +162,10 @@ impl AuthError {
 
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::Forbidden(message.into())
+    }
+
+    pub fn banned_user(message: impl Into<String>) -> Self {
+        Self::BannedUser(message.into())
     }
 
     pub fn not_found(message: impl Into<String>) -> Self {

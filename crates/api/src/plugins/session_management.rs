@@ -11,6 +11,7 @@ use better_auth_core::AuthResult;
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
 use super::StatusResponse;
+use super::helpers::{admin_plugin_enabled, delete_session_cookie_headers, get_cookie};
 use better_auth_core::SuccessResponse;
 
 /// Session management plugin for handling session operations
@@ -161,7 +162,17 @@ impl SessionManagementPlugin {
                 };
                 Ok(AuthResponse::json(200, &response)?)
             }
-            Err(_) => Ok(AuthResponse::json(200, &serde_json::Value::Null)?),
+            Err(_) => {
+                let mut response = AuthResponse::json(200, &serde_json::Value::Null)?;
+                if get_cookie(req, &ctx.config.session.cookie_name)
+                    .is_some_and(|value| !value.is_empty())
+                {
+                    for cookie in delete_session_cookie_headers(&ctx.config) {
+                        response.headers.append("Set-Cookie", cookie);
+                    }
+                }
+                Ok(response)
+            }
         }
     }
 
@@ -187,7 +198,10 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
-        let sessions = list_sessions_core(user.id(), ctx).await?;
+        let mut sessions = list_sessions_core(user.id(), ctx).await?;
+        if admin_plugin_enabled(ctx) {
+            sessions.retain(|session| session.impersonated_by.is_none());
+        }
         Ok(AuthResponse::json(200, &sessions)?)
     }
 
@@ -455,6 +469,63 @@ mod tests {
         let body_str = String::from_utf8(response.body).unwrap();
         let sessions: Vec<SessionView> = serde_json::from_str(&body_str).unwrap();
         assert_eq!(sessions.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_list_sessions_filters_impersonated_sessions_when_admin_plugin_is_enabled() {
+        let plugin = SessionManagementPlugin::new();
+        let (mut ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
+            Duration::hours(24),
+        )
+        .await;
+        ctx.set_metadata("admin.enabled", serde_json::Value::Bool(true));
+
+        let direct_session = CreateSession {
+            user_id: user.id.clone(),
+            expires_at: Utc::now() + Duration::hours(24),
+            ip_address: Some("192.168.1.1".to_string()),
+            user_agent: Some("another-agent".to_string()),
+            impersonated_by: None,
+            active_organization_id: None,
+        };
+        ctx.database.create_session(direct_session).await.unwrap();
+
+        let impersonated_session = CreateSession {
+            user_id: user.id.clone(),
+            expires_at: Utc::now() + Duration::hours(24),
+            ip_address: Some("10.0.0.5".to_string()),
+            user_agent: Some("impersonated-agent".to_string()),
+            impersonated_by: Some("admin-user".to_string()),
+            active_organization_id: None,
+        };
+        let impersonated = ctx
+            .database
+            .create_session(impersonated_session)
+            .await
+            .unwrap();
+
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Get,
+            "/list-sessions",
+            Some(&session.token),
+            None,
+        );
+        let response = plugin.handle_list_sessions(&req, &ctx).await.unwrap();
+
+        assert_eq!(response.status, 200);
+
+        let body_str = String::from_utf8(response.body).unwrap();
+        let sessions: Vec<SessionView> = serde_json::from_str(&body_str).unwrap();
+        assert_eq!(sessions.len(), 2);
+        assert!(
+            sessions
+                .iter()
+                .all(|session| session.token != impersonated.token),
+            "impersonated sessions should not be returned from /list-sessions"
+        );
     }
 
     // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.

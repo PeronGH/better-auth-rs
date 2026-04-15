@@ -1,5 +1,6 @@
 use jsonwebtoken::errors::ErrorKind;
 
+use crate::plugins::helpers::{SessionIssueError, issue_user_session};
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthContext, AuthError, AuthResult, UpdateUser};
 use better_auth_core::{AuthSession, AuthUser};
@@ -192,10 +193,10 @@ where
                 let (_session_user, session): (UserView, SessionView) = match current_session {
                     Some((user, session)) => (user, session),
                     None => {
-                        let session = ctx
-                            .session_manager()
-                            .create_session(&user, ip_address, user_agent)
-                            .await?;
+                        let session = issue_user_session(ctx, &user.id(), ip_address, user_agent)
+                            .await
+                            .map_err(SessionIssueError::into_auth_error)?
+                            .session;
                         (UserView::from(&user), SessionView::from(&session))
                     }
                 };
@@ -320,18 +321,20 @@ where
                 Some(session.token().to_string())
             } else {
                 Some(
-                    ctx.session_manager()
-                        .create_session(&user, ip_address, user_agent)
-                        .await?
+                    issue_user_session(ctx, &user.id(), ip_address, user_agent)
+                        .await
+                        .map_err(SessionIssueError::into_auth_error)?
+                        .session
                         .token()
                         .to_string(),
                 )
             }
         } else {
             Some(
-                ctx.session_manager()
-                    .create_session(&user, ip_address, user_agent)
-                    .await?
+                issue_user_session(ctx, &user.id(), ip_address, user_agent)
+                    .await
+                    .map_err(SessionIssueError::into_auth_error)?
+                    .session
                     .token()
                     .to_string(),
             )
