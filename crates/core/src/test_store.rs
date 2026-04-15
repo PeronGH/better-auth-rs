@@ -80,6 +80,7 @@ impl UserStore<BundledSchema> for MemoryStore {
         let id = create_user
             .id
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let username = create_user.username.map(|username| username.to_lowercase());
         let user = UserView {
             id: id.clone(),
             name: create_user.name,
@@ -88,7 +89,7 @@ impl UserStore<BundledSchema> for MemoryStore {
             image: create_user.image,
             created_at: now,
             updated_at: now,
-            username: create_user.username,
+            username,
             display_username: create_user.display_username,
             two_factor_enabled: false,
             role: create_user.role,
@@ -125,12 +126,33 @@ impl UserStore<BundledSchema> for MemoryStore {
     }
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserView>> {
-        Ok(self
-            .lock()
+        let normalized = username.to_lowercase();
+        let users = self.lock();
+
+        Ok(users
             .users
             .values()
-            .find(|user| user.username.as_deref() == Some(username))
-            .cloned())
+            .find(|user| user.username.as_deref() == Some(&normalized))
+            .cloned()
+            .or_else(|| {
+                if normalized != username {
+                    users
+                        .users
+                        .values()
+                        .find(|user| user.username.as_deref() == Some(username))
+                        .cloned()
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                users.users.values().find_map(|user| {
+                    user.username
+                        .as_deref()
+                        .filter(|stored| stored.eq_ignore_ascii_case(username))
+                        .map(|_| user.clone())
+                })
+            }))
     }
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
@@ -149,7 +171,7 @@ impl UserStore<BundledSchema> for MemoryStore {
             user.email_verified = email_verified;
         }
         if let Some(username) = update.username {
-            user.username = Some(username);
+            user.username = Some(username.to_lowercase());
         }
         if let Some(display_username) = update.display_username {
             user.display_username = Some(display_username);

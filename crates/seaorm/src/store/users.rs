@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use better_auth_core::entity::AuthUser;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait,
@@ -38,6 +39,9 @@ where
             {
                 return Err(cancelled_by_hook("user creation"));
             }
+        }
+        if let Some(username) = create_user.username.as_mut() {
+            *username = username.to_lowercase();
         }
         let now = Utc::now();
         let user_id = create_user
@@ -114,11 +118,36 @@ where
         let Some(col) = <S::User as SeaOrmUserModel>::username_column() else {
             return Ok(None);
         };
-        <S::User as SeaOrmUserModel>::Entity::find()
-            .filter(col.eq(username))
+        let normalized = username.to_lowercase();
+
+        if let Some(user) = <S::User as SeaOrmUserModel>::Entity::find()
+            .filter(col.eq(&normalized))
             .one(self.connection())
             .await
-            .map_err(map_db_err)
+            .map_err(map_db_err)?
+        {
+            return Ok(Some(user));
+        }
+
+        if normalized != username
+            && let Some(user) = <S::User as SeaOrmUserModel>::Entity::find()
+                .filter(col.eq(username))
+                .one(self.connection())
+                .await
+                .map_err(map_db_err)?
+        {
+            return Ok(Some(user));
+        }
+
+        Ok(<S::User as SeaOrmUserModel>::Entity::find()
+            .all(self.connection())
+            .await
+            .map_err(map_db_err)?
+            .into_iter()
+            .find(|user| {
+                user.username()
+                    .is_some_and(|stored| stored.eq_ignore_ascii_case(username))
+            }))
     }
 
     async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<S::User> {
@@ -133,6 +162,9 @@ where
             {
                 return Err(cancelled_by_hook("user update"));
             }
+        }
+        if let Some(username) = update.username.as_mut() {
+            *username = username.to_lowercase();
         }
         let Some(model) = <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(user_id))
