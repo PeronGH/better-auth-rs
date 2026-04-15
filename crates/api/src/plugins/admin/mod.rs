@@ -1,30 +1,34 @@
-use better_auth_core::entity::AuthUser;
-use better_auth_core::wire::{SessionView, UserView};
-use better_auth_core::{AuthContext, AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse};
+use std::collections::HashMap;
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
+use better_auth_core::wire::{SessionView, UserView};
+use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult};
+use validator::Validate;
 
+pub mod access;
 pub(super) mod handlers;
 pub(super) mod types;
 
 #[cfg(test)]
 mod tests;
 
+use access::{has_permission, is_admin_role, is_admin_user_id};
 use handlers::*;
 use types::*;
 
-// ---------------------------------------------------------------------------
-// Plugin & config
-// ---------------------------------------------------------------------------
+const MESSAGE_CHANGE_ROLE: &str = "You are not allowed to change users role";
+const MESSAGE_CREATE_USERS: &str = "You are not allowed to create users";
+const MESSAGE_LIST_USERS: &str = "You are not allowed to list users";
+const MESSAGE_LIST_USER_SESSIONS: &str = "You are not allowed to list users sessions";
+const MESSAGE_BAN_USERS: &str = "You are not allowed to ban users";
+const MESSAGE_IMPERSONATE_USERS: &str = "You are not allowed to impersonate users";
+const MESSAGE_REVOKE_USER_SESSIONS: &str = "You are not allowed to revoke users sessions";
+const MESSAGE_DELETE_USERS: &str = "You are not allowed to delete users";
+const MESSAGE_SET_USER_PASSWORD: &str = "You are not allowed to set users password";
+const MESSAGE_GET_USER: &str = "You are not allowed to get user";
+const MESSAGE_UPDATE_USERS: &str = "You are not allowed to update users";
 
 /// Admin plugin for user management operations.
-///
-/// Provides endpoints for creating users, listing users, banning/unbanning,
-/// role management, session management, password management, user impersonation,
-/// and permission checks.
-///
-/// All endpoints require an authenticated session with the `admin` role.
 pub struct AdminPlugin {
     config: AdminConfig,
 }
@@ -33,32 +37,43 @@ pub struct AdminPlugin {
 #[derive(Debug, Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "AdminPlugin")]
 pub struct AdminConfig {
-    /// The role required to access admin endpoints (default: `"admin"`).
-    #[config(default = "admin".to_string())]
-    pub admin_role: String,
-    /// Default role assigned to newly created users (default: `"user"`).
+    /// Default role assigned to new users and role-less permission checks.
     #[config(default = "user".to_string())]
-    pub default_user_role: String,
-    /// Whether to allow banning other admins (default: `false`).
+    pub default_role: String,
+    /// Roles treated as "admin" for target-admin checks such as impersonation.
+    #[config(default = vec!["admin".to_string()])]
+    pub admin_roles: Vec<String>,
+    /// Users that always bypass admin permission checks.
+    #[config(default = None)]
+    pub admin_user_ids: Option<Vec<String>>,
+    /// Custom role definitions. When provided, these replace the built-in
+    /// `admin` and `user` role permissions.
+    #[config(default = HashMap::new())]
+    pub roles: HashMap<String, access::RolePermissions>,
+    /// Default reason applied when banning a user without an explicit reason.
+    #[config(default = None)]
+    pub default_ban_reason: Option<String>,
+    /// Default ban duration in seconds when banning a user without an explicit duration.
+    #[config(default = None)]
+    pub default_ban_expires_in: Option<i64>,
+    /// Custom impersonation session duration in seconds.
+    #[config(default = None)]
+    pub impersonation_session_duration: Option<i64>,
+    /// Message surfaced to banned users.
+    #[config(default = "You have been banned from this application. Please contact support if you believe this is an error.".to_string())]
+    pub banned_user_message: String,
+    /// Whether other admin users may be impersonated.
     #[config(default = false)]
-    pub allow_ban_admin: bool,
-    /// Default number of users returned in list-users (default: 100).
-    #[config(default = 100)]
-    pub default_page_limit: usize,
-    /// Maximum number of users returned in list-users (default: 500).
-    #[config(default = 500)]
-    pub max_page_limit: usize,
+    pub allow_impersonating_admins: bool,
 }
-
-// ---------------------------------------------------------------------------
-// Plugin trait implementation
-// ---------------------------------------------------------------------------
 
 better_auth_core::impl_auth_plugin! {
     AdminPlugin, "admin";
     routes {
         post "/admin/set-role" => handle_set_role, "admin_set_role";
+        get  "/admin/get-user" => handle_get_user, "admin_get_user";
         post "/admin/create-user" => handle_create_user, "admin_create_user";
+        post "/admin/update-user" => handle_update_user, "admin_update_user";
         get  "/admin/list-users" => handle_list_users, "admin_list_users";
         post "/admin/list-user-sessions" => handle_list_user_sessions, "admin_list_user_sessions";
         post "/admin/ban-user" => handle_ban_user, "admin_ban_user";
@@ -71,29 +86,48 @@ better_auth_core::impl_auth_plugin! {
         post "/admin/set-user-password" => handle_set_user_password, "admin_set_user_password";
         post "/admin/has-permission" => handle_has_permission, "admin_has_permission";
     }
+    extra {
+        async fn on_init(
+            &self,
+            ctx: &mut better_auth_core::AuthInitContext<S>,
+        ) -> better_auth_core::AuthResult<()> {
+            ctx.set_metadata(
+                "admin.default_role",
+                serde_json::Value::String(self.config.default_role.clone()),
+            );
+            Ok(())
+        }
+    }
 }
 
-// ---------------------------------------------------------------------------
-// Handler implementations (old -- delegate to core)
-// ---------------------------------------------------------------------------
-
 impl AdminPlugin {
-    /// Authenticate the caller and verify they have the admin role.
-    async fn require_admin(
+    async fn require_session(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<(UserView, SessionView)> {
         let (user, session) = ctx.require_session(req).await?;
-
-        let user_role = user.role().unwrap_or("user");
-        if user_role != self.config.admin_role {
-            return Err(AuthError::forbidden(
-                "You do not have permission to access this resource",
-            ));
-        }
-
         Ok((UserView::from(&user), SessionView::from(&session)))
+    }
+
+    fn authorize(
+        &self,
+        user: &UserView,
+        resource: &str,
+        action: &str,
+        message: &str,
+    ) -> AuthResult<()> {
+        let permissions = HashMap::from([(resource.to_string(), vec![action.to_string()])]);
+        if has_permission(
+            Some(user.id.as_str()),
+            user.role.as_deref(),
+            &self.config,
+            &permissions,
+        ) {
+            Ok(())
+        } else {
+            Err(AuthError::forbidden(message))
+        }
     }
 
     async fn handle_set_role(
@@ -101,12 +135,30 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "user", "set-role", MESSAGE_CHANGE_ROLE)?;
         let body: SetRoleRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = set_role_core(&body, ctx).await?;
+        let response = set_role_core(&body, &self.config, ctx).await?;
+        AuthResponse::json(200, &response).map_err(AuthError::from)
+    }
+
+    async fn handle_get_user(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<AuthResponse> {
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "user", "get", MESSAGE_GET_USER)?;
+        let query = GetUserQuery {
+            id: req.query.get("id").cloned().unwrap_or_default(),
+        };
+        query
+            .validate()
+            .map_err(|error| AuthError::validation(error.to_string()))?;
+        let response = get_user_core(&query, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -115,7 +167,8 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "user", "create", MESSAGE_CREATE_USERS)?;
         let body: CreateUserRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -124,15 +177,31 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
+    async fn handle_update_user(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<AuthResponse> {
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "user", "update", MESSAGE_UPDATE_USERS)?;
+        let body: AdminUpdateUserRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+        let response = update_user_core(&body, &user, &self.config, ctx).await?;
+        AuthResponse::json(200, &response).map_err(AuthError::from)
+    }
+
     async fn handle_list_users(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "user", "list", MESSAGE_LIST_USERS)?;
         let query = ListUsersQueryParams {
-            limit: req.query.get("limit").and_then(|v| v.parse().ok()),
-            offset: req.query.get("offset").and_then(|v| v.parse().ok()),
+            limit: req.query.get("limit").and_then(|value| value.parse().ok()),
+            offset: req.query.get("offset").and_then(|value| value.parse().ok()),
             search_field: req.query.get("searchField").cloned(),
             search_value: req.query.get("searchValue").cloned(),
             search_operator: req.query.get("searchOperator").cloned(),
@@ -142,7 +211,7 @@ impl AdminPlugin {
             filter_value: req.query.get("filterValue").cloned(),
             filter_operator: req.query.get("filterOperator").cloned(),
         };
-        let response = list_users_core(&query, &self.config, ctx).await?;
+        let response = list_users_core(&query, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -151,7 +220,8 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "session", "list", MESSAGE_LIST_USER_SESSIONS)?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -165,12 +235,13 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "user", "ban", MESSAGE_BAN_USERS)?;
         let body: BanUserRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = ban_user_core(&body, admin_user.id(), &self.config, ctx).await?;
+        let response = ban_user_core(&body, user.id.as_str(), &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -179,7 +250,8 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "user", "ban", MESSAGE_BAN_USERS)?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -193,16 +265,20 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "user", "impersonate", MESSAGE_IMPERSONATE_USERS)?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
         let (response, token) = impersonate_user_core(
             &body,
-            admin_user.id(),
-            req.headers.get("x-forwarded-for").map(|s| s.as_str()),
-            req.headers.get("user-agent").map(|s| s.as_str()),
+            user.id.as_str(),
+            req.headers
+                .get("x-forwarded-for")
+                .map(|value| value.as_str()),
+            req.headers.get("user-agent").map(|value| value.as_str()),
+            &self.config,
             ctx,
         )
         .await?;
@@ -227,8 +303,10 @@ impl AdminPlugin {
         let (response, new_token) = stop_impersonating_core(
             &session,
             &token,
-            req.headers.get("x-forwarded-for").map(|s| s.as_str()),
-            req.headers.get("user-agent").map(|s| s.as_str()),
+            req.headers
+                .get("x-forwarded-for")
+                .map(|value| value.as_str()),
+            req.headers.get("user-agent").map(|value| value.as_str()),
             ctx,
         )
         .await?;
@@ -241,7 +319,8 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "session", "revoke", MESSAGE_REVOKE_USER_SESSIONS)?;
         let body: RevokeSessionRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -255,7 +334,8 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "session", "revoke", MESSAGE_REVOKE_USER_SESSIONS)?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -269,12 +349,13 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "user", "delete", MESSAGE_DELETE_USERS)?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = remove_user_core(&body, admin_user.id(), ctx).await?;
+        let response = remove_user_core(&body, user.id.as_str(), ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -283,7 +364,8 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
+        let (user, _session) = self.require_session(req, ctx).await?;
+        self.authorize(&user, "user", "set-password", MESSAGE_SET_USER_PASSWORD)?;
         let body: SetUserPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -297,8 +379,7 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
-        let user = UserView::from(&user);
+        let (user, _session) = self.require_session(req, ctx).await?;
         let body: HasPermissionRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -307,3 +388,13 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 }
+
+pub(super) fn target_is_admin(
+    user_id: Option<&str>,
+    role: Option<&str>,
+    config: &AdminConfig,
+) -> bool {
+    is_admin_user_id(user_id, config) || is_admin_role(role, config)
+}
+
+pub use access::RolePermissions;

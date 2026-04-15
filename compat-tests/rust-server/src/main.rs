@@ -7,7 +7,7 @@ use axum::{
 use better_auth::integrations::axum::AxumIntegration;
 use better_auth::prelude::{AuthAccount, AuthUser, CreateAccount, CreateVerification};
 use better_auth::plugins::{
-    AccountManagementPlugin, ApiKeyPlugin, DeviceAuthorizationPlugin, EmailPasswordPlugin,
+    AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, DeviceAuthorizationPlugin, EmailPasswordPlugin,
     EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
     PasswordManagementPlugin, SessionManagementPlugin, UserManagementPlugin,
     email_verification::SendVerificationEmail, user_management::SendChangeEmailConfirmation,
@@ -475,6 +475,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .plugin(DeviceAuthorizationPlugin::new())
             .plugin(ApiKeyPlugin::builder().enable_metadata(true).build())
             .plugin(OrganizationPlugin::new())
+            .plugin(AdminPlugin::new())
             .plugin(PasskeyPlugin::new())
             .plugin(
                 PasswordManagementPlugin::new().send_reset_password(Arc::new(CompatResetSender {
@@ -534,6 +535,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth_for_delete_seed = auth.clone();
     let auth_for_remove_credential = auth.clone();
     let auth_for_oauth_seed = auth.clone();
+    let auth_for_promote_admin = auth.clone();
 
     let app = Router::new()
         .route("/__health", get(health_check))
@@ -776,6 +778,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 );
                             }
                         }
+                    }
+
+                    (
+                        axum::http::StatusCode::OK,
+                        Json(serde_json::json!({ "status": true })),
+                    )
+                }
+            }),
+        )
+        .route(
+            "/__test/promote-admin",
+            post(move |Json(body): Json<RemoveCredentialAccountRequest>| {
+                let auth = auth_for_promote_admin.clone();
+                async move {
+                    let user = match auth.store().get_user_by_email(&body.email).await {
+                        Ok(Some(user)) => user,
+                        Ok(None) => {
+                            return (
+                                axum::http::StatusCode::NOT_FOUND,
+                                Json(serde_json::json!({ "message": "User not found" })),
+                            );
+                        }
+                        Err(error) => {
+                            return (
+                                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(serde_json::json!({ "message": error.to_string() })),
+                            );
+                        }
+                    };
+
+                    if let Err(error) = auth
+                        .store()
+                        .update_user(
+                            &user.id(),
+                            better_auth::prelude::UpdateUser {
+                                role: Some("admin".to_string()),
+                                ..Default::default()
+                            },
+                        )
+                        .await
+                    {
+                        return (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(serde_json::json!({ "message": error.to_string() })),
+                        );
                     }
 
                     (

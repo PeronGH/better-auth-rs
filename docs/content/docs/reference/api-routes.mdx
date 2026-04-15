@@ -120,7 +120,9 @@ For interactive API documentation with request/response schemas, see the [OpenAP
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | POST | `/admin/set-role` | Admin | Set user role |
+| GET | `/admin/get-user` | Admin | Get a user by id |
 | POST | `/admin/create-user` | Admin | Create a new user |
+| POST | `/admin/update-user` | Admin | Update a user |
 | GET | `/admin/list-users` | Admin | List users with search/filter/sort |
 | POST | `/admin/list-user-sessions` | Admin | List user's sessions |
 | POST | `/admin/ban-user` | Admin | Ban a user |
@@ -162,4 +164,4 @@ Authenticated endpoints require a session token sent as:
 - **Bearer token**: `Authorization: Bearer session_abc123...`
 - **Cookie**: `Cookie: better-auth.session_token=session_abc123...`
 
-**Admin** endpoints additionally require the user to have the admin role (configurable, default: `"admin"`).
+**Admin** endpoints additionally require the current user to satisfy the admin permission check for that route. With the default config, the built-in `admin` role is authorized and `user` is not.

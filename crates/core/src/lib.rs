@@ -30,6 +30,8 @@ pub(crate) mod test_store;
 pub mod types;
 mod types_org;
 mod types_plugin;
+#[doc(hidden)]
+pub mod user_query;
 pub mod utils;
 pub mod wire;
 

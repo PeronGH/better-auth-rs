@@ -84,6 +84,7 @@ const profiles = {
   "aligned-rs": () => {
     const selected = [
       requiredPlugin("openAPI"),
+      requiredPlugin("admin"),
       requiredPlugin("apiKey"),
       requiredPlugin("twoFactor"),
       requiredPlugin("organization"),

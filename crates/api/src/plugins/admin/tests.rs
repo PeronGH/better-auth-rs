@@ -85,14 +85,14 @@ async fn test_set_role() {
         &admin_session.token,
         Some(serde_json::json!({
             "userId": user.id,
-            "role": "moderator"
+            "role": "superadmin"
         })),
     );
 
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(resp.status, 200);
     let body = json_body(&resp);
-    assert_eq!(body["user"]["role"], "moderator");
+    assert_eq!(body["user"]["role"], "superadmin");
 }
 
 // Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
@@ -167,7 +167,7 @@ async fn test_custom_admin_role() {
         .await
         .unwrap();
 
-    let user = database
+    let _user = database
         .create_user(
             CreateUser::new()
                 .with_email("user@example.com")
@@ -177,22 +177,41 @@ async fn test_custom_admin_role() {
         .await
         .unwrap();
 
-    let plugin = AdminPlugin::new().admin_role("superadmin");
+    let plugin = AdminPlugin::with_config(AdminConfig {
+        admin_roles: vec!["superadmin".to_string()],
+        roles: HashMap::from([(
+            "superadmin".to_string(),
+            RolePermissions::new()
+                .allow(
+                    "user",
+                    [
+                        "create",
+                        "list",
+                        "set-role",
+                        "ban",
+                        "impersonate",
+                        "delete",
+                        "set-password",
+                        "get",
+                        "update",
+                    ],
+                )
+                .allow("session", ["list", "revoke", "delete"]),
+        )]),
+        ..Default::default()
+    });
 
     let req = make_request(
-        HttpMethod::Post,
-        "/admin/set-role",
+        HttpMethod::Get,
+        "/admin/list-users",
         &admin_session.token,
-        Some(serde_json::json!({
-            "userId": user.id,
-            "role": "moderator"
-        })),
+        None,
     );
 
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(resp.status, 200);
     let body = json_body(&resp);
-    assert_eq!(body["user"]["role"], "moderator");
+    assert_eq!(body["total"], 2);
 }
 
 // Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
@@ -346,7 +365,7 @@ async fn test_create_user_duplicate_email_rejected() {
 #[tokio::test]
 async fn test_create_user_default_role_config() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
-    let plugin = AdminPlugin::new().default_user_role("member");
+    let plugin = AdminPlugin::new().default_role("member");
 
     let req = make_request(
         HttpMethod::Post,
@@ -413,18 +432,17 @@ async fn test_list_users_pagination() {
     assert_eq!(body["total"], 2); // total is still 2
     assert_eq!(body["users"].as_array().unwrap().len(), 1); // but only 1 returned
     assert_eq!(body["limit"], 1);
-    assert_eq!(body["offset"], 0);
+    assert!(body["offset"].is_null());
 }
 
 // Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
-async fn test_list_users_respects_max_page_limit() {
+async fn test_list_users_uses_requested_limit_without_plugin_clamp() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
-    let plugin = AdminPlugin::new().max_page_limit(1);
+    let plugin = AdminPlugin::new();
 
-    // Request limit=100 but max is 1
     let mut query = HashMap::new();
-    query.insert("limit".to_string(), "100".to_string());
+    query.insert("limit".to_string(), "1".to_string());
 
     let req = make_request_with_query(
         HttpMethod::Get,
@@ -437,7 +455,6 @@ async fn test_list_users_respects_max_page_limit() {
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(resp.status, 200);
     let body = json_body(&resp);
-    // Should be clamped to max_page_limit=1
     assert_eq!(body["users"].as_array().unwrap().len(), 1);
     assert_eq!(body["limit"], 1);
 }
@@ -665,40 +682,9 @@ async fn test_ban_revokes_user_sessions() {
 
 // Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
-async fn test_cannot_ban_admin_by_default() {
+async fn test_ban_admin_is_allowed() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
     let plugin = AdminPlugin::new();
-
-    // Create second admin
-    let admin2 = ctx
-        .database
-        .create_user(
-            CreateUser::new()
-                .with_email("admin2@example.com")
-                .with_name("Admin 2")
-                .with_role("admin"),
-        )
-        .await
-        .unwrap();
-
-    let req = make_request(
-        HttpMethod::Post,
-        "/admin/ban-user",
-        &admin_session.token,
-        Some(serde_json::json!({
-            "userId": admin2.id,
-        })),
-    );
-
-    let result = plugin.on_request(&req, &ctx).await;
-    assert!(result.is_err());
-}
-
-// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
-#[tokio::test]
-async fn test_allow_ban_admin_config() {
-    let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
-    let plugin = AdminPlugin::new().allow_ban_admin(true);
 
     // Create second admin
     let admin2 = ctx
@@ -1268,7 +1254,7 @@ async fn test_has_permission_admin() {
         "/admin/has-permission",
         &admin_session.token,
         Some(serde_json::json!({
-            "permissions": { "users": ["read", "write"] }
+            "permissions": { "user": ["create", "update"] }
         })),
     );
 
@@ -1289,7 +1275,7 @@ async fn test_has_permission_non_admin() {
         "/admin/has-permission",
         &user_session.token,
         Some(serde_json::json!({
-            "permissions": { "users": ["read", "write"] }
+            "permissions": { "user": ["create"] }
         })),
     );
 
@@ -1297,7 +1283,7 @@ async fn test_has_permission_non_admin() {
     assert_eq!(resp.status, 200);
     let body = json_body(&resp);
     assert_eq!(body["success"], false);
-    assert!(body["error"].is_string());
+    assert!(body["error"].is_null());
 }
 
 // -----------------------------------------------------------------------
@@ -1371,5 +1357,5 @@ async fn test_plugin_name() {
 async fn test_plugin_routes_count() {
     let plugin = AdminPlugin::new();
     let routes = <AdminPlugin as AuthPlugin<TestSchema>>::routes(&plugin);
-    assert_eq!(routes.len(), 13, "admin plugin should register 13 routes");
+    assert_eq!(routes.len(), 15, "admin plugin should register 15 routes");
 }

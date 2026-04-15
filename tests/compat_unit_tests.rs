@@ -205,7 +205,7 @@ fn test_default_profile_is_core() {
 }
 
 #[test]
-fn test_aligned_profile_includes_passkey_surface() {
+fn test_aligned_profile_includes_passkey_and_admin_surface() {
     let spec = load_openapi_spec_with_profile(OpenApiProfile::AlignedRs);
     let paths = spec.paths.as_ref().expect("spec must have paths");
 
@@ -214,8 +214,8 @@ fn test_aligned_profile_includes_passkey_surface() {
         "aligned-rs profile should include passkey endpoints"
     );
     assert!(
-        !paths.contains_key("/admin/list-users"),
-        "aligned-rs profile should not include admin endpoints"
+        paths.contains_key("/admin/list-users"),
+        "aligned-rs profile should include admin endpoints"
     );
 }
 

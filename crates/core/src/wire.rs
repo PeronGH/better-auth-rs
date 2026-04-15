@@ -37,13 +37,12 @@ pub struct UserView {
     pub display_username: Option<String>,
     #[serde(rename = "twoFactorEnabled", skip_serializing_if = "is_false", default)]
     pub two_factor_enabled: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
-    #[serde(skip_serializing_if = "is_false", default)]
+    #[serde(default)]
     pub banned: bool,
-    #[serde(rename = "banReason", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "banReason")]
     pub ban_reason: Option<String>,
-    #[serde(rename = "banExpires", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "banExpires")]
     pub ban_expires: Option<DateTime<Utc>>,
     #[serde(skip)]
     pub metadata: serde_json::Value,
