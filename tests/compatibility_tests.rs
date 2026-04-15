@@ -72,7 +72,6 @@ fn completed_phase_reference_surface(
         "/error",
         "/sign-up/email",
         "/sign-in/email",
-        "/sign-in/username",
         "/get-session",
         "/sign-out",
         "/list-sessions",
