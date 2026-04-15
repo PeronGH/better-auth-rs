@@ -1,9 +1,13 @@
 use std::sync::Arc;
 
+use better_auth_core::utils::username::{
+    UsernameValidationError, normalize_username_fields, validate_username,
+};
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse,
-    AuthResult, AuthSchema, AuthStore, BeforeRequestAction, EmailProvider, HttpMethod, OkResponse,
-    OpenApiBuilder, OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest, core_paths,
+    AuthResult, AuthSchema, AuthStore, BeforeRequestAction, EmailProvider,
+    ErrorCodeMessageResponse, HttpMethod, OkResponse, OpenApiBuilder, OpenApiSpec, SessionManager,
+    UpdateUser, UpdateUserRequest, core_paths,
     entity::{AuthSession, AuthUser},
     hooks::{RequestHookContext, with_request_hook_context_value},
     middleware::{
@@ -11,6 +15,17 @@ use better_auth_core::{
         CsrfMiddleware, Middleware, RateLimitConfig, RateLimitMiddleware,
     },
 };
+
+fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult<AuthResponse> {
+    AuthResponse::json(
+        status,
+        &ErrorCodeMessageResponse {
+            code: code.to_string(),
+            message: message.to_string(),
+        },
+    )
+    .map_err(AuthError::from)
+}
 
 pub struct BetterAuth<S: AuthSchema> {
     config: Arc<AuthConfig>,
@@ -394,11 +409,50 @@ impl<S: AuthSchema> BetterAuth<S> {
         let update_req: UpdateUserRequest =
             serde_json::from_value(serde_json::Value::Object(body.clone()))
                 .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
+        let (username, display_username) =
+            normalize_username_fields(update_req.username, update_req.display_username);
+
+        if let Some(username) = username.as_deref() {
+            match validate_username(username) {
+                Ok(()) => {}
+                Err(UsernameValidationError::TooShort) => {
+                    return username_error_response(
+                        400,
+                        "USERNAME_TOO_SHORT",
+                        "Username is too short",
+                    );
+                }
+                Err(UsernameValidationError::TooLong) => {
+                    return username_error_response(
+                        400,
+                        "USERNAME_IS_TOO_LONG",
+                        "Username is too long",
+                    );
+                }
+                Err(UsernameValidationError::Invalid) => {
+                    return username_error_response(
+                        400,
+                        "USERNAME_IS_INVALID",
+                        "Username is invalid",
+                    );
+                }
+            }
+
+            if let Some(existing_user) = self.store.get_user_by_username(username).await?
+                && existing_user.id() != current_user.id()
+            {
+                return username_error_response(
+                    400,
+                    "USERNAME_IS_ALREADY_TAKEN",
+                    "Username is already taken. Please try another.",
+                );
+            }
+        }
 
         let has_changes = update_req.name.is_some()
             || update_req.image.is_some()
-            || update_req.username.is_some()
-            || update_req.display_username.is_some()
+            || username.is_some()
+            || display_username.is_some()
             || update_req.role.is_some()
             || update_req.metadata.is_some();
         if !has_changes {
@@ -410,8 +464,8 @@ impl<S: AuthSchema> BetterAuth<S> {
             name: update_req.name,
             image: update_req.image,
             email_verified: None,
-            username: update_req.username,
-            display_username: update_req.display_username,
+            username,
+            display_username,
             role: update_req.role,
             banned: None,
             ban_reason: None,

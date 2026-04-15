@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use better_auth_core::entity::AuthUser;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait,
@@ -118,36 +117,11 @@ where
         let Some(col) = <S::User as SeaOrmUserModel>::username_column() else {
             return Ok(None);
         };
-        let normalized = username.to_lowercase();
-
-        if let Some(user) = <S::User as SeaOrmUserModel>::Entity::find()
-            .filter(col.eq(&normalized))
+        <S::User as SeaOrmUserModel>::Entity::find()
+            .filter(col.eq(username.to_lowercase()))
             .one(self.connection())
             .await
-            .map_err(map_db_err)?
-        {
-            return Ok(Some(user));
-        }
-
-        if normalized != username
-            && let Some(user) = <S::User as SeaOrmUserModel>::Entity::find()
-                .filter(col.eq(username))
-                .one(self.connection())
-                .await
-                .map_err(map_db_err)?
-        {
-            return Ok(Some(user));
-        }
-
-        Ok(<S::User as SeaOrmUserModel>::Entity::find()
-            .all(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .into_iter()
-            .find(|user| {
-                user.username()
-                    .is_some_and(|stored| stored.eq_ignore_ascii_case(username))
-            }))
+            .map_err(map_db_err)
     }
 
     async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<S::User> {

@@ -30,7 +30,7 @@ function normalizeApprovedTokenResponse(response: {
   if (snapshot.body && typeof snapshot.body.expires_in === "number") {
     const expiresIn = snapshot.body.expires_in;
     snapshot.body.expires_in =
-      expiresIn === 604799 || expiresIn === 604800 ? "<week-session-ttl>" : expiresIn;
+      Math.abs(expiresIn - 604800) <= 5 ? "<week-session-ttl>" : expiresIn;
   }
 
   return snapshot;
