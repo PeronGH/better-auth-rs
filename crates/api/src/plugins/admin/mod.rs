@@ -424,6 +424,9 @@ impl AdminPlugin {
             .await?
             .ok_or(AuthError::Unauthenticated)?;
         let session = SessionView::from(&session);
+        if session.impersonated_by.is_none() {
+            return Err(AuthError::bad_request("You are not impersonating anyone"));
+        }
 
         let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
         let admin_cookie_value = get_cookie(req, &admin_cookie_name)

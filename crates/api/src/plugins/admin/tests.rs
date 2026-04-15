@@ -343,6 +343,29 @@ async fn test_revoke_user_sessions_missing_user_still_succeeds() {
 }
 
 #[tokio::test]
+async fn test_stop_impersonating_without_impersonated_session_returns_bad_request() {
+    let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
+    let plugin = AdminPlugin::new();
+
+    let req = make_request(
+        HttpMethod::Post,
+        "/admin/stop-impersonating",
+        &admin_session.token,
+        None,
+    );
+    let err = plugin.on_request(&req, &ctx).await.unwrap_err();
+    let response = err.to_auth_response();
+    assert_eq!(response.status, 400);
+    assert_eq!(
+        json_body(&response),
+        serde_json::json!({
+            "code": "YOU_ARE_NOT_IMPERSONATING_ANYONE",
+            "message": "You are not impersonating anyone"
+        })
+    );
+}
+
+#[tokio::test]
 async fn test_remove_user_cleans_up_sessions_and_accounts() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
     let plugin = AdminPlugin::new();

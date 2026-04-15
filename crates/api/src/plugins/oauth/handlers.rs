@@ -501,13 +501,24 @@ fn build_redirect_url(
         base.join("/error")
             .map_err(|error| AuthError::internal(format!("Invalid error URL: {error}")))?
     };
-    {
-        let mut pairs = url.query_pairs_mut();
-        for (key, value) in params {
-            let _ = pairs.append_pair(key, value);
+    if !params.is_empty() {
+        let mut query_segments = Vec::new();
+        if let Some(existing_query) = url.query()
+            && !existing_query.is_empty()
+        {
+            query_segments.push(existing_query.to_string());
         }
+        for (key, value) in params {
+            query_segments.push(format!(
+                "{}={}",
+                urlencoding::encode(key),
+                urlencoding::encode(value),
+            ));
+        }
+        let query = query_segments.join("&");
+        url.set_query(Some(&query));
     }
-    Ok(url.to_string().replace('+', "%20"))
+    Ok(url.to_string())
 }
 
 fn auth_base_url(ctx: &AuthContext<impl better_auth_core::AuthSchema>) -> String {
@@ -2263,5 +2274,20 @@ mod tests {
         let ctx = test_helpers::create_test_context().await;
 
         assert!(validate_redirect_target("/dashboard", &ctx, "Invalid callbackURL").is_ok());
+    }
+
+    #[test]
+    fn build_redirect_url_preserves_plus_in_path_and_encodes_spaces_in_query() {
+        let url = build_redirect_url(
+            "http://localhost:3000/api/auth",
+            Some("/dashboard+beta"),
+            &[("error_description", "space value")],
+        )
+        .expect("redirect URL should build");
+
+        assert_eq!(
+            url,
+            "http://localhost:3000/dashboard+beta?error_description=space%20value"
+        );
     }
 }
