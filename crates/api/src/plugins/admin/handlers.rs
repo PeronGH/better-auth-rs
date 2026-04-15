@@ -244,20 +244,13 @@ pub(crate) async fn list_users_core(
         filter_operator: query.filter_operator.clone(),
     };
 
-    match ctx.database.list_users(params).await {
-        Ok((users, total)) => Ok(ListUsersResponse {
-            users: users.iter().map(AdminUserView::from).collect(),
-            total,
-            limit: query.limit.filter(|limit| *limit > 0),
-            offset: query.offset.filter(|offset| *offset > 0),
-        }),
-        Err(_) => Ok(ListUsersResponse {
-            users: Vec::new(),
-            total: 0,
-            limit: query.limit.filter(|limit| *limit > 0),
-            offset: query.offset.filter(|offset| *offset > 0),
-        }),
-    }
+    let (users, total) = ctx.database.list_users(params).await?;
+    Ok(ListUsersResponse {
+        users: users.iter().map(AdminUserView::from).collect(),
+        total,
+        limit: query.limit.filter(|limit| *limit > 0),
+        offset: query.offset.filter(|offset| *offset > 0),
+    })
 }
 
 pub(crate) async fn list_user_sessions_core(
