@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test tests/phase0 tests/phase1 tests/phase2 tests/phase3 tests/phase4 tests/phase5 tests/phase6 tests/phase7 tests/phase8 tests/phase9 tests/phase10",
+    "test": "bun test tests/phase0 tests/phase1 tests/phase2 tests/phase3 tests/phase4 tests/phase5 tests/phase6 tests/phase7 tests/phase8 tests/phase9 tests/phase10 tests/phase11 tests/phase12",
     "test:phase0": "bun test tests/phase0",
     "test:phase1": "bun test tests/phase1",
     "test:phase2": "bun test tests/phase2",
@@ -14,7 +14,9 @@
     "test:phase7": "bun test tests/phase7",
     "test:phase8": "bun test tests/phase8",
     "test:phase9": "bun test tests/phase9",
-    "test:phase10": "bun test tests/phase10"
+    "test:phase10": "bun test tests/phase10",
+    "test:phase11": "bun test tests/phase11",
+    "test:phase12": "bun test tests/phase12"
   },
   "dependencies": {
     "@better-auth/passkey": "1.4.19",

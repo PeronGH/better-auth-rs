@@ -7,6 +7,7 @@ import {
   type GitHubEmailRecord,
   readChangeEmailConfirmation,
   promoteAdmin,
+  readTwoFactorOtp,
   readVerificationEmail,
   removeCredentialAccount,
   resetServerState,
@@ -79,6 +80,9 @@ type ScenarioServerContext = {
     scope?: string | null;
   }): Promise<string>;
   readVerificationEmail(args: {
+    email: string;
+  }): Promise<unknown>;
+  readTwoFactorOtp(args: {
     email: string;
   }): Promise<unknown>;
   readChangeEmailConfirmation(args: {
@@ -230,6 +234,9 @@ async function runScenario(
     },
     readVerificationEmail(args) {
       return readVerificationEmail(baseURL, args);
+    },
+    readTwoFactorOtp(args) {
+      return readTwoFactorOtp(baseURL, args);
     },
     readChangeEmailConfirmation(args) {
       return readChangeEmailConfirmation(baseURL, args);

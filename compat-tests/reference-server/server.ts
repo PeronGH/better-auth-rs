@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
-import { admin, apiKey, deviceAuthorization, username } from "better-auth/plugins";
+import { admin, apiKey, deviceAuthorization, twoFactor, username } from "better-auth/plugins";
 import { organization } from "better-auth/plugins/organization";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 
@@ -40,6 +40,7 @@ const database = new Database(":memory:");
 const resetPasswordOutbox = new Map<string, { url: string; token: string }>();
 const verificationEmailOutbox = new Map<string, { url: string; token: string }>();
 const changeEmailOutbox = new Map<string, { newEmail: string; url: string; token: string }>();
+const twoFactorOtpOutbox = new Map<string, { otp: string }>();
 let resetPasswordMode: "capture" | "throw" = "capture";
 let oauthRefreshMode: "success" | "error" = "success";
 type SocialProfile = {
@@ -320,6 +321,15 @@ const authOptions = {
     deviceAuthorization(),
     organization(),
     passkey(),
+    twoFactor({
+      otpOptions: {
+        async sendOTP({ user, otp }) {
+          if (user.email) {
+            twoFactorOtpOutbox.set(user.email, { otp });
+          }
+        },
+      },
+    }),
     username(),
     genericOAuth({
       config: [
@@ -389,6 +399,7 @@ const server = Bun.serve({
         resetPasswordOutbox.clear();
         verificationEmailOutbox.clear();
         changeEmailOutbox.clear();
+        twoFactorOtpOutbox.clear();
         resetPasswordMode = "capture";
         oauthRefreshMode = "success";
         socialProfile = defaultSocialProfile();
@@ -416,6 +427,14 @@ const server = Bun.serve({
       if (url.pathname === "/__test/reset-password-token" && request.method === "GET") {
         const email = url.searchParams.get("email");
         const record = email ? resetPasswordOutbox.get(email) ?? null : null;
+        return record
+          ? jsonResponse(record)
+          : jsonResponse({ message: "Not found" }, { status: 404 });
+      }
+
+      if (url.pathname === "/__test/two-factor-otp" && request.method === "GET") {
+        const email = url.searchParams.get("email");
+        const record = email ? twoFactorOtpOutbox.get(email) ?? null : null;
         return record
           ? jsonResponse(record)
           : jsonResponse({ message: "Not found" }, { status: 404 });

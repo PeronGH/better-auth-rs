@@ -125,7 +125,7 @@ pub trait AuthVerification: Clone + Send + Sync + Serialize + std::fmt::Debug + 
 pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
     fn id(&self) -> Cow<'_, str>;
     fn secret(&self) -> &str;
-    fn backup_codes(&self) -> Option<&str>;
+    fn backup_codes(&self) -> &str;
     fn user_id(&self) -> Cow<'_, str>;
     fn created_at(&self) -> DateTime<Utc>;
     fn updated_at(&self) -> DateTime<Utc>;

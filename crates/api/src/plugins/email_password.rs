@@ -7,12 +7,14 @@ use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
-    AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, CreateVerification,
-    ErrorCodeMessageResponse, HttpMethod, RequestMeta,
+    AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, ErrorCodeMessageResponse,
+    HttpMethod, RequestMeta,
 };
 
-use super::email_verification::EmailVerificationPlugin;
-use better_auth_core::utils::cookie_utils::create_session_cookie;
+use super::{email_verification::EmailVerificationPlugin, two_factor};
+use better_auth_core::utils::cookie_utils::{
+    create_session_cookie, create_session_cookie_with_max_age,
+};
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
 use better_auth_core::utils::username::{
     UsernameValidationError, normalize_username, normalize_username_fields, validate_username,
@@ -36,6 +38,18 @@ fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult
         },
     )
     .map_err(AuthError::from)
+}
+
+fn create_session_cookie_for_remember_me(
+    token: &str,
+    remember_me: Option<bool>,
+    config: &better_auth_core::AuthConfig,
+) -> String {
+    if remember_me == Some(false) {
+        create_session_cookie_with_max_age(Some(token), None, config)
+    } else {
+        create_session_cookie(token, config)
+    }
 }
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
@@ -95,7 +109,6 @@ pub(crate) struct SignUpRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignInRequest {
     #[validate(email(message = "Invalid email address"))]
     email: String,
@@ -108,7 +121,6 @@ pub(crate) struct SignInRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignInUsernameRequest {
     username: String,
     password: String,
@@ -149,18 +161,17 @@ pub(crate) struct SignInUsernameResponse<U: Serialize> {
     user: U,
 }
 
-/// 2FA redirect response returned when the user has 2FA enabled.
-#[derive(Debug, Serialize)]
-pub(crate) struct TwoFactorRedirectResponse {
-    #[serde(rename = "twoFactorRedirect")]
-    two_factor_redirect: bool,
-    token: String,
-}
-
 /// Result of sign-in: either a successful session or a 2FA redirect.
 pub(crate) enum SignInCoreResult<U: Serialize> {
-    Success(SignInResponse<U>, String),
-    TwoFactorRedirect(TwoFactorRedirectResponse),
+    Success {
+        response: SignInResponse<U>,
+        token: String,
+        set_cookie_headers: Vec<String>,
+    },
+    TwoFactorRedirect {
+        response: two_factor::TwoFactorRedirectResponse,
+        set_cookie_headers: Vec<String>,
+    },
 }
 
 impl EmailPasswordPlugin {
@@ -293,6 +304,7 @@ impl EmailPasswordPlugin {
 
         let meta = RequestMeta::from_request(req);
         match sign_in_core(
+            req,
             &signin_req,
             &self.config,
             self.email_verification.as_deref(),
@@ -301,12 +313,33 @@ impl EmailPasswordPlugin {
         )
         .await?
         {
-            SignInCoreResult::Success(response, token) => {
-                let cookie_header = create_session_cookie(&token, &ctx.config);
-                Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+            SignInCoreResult::Success {
+                response,
+                token,
+                set_cookie_headers,
+            } => {
+                let mut auth_response = AuthResponse::json(200, &response)?.with_appended_header(
+                    "Set-Cookie",
+                    create_session_cookie_for_remember_me(
+                        &token,
+                        signin_req.remember_me,
+                        &ctx.config,
+                    ),
+                );
+                for cookie in set_cookie_headers {
+                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
+                }
+                Ok(auth_response)
             }
-            SignInCoreResult::TwoFactorRedirect(redirect) => {
-                Ok(AuthResponse::json(200, &redirect)?)
+            SignInCoreResult::TwoFactorRedirect {
+                response,
+                set_cookie_headers,
+            } => {
+                let mut auth_response = AuthResponse::json(200, &response)?;
+                for cookie in set_cookie_headers {
+                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
+                }
+                Ok(auth_response)
             }
         }
     }
@@ -358,6 +391,7 @@ impl EmailPasswordPlugin {
 
         let meta = RequestMeta::from_request(req);
         match sign_in_username_core(
+            req,
             &signin_req,
             &username,
             &self.config,
@@ -367,17 +401,38 @@ impl EmailPasswordPlugin {
         )
         .await
         {
-            Ok(SignInCoreResult::Success(response, token)) => {
-                let cookie_header = create_session_cookie(&token, &ctx.config);
+            Ok(SignInCoreResult::Success {
+                response,
+                token,
+                set_cookie_headers,
+            }) => {
                 let username_response = SignInUsernameResponse {
                     token: response.token,
                     user: response.user,
                 };
-                Ok(AuthResponse::json(200, &username_response)?
-                    .with_header("Set-Cookie", cookie_header))
+                let mut auth_response = AuthResponse::json(200, &username_response)?
+                    .with_appended_header(
+                        "Set-Cookie",
+                        create_session_cookie_for_remember_me(
+                            &token,
+                            signin_req.remember_me,
+                            &ctx.config,
+                        ),
+                    );
+                for cookie in set_cookie_headers {
+                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
+                }
+                Ok(auth_response)
             }
-            Ok(SignInCoreResult::TwoFactorRedirect(redirect)) => {
-                Ok(AuthResponse::json(200, &redirect)?)
+            Ok(SignInCoreResult::TwoFactorRedirect {
+                response,
+                set_cookie_headers,
+            }) => {
+                let mut auth_response = AuthResponse::json(200, &response)?;
+                for cookie in set_cookie_headers {
+                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
+                }
+                Ok(auth_response)
             }
             Err(SignInUsernameFailure::InvalidUsernameOrPassword) => username_error_response(
                 401,
@@ -580,29 +635,28 @@ async fn verify_user_password(
 
 /// Shared sign-in finalization logic after user lookup and credential verification.
 async fn finalize_sign_in_with_user_core(
+    req: &AuthRequest,
     user: impl AuthUser,
+    remember_me: Option<bool>,
     email_verification: Option<&EmailVerificationPlugin>,
     callback_url: Option<&str>,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SignInCoreResult<UserView>> {
-    // Check if 2FA is enabled
-    if user.two_factor_enabled() {
-        let pending_token = format!("2fa_{}", uuid::Uuid::new_v4());
-        let _ = ctx
-            .database
-            .create_verification(CreateVerification {
-                identifier: format!("2fa_pending:{}", pending_token),
-                value: user.id().to_string(),
-                expires_at: chrono::Utc::now() + chrono::Duration::minutes(5),
-            })
-            .await?;
-        return Ok(SignInCoreResult::TwoFactorRedirect(
-            TwoFactorRedirectResponse {
-                two_factor_redirect: true,
-                token: pending_token,
-            },
-        ));
+    let mut set_cookie_headers = Vec::new();
+    if two_factor::is_enabled(ctx) && user.two_factor_enabled() {
+        let trusted_device = two_factor::inspect_trusted_device(req, &user, ctx).await?;
+        if trusted_device.trusted {
+            set_cookie_headers.extend(trusted_device.set_cookie_headers);
+        } else {
+            let redirect = two_factor::begin_sign_in_challenge(&user, remember_me, ctx).await?;
+            let mut redirect_headers = trusted_device.set_cookie_headers;
+            redirect_headers.extend(redirect.set_cookie_headers);
+            return Ok(SignInCoreResult::TwoFactorRedirect {
+                response: redirect.response,
+                set_cookie_headers: redirect_headers,
+            });
+        }
     }
 
     // Send verification email on sign-in if configured
@@ -634,11 +688,16 @@ async fn finalize_sign_in_with_user_core(
         url: None,
         user: UserView::from(&issued.user),
     };
-    Ok(SignInCoreResult::Success(response, token))
+    Ok(SignInCoreResult::Success {
+        response,
+        token,
+        set_cookie_headers,
+    })
 }
 
 /// Core sign-in by email.
 pub(crate) async fn sign_in_core(
+    req: &AuthRequest,
     body: &SignInRequest,
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
@@ -654,7 +713,9 @@ pub(crate) async fn sign_in_core(
     verify_user_password(&user, &body.password, config, ctx).await?;
 
     finalize_sign_in_with_user_core(
+        req,
         user,
+        body.remember_me,
         email_verification,
         body.callback_url.as_deref(),
         meta,
@@ -665,6 +726,7 @@ pub(crate) async fn sign_in_core(
 
 /// Core sign-in by username.
 pub(crate) async fn sign_in_username_core(
+    req: &AuthRequest,
     body: &SignInUsernameRequest,
     normalized_username: &str,
     config: &EmailPasswordConfig,
@@ -708,7 +770,9 @@ pub(crate) async fn sign_in_username_core(
     }
 
     finalize_sign_in_with_user_core(
+        req,
         user,
+        body.remember_me,
         email_verification,
         body.callback_url.as_deref(),
         meta,

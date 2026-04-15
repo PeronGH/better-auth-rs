@@ -582,7 +582,11 @@ async fn create_two_factor(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                         .string()
                         .not_null(),
                 )
-                .col(ColumnDef::new(two_factor::Column::BackupCodes).string())
+                .col(
+                    ColumnDef::new(two_factor::Column::BackupCodes)
+                        .string()
+                        .not_null(),
+                )
                 .col(
                     ColumnDef::new(two_factor::Column::UserId)
                         .string()

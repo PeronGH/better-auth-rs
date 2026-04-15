@@ -102,6 +102,13 @@ export async function readVerificationEmail(
   return getControl(baseURL, "/__test/verification-email", { email });
 }
 
+export async function readTwoFactorOtp(
+  baseURL: string,
+  { email }: { email: string },
+) {
+  return getControl(baseURL, "/__test/two-factor-otp", { email });
+}
+
 export async function readChangeEmailConfirmation(
   baseURL: string,
   { email }: { email: string },

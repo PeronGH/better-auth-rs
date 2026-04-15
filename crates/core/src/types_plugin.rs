@@ -10,7 +10,7 @@ pub struct TwoFactor {
     pub id: String,
     pub secret: String,
     #[serde(rename = "backupCodes")]
-    pub backup_codes: Option<String>,
+    pub backup_codes: String,
     #[serde(rename = "userId")]
     pub user_id: String,
     #[serde(rename = "createdAt")]
@@ -24,7 +24,7 @@ pub struct TwoFactor {
 pub struct CreateTwoFactor {
     pub user_id: String,
     pub secret: String,
-    pub backup_codes: Option<String>,
+    pub backup_codes: String,
 }
 
 /// Passkey response shape.
@@ -227,8 +227,8 @@ impl AuthTwoFactor for TwoFactor {
     fn secret(&self) -> &str {
         &self.secret
     }
-    fn backup_codes(&self) -> Option<&str> {
-        self.backup_codes.as_deref()
+    fn backup_codes(&self) -> &str {
+        &self.backup_codes
     }
     fn user_id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.user_id)
@@ -246,7 +246,7 @@ impl<T: AuthTwoFactor> From<&T> for TwoFactor {
         Self {
             id: two_factor.id().into_owned(),
             secret: two_factor.secret().to_owned(),
-            backup_codes: two_factor.backup_codes().map(str::to_owned),
+            backup_codes: two_factor.backup_codes().to_owned(),
             user_id: two_factor.user_id().into_owned(),
             created_at: two_factor.created_at(),
             updated_at: two_factor.updated_at(),

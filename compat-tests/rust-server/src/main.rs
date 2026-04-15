@@ -11,6 +11,7 @@ use better_auth::plugins::{
     EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
     PasswordManagementPlugin, SessionManagementPlugin, UserManagementPlugin,
     email_verification::SendVerificationEmail, user_management::SendChangeEmailConfirmation,
+    SendTwoFactorOtp, TwoFactorPlugin,
     oauth::{
         OAuthIdTokenVerifier, OAuthProvider, OAuthRefreshTokenHandler, OAuthTokenSet, OAuthUserInfo,
         OAuthUserInfoHandler, OAuthUserInfoRequest, OAuthUserInfoResponse,
@@ -185,6 +186,24 @@ impl SendVerificationEmail for CompatVerificationSender {
                     token: token.to_string(),
                 },
             );
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct CompatTwoFactorOtpSender {
+    outbox: Arc<Mutex<HashMap<String, String>>>,
+}
+
+#[async_trait::async_trait]
+impl SendTwoFactorOtp for CompatTwoFactorOtpSender {
+    async fn send(&self, user: &UserView, otp: &str) -> better_auth::AuthResult<()> {
+        if let Some(email) = user.email() {
+            self.outbox
+                .lock()
+                .await
+                .insert(email.to_string(), otp.to_string());
         }
         Ok(())
     }
@@ -478,6 +497,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reset_outbox = Arc::new(Mutex::new(HashMap::new()));
     let verification_outbox = Arc::new(Mutex::new(HashMap::new()));
     let change_email_outbox = Arc::new(Mutex::new(HashMap::new()));
+    let two_factor_otp_outbox = Arc::new(Mutex::new(HashMap::new()));
     let reset_password_mode = Arc::new(Mutex::new(ResetPasswordMode::Capture));
     let oauth_refresh_mode = Arc::new(Mutex::new(OAuthRefreshMode::Success));
     let social_profile = Arc::new(Mutex::new(default_social_profile()));
@@ -518,6 +538,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .delete_user_enabled(true)
                     .require_delete_verification(false),
             )
+            .plugin(TwoFactorPlugin::new().custom_send_otp(Arc::new(
+                CompatTwoFactorOtpSender {
+                    outbox: two_factor_otp_outbox.clone(),
+                },
+            )))
             .plugin(mock_oauth_plugin(
                 port,
                 social_profile.clone(),
@@ -536,6 +561,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let verification_outbox_for_reset = verification_outbox.clone();
     let change_email_outbox_for_get = change_email_outbox.clone();
     let change_email_outbox_for_reset = change_email_outbox.clone();
+    let two_factor_otp_outbox_for_get = two_factor_otp_outbox.clone();
+    let two_factor_otp_outbox_for_reset = two_factor_otp_outbox.clone();
     let reset_mode_for_reset = reset_password_mode.clone();
     let reset_mode_for_set = reset_password_mode.clone();
     let oauth_mode_for_reset = oauth_refresh_mode.clone();
@@ -617,11 +644,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .route(
+            "/__test/two-factor-otp",
+            get(move |Query(query): Query<EmailQuery>| {
+                let two_factor_otp_outbox = two_factor_otp_outbox_for_get.clone();
+                async move {
+                    let record = two_factor_otp_outbox.lock().await.get(&query.email).cloned();
+                    match record {
+                        Some(otp) => (
+                            axum::http::StatusCode::OK,
+                            Json(serde_json::json!({ "otp": otp })),
+                        ),
+                        None => (
+                            axum::http::StatusCode::NOT_FOUND,
+                            Json(serde_json::json!({ "message": "Not found" })),
+                        ),
+                    }
+                }
+            }),
+        )
+        .route(
             "/__test/reset-state",
             post(move || {
                 let reset_outbox = reset_outbox_for_reset.clone();
                 let verification_outbox = verification_outbox_for_reset.clone();
                 let change_email_outbox = change_email_outbox_for_reset.clone();
+                let two_factor_otp_outbox = two_factor_otp_outbox_for_reset.clone();
                 let reset_mode = reset_mode_for_reset.clone();
                 let oauth_mode = oauth_mode_for_reset.clone();
                 let social_profile = social_profile_for_reset.clone();
@@ -638,6 +685,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     reset_outbox.lock().await.clear();
                     verification_outbox.lock().await.clear();
                     change_email_outbox.lock().await.clear();
+                    two_factor_otp_outbox.lock().await.clear();
                     *reset_mode.lock().await = ResetPasswordMode::Capture;
                     *oauth_mode.lock().await = OAuthRefreshMode::Success;
                     *social_profile.lock().await = default_social_profile();

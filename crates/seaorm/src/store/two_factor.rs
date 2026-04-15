@@ -59,7 +59,7 @@ where
         };
 
         let mut active = model.into_active_model();
-        active.backup_codes = Set(Some(backup_codes.to_owned()));
+        active.backup_codes = Set(backup_codes.to_owned());
         active.updated_at = Set(Utc::now());
         active
             .update(self.connection())

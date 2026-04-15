@@ -22,6 +22,9 @@ pub enum AuthError {
     #[error("Authentication required")]
     Unauthenticated,
 
+    #[error("{0}")]
+    AuthenticationFailed(String),
+
     #[error("Session not found or expired")]
     SessionNotFound,
 
@@ -81,7 +84,10 @@ impl AuthError {
             // 400
             Self::BadRequest(_) | Self::InvalidRequest(_) | Self::Validation(_) => 400,
             // 401
-            Self::InvalidCredentials | Self::Unauthenticated | Self::SessionNotFound => 401,
+            Self::InvalidCredentials
+            | Self::Unauthenticated
+            | Self::AuthenticationFailed(_)
+            | Self::SessionNotFound => 401,
             // 403
             Self::Forbidden(_) | Self::BannedUser(_) | Self::Unauthorized => 403,
             // 404
@@ -197,6 +203,10 @@ impl AuthError {
 
     pub fn validation(message: impl Into<String>) -> Self {
         Self::Validation(message.into())
+    }
+
+    pub fn authentication_failed(message: impl Into<String>) -> Self {
+        Self::AuthenticationFailed(message.into())
     }
 }
 

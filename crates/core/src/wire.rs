@@ -14,10 +14,6 @@ use crate::entity::{
 };
 use crate::types::InvitationStatus;
 
-fn is_false(value: &bool) -> bool {
-    !(*value)
-}
-
 /// Public user response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UserView {
@@ -34,7 +30,7 @@ pub struct UserView {
     pub username: Option<String>,
     #[serde(rename = "displayUsername")]
     pub display_username: Option<String>,
-    #[serde(rename = "twoFactorEnabled", skip_serializing_if = "is_false", default)]
+    #[serde(rename = "twoFactorEnabled", default)]
     pub two_factor_enabled: bool,
     pub role: Option<String>,
     #[serde(default)]

@@ -181,7 +181,7 @@ pub use password_management::{
     PasswordManagementConfig, PasswordManagementPlugin, SendResetPassword,
 };
 pub use session_management::SessionManagementPlugin;
-pub use two_factor::{TwoFactorConfig, TwoFactorPlugin};
+pub use two_factor::{SendTwoFactorOtp, TwoFactorConfig, TwoFactorPlugin};
 pub use user_management::{
     ChangeEmailConfig, DeleteUserConfig, UserManagementConfig, UserManagementPlugin,
 };
