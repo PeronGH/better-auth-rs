@@ -850,7 +850,7 @@ async fn verify_backup_code_core(
     else {
         return Err(AuthError::authentication_failed("Invalid backup code"));
     };
-    _ = backup_codes.remove(index);
+    backup_codes.remove(index);
 
     let encrypted = encrypt_value(&ctx.config.secret, &serde_json::to_string(&backup_codes)?)?;
     _ = ctx
@@ -970,6 +970,8 @@ async fn verify_existing_session_factor(
         return Ok((
             SessionTokenResponse {
                 token: issued.session.token().to_string(),
+                // TS keeps the verify response on the pre-update snapshot even
+                // though the re-issued session already observes 2FA as enabled.
                 user: UserView::from(&user),
             },
             vec![create_session_cookie(issued.session.token(), &ctx.config)],
