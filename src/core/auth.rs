@@ -339,7 +339,11 @@ impl<S: AuthSchema> BetterAuth<S> {
                     .get("error")
                     .cloned()
                     .unwrap_or_else(|| "UNKNOWN".to_string());
-                let html = core_paths::error_page_html(&error_code);
+                let error_description = req.query.get("error_description").map(String::as_str);
+                let html = better_auth_core::config::core_paths::error_page_html_with_description(
+                    &error_code,
+                    error_description,
+                );
                 Ok(Some(AuthResponse::html(200, html)))
             }
             (HttpMethod::Get, core_paths::OPENAPI_SPEC) => {

@@ -385,7 +385,10 @@ impl DeviceAuthorizationPlugin {
                 &DeviceTokenResponse {
                     access_token: session.token().to_string(),
                     token_type: "Bearer",
-                    expires_in: ctx.config.session.expires_in.num_seconds(),
+                    expires_in: (session.expires_at().timestamp_millis()
+                        - Utc::now().timestamp_millis())
+                    .div_euclid(1000)
+                    .max(0),
                     scope: device_code.scope.unwrap_or_default(),
                 },
             )?

@@ -15,6 +15,8 @@ use super::email_verification::EmailVerificationPlugin;
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
 use better_auth_core::wire::UserView;
+
+use crate::plugins::helpers::apply_default_role;
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
     config: EmailPasswordConfig,
@@ -310,12 +312,7 @@ pub(crate) async fn sign_up_core(
     let mut create_user = CreateUser::new()
         .with_email(&body.email)
         .with_name(&body.name);
-    if let Some(default_role) = ctx
-        .get_metadata("admin.default_role")
-        .and_then(|value| value.as_str())
-    {
-        create_user = create_user.with_role(default_role.to_string());
-    }
+    apply_default_role(ctx, &mut create_user);
     if let Some(ref username) = body.username {
         create_user = create_user.with_username(username.clone());
     }

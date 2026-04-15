@@ -3,7 +3,7 @@
 //! Extracted to avoid duplicating common patterns across plugins (DRY).
 
 use better_auth_core::entity::{AuthAccount, AuthApiKey, AuthUser};
-use better_auth_core::{AuthContext, AuthError, AuthResult};
+use better_auth_core::{AuthContext, AuthError, AuthResult, CreateUser};
 
 /// Convert an `expiresIn` value (**seconds** from now) into an RFC 3339
 /// `expires_at` timestamp string.
@@ -75,4 +75,22 @@ pub async fn user_has_password(
     user: &impl AuthUser,
 ) -> AuthResult<bool> {
     Ok(get_credential_password_hash(ctx, user).await?.is_some())
+}
+
+/// Apply the configured default admin role to a new user when the caller
+/// didn't set an explicit role.
+pub fn apply_default_role(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    create_user: &mut CreateUser,
+) {
+    if create_user.role.is_some() {
+        return;
+    }
+
+    if let Some(default_role) = ctx
+        .get_metadata("admin.default_role")
+        .and_then(|value| value.as_str())
+    {
+        create_user.role = Some(default_role.to_string());
+    }
 }

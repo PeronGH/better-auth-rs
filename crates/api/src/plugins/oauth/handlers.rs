@@ -30,6 +30,8 @@ use super::types::{
 };
 use better_auth_core::wire::{SessionView, UserView};
 
+use crate::plugins::helpers::apply_default_role;
+
 // ---------------------------------------------------------------------------
 // Shared helpers (DRY)
 // ---------------------------------------------------------------------------
@@ -818,6 +820,7 @@ async fn process_oauth_sign_in(
             .with_email(user_info.email.to_lowercase())
             .with_name(user_info.name.as_deref().unwrap_or(&user_info.email))
             .with_email_verified(user_info.email_verified);
+        apply_default_role(ctx, &mut create_user);
         create_user.image = user_info.image.clone();
 
         let created_user = ctx

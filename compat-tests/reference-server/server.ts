@@ -351,6 +351,27 @@ await runMigrations();
 
 const auth = betterAuth(authOptions);
 const authContext = await auth.$context;
+const RESET_MODELS = [
+  "deviceCode",
+  "passkey",
+  "apikey",
+  "invitation",
+  "member",
+  "organization",
+  "verification",
+  "account",
+  "session",
+  "user",
+] as const;
+
+async function resetDatabaseState() {
+  for (const model of RESET_MODELS) {
+    await authContext.adapter.deleteMany({
+      model,
+      where: [],
+    });
+  }
+}
 
 const server = Bun.serve({
   port: PORT,
@@ -363,6 +384,7 @@ const server = Bun.serve({
       }
 
       if (url.pathname === "/__test/reset-state" && request.method === "POST") {
+        await resetDatabaseState();
         resetPasswordOutbox.clear();
         verificationEmailOutbox.clear();
         changeEmailOutbox.clear();

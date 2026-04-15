@@ -19,41 +19,105 @@ pub mod core_paths {
     pub const CHANGE_EMAIL: &str = "/change-email";
     pub const DELETE_USER_CALLBACK: &str = "/delete-user/callback";
 
-    /// Build the HTML error page returned by `GET /error`.
-    ///
-    /// Matches the TS better-auth error page that displays the error code.
-    pub fn error_page_html(error_code: &str) -> String {
-        // Whitelist error codes to prevent reflected XSS.
-        // Matches the TS sanitization: /^[A-Za-z0-9_'-]+$/
-        let safe_code = if !error_code.is_empty()
-            && error_code
+    fn valid_error_code(input: &str) -> bool {
+        !input.is_empty()
+            && input
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '\'')
-        {
+    }
+
+    fn is_preserved_entity(input: &str) -> bool {
+        input.starts_with("amp;")
+            || input.starts_with("lt;")
+            || input.starts_with("gt;")
+            || input.starts_with("quot;")
+            || input.starts_with("#39;")
+            || input.strip_prefix("#x").is_some_and(|hex| {
+                let Some(hex) = hex.strip_suffix(';') else {
+                    return false;
+                };
+                !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit())
+            })
+            || input.strip_prefix('#').is_some_and(|digits| {
+                let Some(digits) = digits.strip_suffix(';') else {
+                    return false;
+                };
+                !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
+            })
+    }
+
+    fn sanitize_html(input: &str) -> String {
+        let mut out = String::with_capacity(input.len());
+
+        for (idx, ch) in input.char_indices() {
+            match ch {
+                '<' => out.push_str("&lt;"),
+                '>' => out.push_str("&gt;"),
+                '"' => out.push_str("&quot;"),
+                '\'' => out.push_str("&#39;"),
+                '&' => {
+                    let rest = &input[idx + ch.len_utf8()..];
+                    if is_preserved_entity(rest) {
+                        out.push('&');
+                    } else {
+                        out.push_str("&amp;");
+                    }
+                }
+                _ => out.push(ch),
+            }
+        }
+
+        out
+    }
+
+    fn default_error_description(code: &str) -> String {
+        format!(
+            "We encountered an unexpected error. Please try again or return to the home page. If you're a developer, you can find more information about the error <a href='https://better-auth.com/docs/reference/errors/{code}' target='_blank' rel=\"noopener noreferrer\" style='color: var(--foreground); text-decoration: underline;'>here</a>."
+        )
+    }
+
+    /// Build the HTML error page returned by `GET /error`.
+    ///
+    /// Matches the current TS better-auth error page renderer.
+    pub fn error_page_html(error_code: &str) -> String {
+        error_page_html_with_description(error_code, None)
+    }
+
+    /// Build the HTML error page returned by `GET /error`, optionally
+    /// overriding the default description text.
+    pub fn error_page_html_with_description(
+        error_code: &str,
+        error_description: Option<&str>,
+    ) -> String {
+        let safe_code = if valid_error_code(error_code) {
             error_code
         } else {
             "UNKNOWN"
         };
-        let ask_ai_query = format!("What%20does%20the%20error%20code%20{}%20mean%3F", safe_code);
+        let description = error_description
+            .map(sanitize_html)
+            .unwrap_or_else(|| default_error_description(safe_code));
+        let ask_ai_query = format!("What%20does%20the%20error%20code%20{safe_code}%20mean%3F");
 
-        r#"<!DOCTYPE html>
+        format!(
+            r#"<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Error</title>
     <style>
-      * {
+      * {{
         box-sizing: border-box;
-      }
-      body {
+      }}
+      body {{
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         background: var(--background);
         color: var(--foreground);
         margin: 0;
-      }
+      }}
       :root,
-      :host {
+      :host {{
         --spacing: 0.25rem;
         --container-md: 28rem;
         --text-sm: 0.875rem;
@@ -79,9 +143,9 @@ pub mod core_paths {
         --destructive: oklch(0.55 0.15 25.723);
         --muted-foreground: oklch(0.545 0 0);
         --corner-border: #404040;
-      }
+      }}
 
-      button, .btn {
+      button, .btn {{
         cursor: pointer;
         background: none;
         border: none;
@@ -89,22 +153,14 @@ pub mod core_paths {
         font: inherit;
         transition: all var(--default-transition-duration)
           var(--default-transition-timing-function);
-      }
-      button:hover, .btn:hover {
+      }}
+      button:hover, .btn:hover {{
         opacity: 0.8;
-      }
+      }}
 
-      h1 {
-        margin: 0;
-        font-size: inherit;
-        font-weight: inherit;
-        color: inherit;
-        letter-spacing: -0.02em;
-      }
-
-      @media (prefers-color-scheme: dark) {
+      @media (prefers-color-scheme: dark) {{
         :root,
-        :host {
+        :host {{
           --primary: white;
           --primary-foreground: black;
           --background: oklch(0.15 0 0);
@@ -113,21 +169,21 @@ pub mod core_paths {
           --destructive: oklch(0.65 0.15 25.723);
           --muted-foreground: oklch(0.65 0 0);
           --corner-border: #a0a0a0;
-        }
-      }
-      @media (max-width: 640px) {
-        :root, :host {
+        }}
+      }}
+      @media (max-width: 640px) {{
+        :root, :host {{
           --text-6xl: 2.5rem;
           --text-2xl: 1.25rem;
           --text-sm: 0.8125rem;
-        }
-      }
-      @media (max-width: 480px) {
-        :root, :host {
+        }}
+      }}
+      @media (max-width: 480px) {{
+        :root, :host {{
           --text-6xl: 2rem;
           --text-2xl: 1.125rem;
-        }
-      }
+        }}
+      }}
     </style>
   </head>
   <body style="width: 100vw; min-height: 100vh; overflow-x: hidden; overflow-y: auto;">
@@ -239,12 +295,19 @@ pub mod core_paths {
                 display: inline-block;
                 border: 2px solid var(--destructive);
                 padding: 0.375rem 1rem;
-                font-size: var(--text-6xl);
-                font-weight: var(--font-weight-semibold);
-                color: var(--foreground);
               "
             >
-              <h1>ERROR</h1>
+              <h1
+                style="
+                  font-size: var(--text-6xl);
+                  font-weight: var(--font-weight-semibold);
+                  color: var(--foreground);
+                  letter-spacing: -0.02em;
+                  margin: 0;
+                "
+              >
+                ERROR
+              </h1>
             </div>
             <div
               style="
@@ -272,18 +335,34 @@ pub mod core_paths {
             style="
                 display: inline-flex;
                 align-items: center;
+                gap: 0.5rem;
                 border: 2px solid var(--border);
                 background-color: var(--muted);
                 padding: 0.375rem 0.75rem;
                 margin: 0 0 1rem;
                 flex-wrap: wrap;
                 justify-content: center;
+            "
+            >
+            <span
+                style="
+                font-size: 0.75rem;
+                color: var(--muted-foreground);
+                font-weight: var(--font-weight-semibold);
+                "
+            >
+                CODE:
+            </span>
+            <span
+                style="
                 font-size: var(--text-sm);
                 font-family: var(--default-mono-font-family, monospace);
                 color: var(--foreground);
-            "
+                word-break: break-all;
+                "
             >
-                CODE: __CODE__
+                {safe_code}
+            </span>
             </div>
 
           <p
@@ -296,7 +375,7 @@ pub mod core_paths {
               text-wrap: pretty;
             "
           >
-            We encountered an unexpected error. Please try again or return to the home page. If you're a developer, you can find more information about the error <a href='https://better-auth.com/docs/reference/errors/__CODE__' target='_blank' rel="noopener noreferrer" style='color: var(--foreground); text-decoration: underline;'>here</a>.
+            {description}
           </p>
         </div>
 
@@ -330,7 +409,7 @@ pub mod core_paths {
             </div>
           </a>
           <a
-            href="https://better-auth.com/docs/reference/errors/__CODE__?askai=__ASK_AI__"
+            href="https://better-auth.com/docs/reference/errors/{safe_code}?askai={ask_ai_query}"
             target="_blank"
             rel="noopener noreferrer"
             style="
@@ -356,8 +435,7 @@ pub mod core_paths {
     </div>
   </body>
 </html>"#
-            .replace("__CODE__", safe_code)
-            .replace("__ASK_AI__", &ask_ai_query)
+        )
     }
 }
 

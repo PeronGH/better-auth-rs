@@ -19,6 +19,11 @@ use better_auth::plugins::{
 };
 use better_auth::wire::UserView;
 use better_auth::{AuthBuilder, AuthConfig};
+use better_auth_seaorm::sea_orm::{DatabaseConnection, DbErr, EntityTrait};
+use better_auth_seaorm::store::entities::{
+    account, api_key, device_code, invitation, member, organization, passkey, session,
+    two_factor, user, verification,
+};
 use better_auth_seaorm::{Database, SeaOrmStore};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -117,6 +122,22 @@ fn default_github_profile() -> GitHubProfile {
             visibility: Some("private".to_string()),
         }],
     }
+}
+
+async fn reset_database_state(database: &DatabaseConnection) -> Result<(), DbErr> {
+    device_code::Entity::delete_many().exec(database).await?;
+    passkey::Entity::delete_many().exec(database).await?;
+    api_key::Entity::delete_many().exec(database).await?;
+    two_factor::Entity::delete_many().exec(database).await?;
+    invitation::Entity::delete_many().exec(database).await?;
+    member::Entity::delete_many().exec(database).await?;
+    organization::Entity::delete_many().exec(database).await?;
+    verification::Entity::delete_many().exec(database).await?;
+    account::Entity::delete_many().exec(database).await?;
+    session::Entity::delete_many().exec(database).await?;
+    user::Entity::delete_many().exec(database).await?;
+
+    Ok(())
 }
 
 #[async_trait::async_trait]
@@ -451,10 +472,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .password_min_length(8);
 
     let database = Database::connect("sqlite::memory:").await?;
-    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(
-        &database,
-    )
-    .await?;
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database).await?;
+    let reset_database = database.clone();
 
     let reset_outbox = Arc::new(Mutex::new(HashMap::new()));
     let verification_outbox = Arc::new(Mutex::new(HashMap::new()));
@@ -531,6 +550,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let github_profile_for_emails = github_profile.clone();
     let social_id_token_valid_for_reset = social_id_token_valid.clone();
     let social_id_token_valid_for_set = social_id_token_valid.clone();
+    let database_for_reset = reset_database.clone();
     let auth_for_reset_seed = auth.clone();
     let auth_for_delete_seed = auth.clone();
     let auth_for_remove_credential = auth.clone();
@@ -607,7 +627,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let social_profile = social_profile_for_reset.clone();
                 let github_profile = github_profile_for_reset.clone();
                 let social_id_token_valid = social_id_token_valid_for_reset.clone();
+                let database = database_for_reset.clone();
                 async move {
+                    if let Err(error) = reset_database_state(&database).await {
+                        return (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(serde_json::json!({ "message": error.to_string() })),
+                        );
+                    }
                     reset_outbox.lock().await.clear();
                     verification_outbox.lock().await.clear();
                     change_email_outbox.lock().await.clear();
@@ -616,7 +643,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     *social_profile.lock().await = default_social_profile();
                     *github_profile.lock().await = default_github_profile();
                     *social_id_token_valid.lock().await = true;
-                    Json(serde_json::json!({ "status": true }))
+                    (
+                        axum::http::StatusCode::OK,
+                        Json(serde_json::json!({ "status": true })),
+                    )
                 }
             }),
         )
