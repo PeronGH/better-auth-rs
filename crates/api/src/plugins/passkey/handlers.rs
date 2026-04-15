@@ -423,15 +423,6 @@ pub(super) async fn verify_authentication_core(
         return response_message(500, "User not found");
     };
 
-    let session = match ctx
-        .session_manager()
-        .create_session(&user, ip_address, user_agent)
-        .await
-    {
-        Ok(session) => session,
-        Err(error) => return Err(error),
-    };
-
     if ctx
         .database
         .delete_verification(verification.id().as_ref())
@@ -440,6 +431,15 @@ pub(super) async fn verify_authentication_core(
     {
         return passkey_authentication_failure();
     }
+
+    let session = match ctx
+        .session_manager()
+        .create_session(&user, ip_address, user_agent)
+        .await
+    {
+        Ok(session) => session,
+        Err(error) => return Err(error),
+    };
 
     Ok(PasskeyHandlerOutcome::Success((
         serde_json::to_value(SessionResponse {

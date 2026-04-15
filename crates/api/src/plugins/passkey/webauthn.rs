@@ -288,9 +288,10 @@ pub(super) fn parse_stored_passkey(serialized: &str) -> AuthResult<WebauthnPassk
         .map_err(|error| AuthError::internal(format!("Failed to decode stored passkey: {error}")))
 }
 
-pub(super) fn snapshot_passkey(passkey: &WebauthnPasskey) -> AuthResult<PasskeySnapshot> {
-    let serialized = serde_json::to_string(passkey)?;
-    let value: Value = serde_json::from_str(&serialized)?;
+pub(super) fn extract_passkey_snapshot_fields(value: &Value) -> AuthResult<(u64, bool, bool)> {
+    // webauthn-rs does not expose stable accessors for all persisted passkey
+    // attributes we need at registration time. We intentionally depend on the
+    // current 0.5.x serialized shape here and fail closed if it drifts.
     let Some(cred) = value.get("cred").and_then(Value::as_object) else {
         return Err(AuthError::internal(
             "Stored passkey JSON missing credential payload",
@@ -303,11 +304,19 @@ pub(super) fn snapshot_passkey(passkey: &WebauthnPasskey) -> AuthResult<PasskeyS
     let backed_up = cred
         .get("backup_state")
         .and_then(Value::as_bool)
-        .unwrap_or(false);
+        .ok_or_else(|| AuthError::internal("Stored passkey JSON missing backup_state"))?;
     let backup_eligible = cred
         .get("backup_eligible")
         .and_then(Value::as_bool)
-        .unwrap_or(false);
+        .ok_or_else(|| AuthError::internal("Stored passkey JSON missing backup_eligible"))?;
+
+    Ok((counter, backed_up, backup_eligible))
+}
+
+pub(super) fn snapshot_passkey(passkey: &WebauthnPasskey) -> AuthResult<PasskeySnapshot> {
+    let serialized = serde_json::to_string(passkey)?;
+    let value: Value = serde_json::from_str(&serialized)?;
+    let (counter, backed_up, backup_eligible) = extract_passkey_snapshot_fields(&value)?;
 
     Ok(PasskeySnapshot {
         serialized,

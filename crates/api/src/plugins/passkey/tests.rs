@@ -26,6 +26,39 @@ fn credential_id(label: &str) -> String {
     URL_SAFE_NO_PAD.encode(label.as_bytes())
 }
 
+#[test]
+fn test_extract_passkey_snapshot_fields_requires_all_expected_fields() {
+    let value = serde_json::json!({
+        "cred": {
+            "counter": 7,
+            "backup_state": true
+        }
+    });
+
+    let err = super::webauthn::extract_passkey_snapshot_fields(&value).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "Internal server error: Stored passkey JSON missing backup_eligible"
+    );
+}
+
+#[test]
+fn test_extract_passkey_snapshot_fields_reads_expected_values() {
+    let value = serde_json::json!({
+        "cred": {
+            "counter": 11,
+            "backup_state": true,
+            "backup_eligible": false
+        }
+    });
+
+    let (counter, backed_up, backup_eligible) =
+        super::webauthn::extract_passkey_snapshot_fields(&value).unwrap();
+    assert_eq!(counter, 11);
+    assert!(backed_up);
+    assert!(!backup_eligible);
+}
+
 #[tokio::test]
 async fn test_generate_register_options_sets_cookie_and_uses_query_name() {
     let plugin = passkey_plugin();
