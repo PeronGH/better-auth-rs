@@ -362,8 +362,9 @@ pub(crate) async fn impersonate_user_core(
         return Err(AuthError::forbidden(MESSAGE_CANNOT_IMPERSONATE_ADMINS));
     }
 
-    let expires_at =
-        Utc::now() + Duration::seconds(config.impersonation_session_duration.unwrap_or(60 * 60));
+    let expires_at = Utc::now()
+        + Duration::try_seconds(config.impersonation_session_duration.unwrap_or(60 * 60))
+            .unwrap_or(Duration::hours(1));
     let create_session = CreateSession {
         user_id: target.id().to_string(),
         expires_at,
