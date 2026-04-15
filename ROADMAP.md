@@ -5,12 +5,9 @@ This project targets strict 1:1 behavioral alignment with the
 implementation (`better-auth@1.4.19`). Work is organized into
 self-contained phases, each covering a group of related endpoints.
 
-This roadmap currently tracks the public route surface we have chosen to
-align from the pinned upstream TypeScript sources: the main
-`better-auth` package plus the separately versioned `passkey` package.
-It is not a complete inventory of every optional upstream package or
-plugin family. When upstream only publishes routes behind feature
-options, the relevant phase calls that out explicitly.
+This roadmap tracks the pinned upstream TypeScript surface plus exposed
+Rust plugin routes we intend to keep. Public routes not present in
+upstream TS should be removed.
 
 Phases are ordered so that each one only depends on capabilities from
 earlier phases. A phase is complete when every endpoint in it has
@@ -22,7 +19,8 @@ Test suites, scripts, and source comments reference these phase numbers
 ## Phases
 
 **Phase 0 — Core auth flow:**
-`/sign-up/email`, `/sign-in/email`, `/get-session`, `/sign-out`,
+`/sign-up/email`, `/sign-in/email`, `/sign-in/username`,
+`/get-session`, `/sign-out`,
 `/ok`, `/error`
 
 **Phase 1 — Session and password management:**

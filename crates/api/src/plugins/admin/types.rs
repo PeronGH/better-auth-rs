@@ -148,6 +148,9 @@ pub(crate) struct AdminUserView {
     pub created_at: DateTime<Utc>,
     #[serde(rename = "updatedAt")]
     pub updated_at: DateTime<Utc>,
+    pub username: Option<String>,
+    #[serde(rename = "displayUsername")]
+    pub display_username: Option<String>,
     pub role: Option<String>,
     pub banned: bool,
     #[serde(rename = "banReason")]
@@ -166,6 +169,8 @@ impl<T: better_auth_core::entity::AuthUser> From<&T> for AdminUserView {
             image: user.image().map(str::to_owned),
             created_at: user.created_at(),
             updated_at: user.updated_at(),
+            username: user.username().map(str::to_owned),
+            display_username: user.display_username().map(str::to_owned),
             role: user.role().map(str::to_owned),
             banned: user.banned(),
             ban_reason: user.ban_reason().map(str::to_owned),

@@ -8,7 +8,7 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
     AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, CreateVerification,
-    HttpMethod, RequestMeta,
+    ErrorCodeMessageResponse, HttpMethod, RequestMeta,
 };
 
 use super::email_verification::EmailVerificationPlugin;
@@ -17,6 +17,35 @@ use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
 use better_auth_core::wire::UserView;
 
 use crate::plugins::helpers::apply_default_role;
+
+const USERNAME_MIN_LENGTH: usize = 3;
+const USERNAME_MAX_LENGTH: usize = 30;
+const MESSAGE_INVALID_USERNAME_OR_PASSWORD: &str = "Invalid username or password";
+const MESSAGE_EMAIL_NOT_VERIFIED: &str = "Email not verified";
+const MESSAGE_USERNAME_TOO_SHORT: &str = "Username is too short";
+const MESSAGE_USERNAME_TOO_LONG: &str = "Username is too long";
+const MESSAGE_INVALID_USERNAME: &str = "Username is invalid";
+
+fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult<AuthResponse> {
+    AuthResponse::json(
+        status,
+        &ErrorCodeMessageResponse {
+            code: code.to_string(),
+            message: message.to_string(),
+        },
+    )
+    .map_err(AuthError::from)
+}
+
+fn normalize_username(username: &str) -> String {
+    username.to_lowercase()
+}
+
+fn username_is_valid(username: &str) -> bool {
+    username
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '.')
+}
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
     config: EmailPasswordConfig,
@@ -90,12 +119,12 @@ pub(crate) struct SignInRequest {
 #[derive(Debug, Deserialize, Validate)]
 #[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignInUsernameRequest {
-    #[validate(length(min = 1, message = "Username is required"))]
     username: String,
-    #[validate(length(min = 1, message = "Password is required"))]
     password: String,
     #[serde(rename = "rememberMe")]
     remember_me: Option<bool>,
+    #[serde(rename = "callbackURL")]
+    callback_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -110,6 +139,12 @@ pub(crate) struct SignInResponse<U: Serialize> {
     token: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     url: Option<String>,
+    user: U,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct SignInUsernameResponse<U: Serialize> {
+    token: String,
     user: U,
 }
 
@@ -251,23 +286,60 @@ impl EmailPasswordPlugin {
             Err(resp) => return Ok(resp),
         };
 
+        if signin_req.username.is_empty() || signin_req.password.is_empty() {
+            return username_error_response(
+                401,
+                "INVALID_USERNAME_OR_PASSWORD",
+                MESSAGE_INVALID_USERNAME_OR_PASSWORD,
+            );
+        }
+
+        let username = normalize_username(&signin_req.username);
+
+        if username.len() < USERNAME_MIN_LENGTH {
+            return username_error_response(422, "USERNAME_TOO_SHORT", MESSAGE_USERNAME_TOO_SHORT);
+        }
+
+        if username.len() > USERNAME_MAX_LENGTH {
+            return username_error_response(422, "USERNAME_IS_TOO_LONG", MESSAGE_USERNAME_TOO_LONG);
+        }
+
+        if !username_is_valid(&username) {
+            return username_error_response(422, "USERNAME_IS_INVALID", MESSAGE_INVALID_USERNAME);
+        }
+
         let meta = RequestMeta::from_request(req);
         match sign_in_username_core(
             &signin_req,
+            &username,
             &self.config,
             self.email_verification.as_deref(),
             &meta,
             ctx,
         )
-        .await?
+        .await
         {
-            SignInCoreResult::Success(response, token) => {
+            Ok(SignInCoreResult::Success(response, token)) => {
                 let cookie_header = create_session_cookie(&token, &ctx.config);
-                Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+                let username_response = SignInUsernameResponse {
+                    token: response.token,
+                    user: response.user,
+                };
+                Ok(AuthResponse::json(200, &username_response)?
+                    .with_header("Set-Cookie", cookie_header))
             }
-            SignInCoreResult::TwoFactorRedirect(redirect) => {
+            Ok(SignInCoreResult::TwoFactorRedirect(redirect)) => {
                 Ok(AuthResponse::json(200, &redirect)?)
             }
+            Err(SignInUsernameFailure::InvalidUsernameOrPassword) => username_error_response(
+                401,
+                "INVALID_USERNAME_OR_PASSWORD",
+                MESSAGE_INVALID_USERNAME_OR_PASSWORD,
+            ),
+            Err(SignInUsernameFailure::EmailNotVerified) => {
+                username_error_response(403, "EMAIL_NOT_VERIFIED", MESSAGE_EMAIL_NOT_VERIFIED)
+            }
+            Err(SignInUsernameFailure::Auth(error)) => Err(error),
         }
     }
 }
@@ -314,10 +386,12 @@ pub(crate) async fn sign_up_core(
         .with_name(&body.name);
     apply_default_role(ctx, &mut create_user);
     if let Some(ref username) = body.username {
-        create_user = create_user.with_username(username.clone());
+        create_user = create_user.with_username(normalize_username(username));
     }
     if let Some(ref display_username) = body.display_username {
         create_user.display_username = Some(display_username.clone());
+    } else if let Some(ref username) = body.username {
+        create_user.display_username = Some(username.clone());
     }
     let auto_sign_in = config.auto_sign_in;
     let expires_in = ctx.config.session.expires_in;
@@ -478,27 +552,78 @@ pub(crate) async fn sign_in_core(
 /// Core sign-in by username.
 pub(crate) async fn sign_in_username_core(
     body: &SignInUsernameRequest,
+    normalized_username: &str,
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<SignInCoreResult<UserView>> {
-    let user = ctx
+) -> Result<SignInCoreResult<UserView>, SignInUsernameFailure> {
+    let Some(user) = ctx
         .database
-        .get_user_by_username(&body.username)
-        .await?
-        .ok_or(AuthError::InvalidCredentials)?;
+        .get_user_by_username(normalized_username)
+        .await
+        .map_err(SignInUsernameFailure::Auth)?
+    else {
+        let _ = password_utils::hash_password(config.password_hasher.as_ref(), &body.password)
+            .await
+            .map_err(SignInUsernameFailure::Auth)?;
+        return Err(SignInUsernameFailure::InvalidUsernameOrPassword);
+    };
+
+    let stored_hash = ctx
+        .database
+        .get_user_accounts(&user.id())
+        .await
+        .map_err(SignInUsernameFailure::Auth)?
+        .into_iter()
+        .find(|account| account.provider_id() == "credential" && account.password().is_some())
+        .and_then(|account| account.password().map(str::to_string))
+        .ok_or(SignInUsernameFailure::InvalidUsernameOrPassword)?;
+
+    password_utils::verify_password(
+        config.password_hasher.as_ref(),
+        &body.password,
+        &stored_hash,
+    )
+    .await
+    .map_err(|error| match error {
+        AuthError::InvalidCredentials => SignInUsernameFailure::InvalidUsernameOrPassword,
+        other => SignInUsernameFailure::Auth(other),
+    })?;
+
+    if let Some(ev) = email_verification
+        && ev.is_verification_required()
+        && !user.email_verified()
+    {
+        if let Err(error) = ev
+            .send_verification_on_sign_in(&user, body.callback_url.as_deref(), ctx)
+            .await
+        {
+            tracing::warn!(
+                error = %error,
+                "Failed to send verification email on username sign-in"
+            );
+        }
+        return Err(SignInUsernameFailure::EmailNotVerified);
+    }
 
     sign_in_with_user_core(
         user,
         &body.password,
         config,
         email_verification,
-        None,
+        body.callback_url.as_deref(),
         meta,
         ctx,
     )
     .await
+    .map_err(SignInUsernameFailure::Auth)
+}
+
+pub(crate) enum SignInUsernameFailure {
+    InvalidUsernameOrPassword,
+    EmailNotVerified,
+    Auth(AuthError),
 }
 
 impl Default for EmailPasswordConfig {

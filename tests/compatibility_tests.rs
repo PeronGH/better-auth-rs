@@ -72,6 +72,7 @@ fn completed_phase_reference_surface(
         "/error",
         "/sign-up/email",
         "/sign-in/email",
+        "/sign-in/username",
         "/get-session",
         "/sign-out",
         "/list-sessions",
@@ -126,6 +127,12 @@ fn completed_phase_reference_surface(
     let _ = surface.insert(
         "/callback/{provider}".to_string(),
         HashSet::from(["get".to_string(), "post".to_string()]),
+    );
+    // The pinned TS runtime exposes `/sign-in/username` publicly when the
+    // username plugin is enabled, but the generated OpenAPI profile omits it.
+    let _ = surface.insert(
+        "/sign-in/username".to_string(),
+        HashSet::from(["post".to_string()]),
     );
 
     surface
@@ -351,6 +358,7 @@ async fn test_completed_phase_endpoints_present() {
         ("get", "/error"),
         ("post", "/sign-up/email"),
         ("post", "/sign-in/email"),
+        ("post", "/sign-in/username"),
         ("get", "/get-session"),
         ("post", "/sign-out"),
         ("post", "/update-user"),

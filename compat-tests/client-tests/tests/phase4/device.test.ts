@@ -16,6 +16,26 @@ function asString(value: unknown, key: string): string {
   return value;
 }
 
+function normalizeApprovedTokenResponse(response: {
+  status: number;
+  location: string | null;
+  body: unknown;
+}) {
+  const snapshot = structuredClone(response) as {
+    status: number;
+    location: string | null;
+    body: Record<string, unknown> | null;
+  };
+
+  if (snapshot.body && typeof snapshot.body.expires_in === "number") {
+    const expiresIn = snapshot.body.expires_in;
+    snapshot.body.expires_in =
+      expiresIn === 604799 || expiresIn === 604800 ? "<week-session-ttl>" : expiresIn;
+  }
+
+  return snapshot;
+}
+
 compatScenario("device code request returns oauth device response fields", async (ctx) => {
   const code = await ctx.rawRequest({
     path: "/api/auth/device/code",
@@ -159,7 +179,7 @@ compatScenario("device approve flow returns a bearer token", async (ctx) => {
   return {
     signup: ctx.snapshot(signup),
     approve: ctx.snapshot(approve),
-    token: ctx.snapshot(token),
+    token: normalizeApprovedTokenResponse(ctx.snapshot(token) as typeof token),
   };
 });
 

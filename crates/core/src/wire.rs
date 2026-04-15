@@ -31,9 +31,8 @@ pub struct UserView {
     pub created_at: DateTime<Utc>,
     #[serde(rename = "updatedAt")]
     pub updated_at: DateTime<Utc>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub username: Option<String>,
-    #[serde(rename = "displayUsername", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "displayUsername")]
     pub display_username: Option<String>,
     #[serde(rename = "twoFactorEnabled", skip_serializing_if = "is_false", default)]
     pub two_factor_enabled: bool,

@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
-import { admin, apiKey, deviceAuthorization } from "better-auth/plugins";
+import { admin, apiKey, deviceAuthorization, username } from "better-auth/plugins";
 import { organization } from "better-auth/plugins/organization";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 
@@ -320,6 +320,7 @@ const authOptions = {
     deviceAuthorization(),
     organization(),
     passkey(),
+    username(),
     genericOAuth({
       config: [
         {
