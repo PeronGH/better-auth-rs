@@ -2,6 +2,9 @@
 
 The most comprehensive authentication framework for Rust. Inspired by [Better Auth](https://www.better-auth.com/).
 
+> [!NOTE]
+> **v1 ([`v1`](https://github.com/better-auth-rs/better-auth-rs/tree/v1) branch, alpha):** complete rewrite with app-owned schema and full compatibility with [`better-auth@1.4.19`](https://www.npmjs.com/package/better-auth/v/1.4.19).
+
 [![Crates.io](https://img.shields.io/crates/v/better-auth.svg)](https://crates.io/crates/better-auth)
 [![Documentation](https://docs.rs/better-auth/badge.svg)](https://docs.rs/better-auth)
 [![CI](https://github.com/better-auth-rs/better-auth-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/better-auth-rs/better-auth-rs/actions/workflows/ci.yml)
